@@ -23,7 +23,7 @@ export default function HomeScreen({
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#1E2D42] text-2xl shadow-lg shadow-black/20">
-            🧠
+            {"\u{1F9E0}"}
           </span>
           <div>
             <p className="text-xl font-black tracking-wide text-white">Zakovot</p>

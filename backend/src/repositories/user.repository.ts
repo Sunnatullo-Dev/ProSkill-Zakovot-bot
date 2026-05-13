@@ -1,83 +1,108 @@
 import { AppError } from "../middleware/error.middleware";
 import { supabase } from "../db/supabase";
-import type { AppUser, DbUser, TelegramUser } from "../types";
+import type { AppUser, DbUser } from "../types";
 
 export const userRepository = {
-  async upsertTelegramUser(telegramUser: TelegramUser): Promise<AppUser> {
-    const { data, error } = await supabase
-      .from("users")
-      .upsert(
-        {
-          telegram_id: telegramUser.id,
-          first_name: telegramUser.first_name ?? null,
-          last_name: telegramUser.last_name ?? null,
-          username: telegramUser.username ?? null,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: "telegram_id" }
-      )
-      .select("id, telegram_id, first_name, last_name, username, score")
-      .single<DbUser>();
+  async upsertUser(
+    telegramId: number,
+    firstName?: string,
+    lastName?: string,
+    username?: string
+  ): Promise<AppUser> {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .upsert(
+          {
+            telegram_id: telegramId,
+            first_name: firstName ?? null,
+            last_name: lastName ?? null,
+            username: username ?? null,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: "telegram_id" }
+        )
+        .select("id, telegram_id, first_name, last_name, username, score")
+        .single<DbUser>();
 
-    if (error || !data) {
-      throw new AppError(500, "Foydalanuvchini saqlashda xatolik yuz berdi.");
+      if (error || !data) {
+        throw new AppError(500, "User upsert failed");
+      }
+
+      return mapUser(data);
+    } catch (error) {
+      console.error("upsertUser failed", error);
+      throw error;
     }
-
-    return mapUser(data);
   },
 
   async findByTelegramId(telegramId: number): Promise<AppUser | null> {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, telegram_id, first_name, last_name, username, score")
-      .eq("telegram_id", telegramId)
-      .maybeSingle<DbUser>();
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, telegram_id, first_name, last_name, username, score")
+        .eq("telegram_id", telegramId)
+        .maybeSingle<DbUser>();
 
-    if (error) {
-      throw new AppError(500, "Foydalanuvchini olishda xatolik yuz berdi.");
+      if (error) {
+        throw new AppError(500, "User lookup failed");
+      }
+
+      return data ? mapUser(data) : null;
+    } catch (error) {
+      console.error("findByTelegramId failed", error);
+      throw error;
     }
-
-    return data ? mapUser(data) : null;
   },
 
   async incrementScore(telegramId: number): Promise<AppUser> {
-    const user = await userRepository.findByTelegramId(telegramId);
+    try {
+      const user = await userRepository.findByTelegramId(telegramId);
 
-    if (!user) {
-      throw new AppError(404, "Foydalanuvchi topilmadi.");
+      if (!user) {
+        throw new AppError(404, "User not found");
+      }
+
+      const { data, error } = await supabase
+        .from("users")
+        .update({
+          score: user.score + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq("telegram_id", telegramId)
+        .select("id, telegram_id, first_name, last_name, username, score")
+        .single<DbUser>();
+
+      if (error || !data) {
+        throw new AppError(500, "Score update failed");
+      }
+
+      return mapUser(data);
+    } catch (error) {
+      console.error("incrementScore failed", error);
+      throw error;
     }
-
-    const { data, error } = await supabase
-      .from("users")
-      .update({
-        score: user.score + 1,
-        updated_at: new Date().toISOString()
-      })
-      .eq("telegram_id", telegramId)
-      .select("id, telegram_id, first_name, last_name, username, score")
-      .single<DbUser>();
-
-    if (error || !data) {
-      throw new AppError(500, "Ballni yangilashda xatolik yuz berdi.");
-    }
-
-    return mapUser(data);
   },
 
-  async getLeaderboard(limit = 3): Promise<AppUser[]> {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, telegram_id, first_name, last_name, username, score")
-      .order("score", { ascending: false })
-      .order("created_at", { ascending: true })
-      .limit(limit)
-      .returns<DbUser[]>();
+  async getTopUsers(limit = 10): Promise<AppUser[]> {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, telegram_id, first_name, last_name, username, score")
+        .order("score", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(limit)
+        .returns<DbUser[]>();
 
-    if (error) {
-      throw new AppError(500, "Leaderboardni olishda xatolik yuz berdi.");
+      if (error) {
+        throw new AppError(500, "Top users lookup failed");
+      }
+
+      return (data ?? []).map(mapUser);
+    } catch (error) {
+      console.error("getTopUsers failed", error);
+      throw error;
     }
-
-    return (data ?? []).map(mapUser);
   }
 };
 

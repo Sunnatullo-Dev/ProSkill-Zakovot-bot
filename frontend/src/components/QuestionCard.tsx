@@ -38,7 +38,9 @@ export default function QuestionCard({
       <header className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1E2D42] text-xl">🧠</span>
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1E2D42] text-xl">
+              {"\u{1F9E0}"}
+            </span>
             <span className="text-lg font-bold tracking-wide">Zakovot</span>
           </div>
           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm font-semibold text-[#94A3B8]">

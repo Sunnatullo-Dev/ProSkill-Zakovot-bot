@@ -1,10 +1,15 @@
 import type { Request, Response } from "express";
-import { questionService } from "../services/question.service";
+import { AppError } from "../middleware/error.middleware";
+import { questionRepository } from "../repositories/question.repository";
 
 export const questionController = {
   async getRandomQuestion(_req: Request, res: Response) {
-    const question = await questionService.getRandomQuestion();
+    const question = await questionRepository.getRandomQuestion();
 
-    res.json(question);
+    if (!question) {
+      throw new AppError(404, "Question not found");
+    }
+
+    return res.json(question);
   }
 };

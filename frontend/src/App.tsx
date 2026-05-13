@@ -1,115 +1,109 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { apiClient } from "./api/client";
+import { getQuestion, getTopUsers, login, submitAnswer } from "./api/client";
 import FinishScreen from "./components/FinishScreen";
 import HomeScreen from "./components/HomeScreen";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
 import { useTelegram } from "./hooks/useTelegram";
 import { useTimer } from "./hooks/useTimer";
-import type { AnswerResult, AnswerStatus, AppUser, LeaderboardUser, Question } from "./types";
+import type { AnswerResult, AppUser, LeaderboardUser, Question, Screen } from "./types";
 
-const ROUND_SECONDS = 15;
-const TOTAL_QUESTIONS = 10;
+const TIMER_SECONDS = 15;
+const ANSWER_TIMEOUT_MS = 15000;
+const MAX_QUESTION_COUNT = 10;
+const SERVER_ERROR_MESSAGE = "Serverga ulanib bo'lmadi. Qayta urinib ko'ring.";
+const TELEGRAM_ERROR_MESSAGE = "Telegram orqali oching";
 
-type GameScreen = "home" | "question" | "result" | "finish";
+type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 
 export default function App() {
-  const { initData, telegramUser, isReady, error: telegramError } = useTelegram();
+  const { initData, isReady, user: telegramUser, error: telegramError } = useTelegram();
+  const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<AppUser | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
-  const [question, setQuestion] = useState<Question | null>(null);
+  const [score, setScore] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [lastResult, setLastResult] = useState<AnswerResult | null>(null);
+  const [questionCount, setQuestionCount] = useState(0);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
   const [answer, setAnswer] = useState("");
-  const [answerResult, setAnswerResult] = useState<AnswerResult | null>(null);
-  const [status, setStatus] = useState<AnswerStatus>("idle");
-  const [screen, setScreen] = useState<GameScreen>("home");
-  const [currentQuestionNumber, setCurrentQuestionNumber] = useState(1);
-  const [roundScore, setRoundScore] = useState(0);
-  const [isAppLoading, setIsAppLoading] = useState(true);
-  const [isQuestionLoading, setIsQuestionLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const submitAnswerRef = useRef<SubmitAnswerFn | null>(null);
+  const timer = useTimer(TIMER_SECONDS, () => {
+    void submitAnswerRef.current?.("", ANSWER_TIMEOUT_MS + 1);
+  });
 
-  const loadLeaderboard = useCallback(async () => {
-    if (!initData) {
-      return;
-    }
-
+  const loadTopUsers = useCallback(async () => {
     try {
-      const nextLeaderboard = await apiClient.getLeaderboard(initData);
-      setLeaderboard(nextLeaderboard);
-    } catch {
+      const users = await getTopUsers(3);
+      setLeaderboard(users);
+    } catch (error) {
+      console.error("Top users load failed", error);
       setLeaderboard([]);
     }
-  }, [initData]);
+  }, []);
 
-  const submitAnswer = useCallback(async (answerText: string, timedOut = false) => {
-    if (!initData || !question || status !== "idle") {
+  const loadQuestion = useCallback(async (nextQuestionCount: number) => {
+    try {
+      setErrorMessage("");
+      setAnswer("");
+      setLastResult(null);
+      setCurrentQuestion(null);
+      setScreen("question");
+      timer.reset();
+
+      const question = await getQuestion();
+
+      setCurrentQuestion(question);
+      setQuestionCount(nextQuestionCount);
+      timer.start();
+    } catch (error) {
+      console.error("Question load failed", error);
+      setErrorMessage(SERVER_ERROR_MESSAGE);
+      setScreen("home");
+    }
+  }, [timer]);
+
+  const handleSubmitAnswer = useCallback<SubmitAnswerFn>(async (userAnswer: string, timeTaken: number) => {
+    if (!currentQuestion || isSubmitting) {
       return;
     }
 
-    if (!timedOut && !answerText.trim()) {
-      setError("Javob yozing.");
+    if (timeTaken <= ANSWER_TIMEOUT_MS && !userAnswer.trim()) {
+      setErrorMessage("Javob yozing.");
       return;
     }
-
-    setStatus(timedOut ? "timeout" : "checking");
-    setError("");
 
     try {
-      const result = await apiClient.submitAnswer(initData, {
-        questionId: question.id,
-        answer: answerText.trim(),
-        timedOut
-      });
+      setIsSubmitting(true);
+      setErrorMessage("");
+      timer.stop();
+
+      const result = await submitAnswer(currentQuestion.id, userAnswer.trim(), timeTaken);
 
       if (result.isCorrect) {
-        setRoundScore((currentScore) => currentScore + 1);
+        setCorrectAnswers((currentValue) => currentValue + 1);
       }
 
-      setUser((currentUser) => (currentUser ? { ...currentUser, score: result.score } : currentUser));
-      setAnswerResult(result);
-      setStatus(result.isCorrect ? "correct" : timedOut ? "timeout" : "wrong");
+      setLastResult(result);
+      setScore(result.newScore);
+      setUser((currentUser) => (currentUser ? { ...currentUser, score: result.newScore } : currentUser));
       setScreen("result");
-      void loadLeaderboard();
-    } catch (requestError) {
-      setStatus("idle");
-      setError(requestError instanceof Error ? requestError.message : "Javobni tekshirishda xatolik yuz berdi.");
-    }
-  }, [initData, loadLeaderboard, question, status]);
-
-  const { remainingSeconds, resetTimer } = useTimer(
-    ROUND_SECONDS,
-    screen === "question" && Boolean(question) && !isQuestionLoading && status === "idle",
-    () => {
-      void submitAnswer("", true);
-    }
-  );
-
-  const loadQuestion = useCallback(async (questionNumber: number) => {
-    if (!initData) {
-      setError("Telegram initData topilmadi.");
-      return;
-    }
-
-    setScreen("question");
-    setCurrentQuestionNumber(questionNumber);
-    setIsQuestionLoading(true);
-    setAnswer("");
-    setAnswerResult(null);
-    setError("");
-    setStatus("idle");
-
-    try {
-      const nextQuestion = await apiClient.getRandomQuestion(initData);
-      setQuestion(nextQuestion);
-      resetTimer();
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Savolni olishda xatolik yuz berdi.");
-      setScreen("home");
+      void loadTopUsers();
+    } catch (error) {
+      console.error("Answer submit failed", error);
+      setErrorMessage(SERVER_ERROR_MESSAGE);
+      timer.start();
     } finally {
-      setIsQuestionLoading(false);
+      setIsSubmitting(false);
     }
-  }, [initData, resetTimer]);
+  }, [currentQuestion, isSubmitting, loadTopUsers, timer]);
+
+  useEffect(() => {
+    submitAnswerRef.current = handleSubmitAnswer;
+  }, [handleSubmitAnswer]);
 
   useEffect(() => {
     if (!isReady) {
@@ -117,51 +111,60 @@ export default function App() {
     }
 
     if (!initData) {
-      setIsAppLoading(false);
-      setError(telegramError || "Zakovotni Telegram Mini App ichida oching.");
+      console.error("Telegram initData is missing", telegramError);
+      setErrorMessage(TELEGRAM_ERROR_MESSAGE);
+      setScreen("home");
       return;
     }
 
     async function bootstrap() {
-      setIsAppLoading(true);
-      setError("");
-
       try {
-        const authResponse = await apiClient.login(initData);
-        setUser(authResponse.user);
-        const nextLeaderboard = await apiClient.getLeaderboard(initData);
-        setLeaderboard(nextLeaderboard);
-      } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : "Ilovani yuklashda xatolik yuz berdi.");
-      } finally {
-        setIsAppLoading(false);
+        setScreen("loading");
+        setErrorMessage("");
+
+        const response = await login(initData);
+
+        setUser(response.user);
+        setScore(response.user.score);
+        await loadTopUsers();
+        setScreen("home");
+      } catch (error) {
+        console.error("Login failed", error);
+        setErrorMessage(SERVER_ERROR_MESSAGE);
+        setScreen("home");
       }
     }
 
     void bootstrap();
-  }, [initData, isReady, telegramError]);
+  }, [initData, isReady, loadTopUsers, telegramError]);
 
   function handleStartGame() {
-    setRoundScore(0);
-    setCurrentQuestionNumber(1);
+    if (!initData) {
+      setErrorMessage(TELEGRAM_ERROR_MESSAGE);
+      return;
+    }
+
+    setQuestionCount(0);
+    setCorrectAnswers(0);
     void loadQuestion(1);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleAnswerSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await submitAnswer(answer);
+
+    const timeTaken = (TIMER_SECONDS - timer.timeLeft) * 1000;
+    await handleSubmitAnswer(answer, timeTaken);
   }
 
   function handleNextQuestion() {
-    if (currentQuestionNumber >= TOTAL_QUESTIONS) {
-      setQuestion(null);
-      setAnswerResult(null);
-      setStatus("idle");
+    if (questionCount >= MAX_QUESTION_COUNT) {
+      timer.reset();
+      setCurrentQuestion(null);
       setScreen("finish");
       return;
     }
 
-    void loadQuestion(currentQuestionNumber + 1);
+    void loadQuestion(questionCount + 1);
   }
 
   const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovotchi";
@@ -169,13 +172,25 @@ export default function App() {
   return (
     <main className="min-h-screen bg-[#0F1B2D] px-4 py-4 text-white">
       <section className="mx-auto min-h-[calc(100vh-32px)] w-full max-w-[430px]">
+        {screen === "loading" ? (
+          <div className="grid min-h-[calc(100vh-32px)] place-items-center text-center">
+            <div>
+              <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[#1E2D42] text-3xl">
+                {"\u{1F9E0}"}
+              </span>
+              <p className="mt-4 text-lg font-black text-white">Zakovot</p>
+              <p className="mt-2 text-sm font-semibold text-[#94A3B8]">Yuklanmoqda...</p>
+            </div>
+          </div>
+        ) : null}
+
         {screen === "home" ? (
           <HomeScreen
-            error={error}
-            isLoading={isAppLoading}
+            error={errorMessage}
+            isLoading={false}
             leaderboard={leaderboard}
             playerName={playerName}
-            score={user?.score ?? 0}
+            score={score}
             onStart={handleStartGame}
           />
         ) : null}
@@ -183,25 +198,25 @@ export default function App() {
         {screen === "question" ? (
           <QuestionCard
             answer={answer}
-            currentQuestion={currentQuestionNumber}
-            disabled={!question || status !== "idle" || isQuestionLoading}
-            error={error}
-            isChecking={status === "checking" || status === "timeout"}
-            isLoading={isQuestionLoading}
-            question={question?.question ?? ""}
-            remainingSeconds={remainingSeconds}
-            totalQuestions={TOTAL_QUESTIONS}
-            totalSeconds={ROUND_SECONDS}
+            currentQuestion={questionCount}
+            disabled={!currentQuestion || isSubmitting || timer.isExpired}
+            error={errorMessage}
+            isChecking={isSubmitting}
+            isLoading={!currentQuestion}
+            question={currentQuestion?.text ?? ""}
+            remainingSeconds={timer.timeLeft}
+            totalQuestions={MAX_QUESTION_COUNT}
+            totalSeconds={TIMER_SECONDS}
             onAnswerChange={setAnswer}
-            onSubmit={handleSubmit}
+            onSubmit={handleAnswerSubmit}
           />
         ) : null}
 
-        {screen === "result" && answerResult ? (
+        {screen === "result" && lastResult ? (
           <ResultScreen
-            currentQuestion={currentQuestionNumber}
-            result={answerResult}
-            totalQuestions={TOTAL_QUESTIONS}
+            currentQuestion={questionCount}
+            result={lastResult}
+            totalQuestions={MAX_QUESTION_COUNT}
             onNext={handleNextQuestion}
           />
         ) : null}
@@ -210,9 +225,9 @@ export default function App() {
           <FinishScreen
             leaderboard={leaderboard}
             playerName={playerName}
-            roundScore={roundScore}
-            totalQuestions={TOTAL_QUESTIONS}
-            totalScore={user?.score ?? 0}
+            roundScore={correctAnswers}
+            totalQuestions={MAX_QUESTION_COUNT}
+            totalScore={score}
             onRestart={handleStartGame}
           />
         ) : null}

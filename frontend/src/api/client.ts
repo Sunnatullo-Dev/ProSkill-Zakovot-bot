@@ -1,52 +1,103 @@
-import type { AnswerPayload, AnswerResult, AuthResponse, LeaderboardUser, Question } from "../types";
+import type { AnswerResult, AppUser, AuthResponse, LeaderboardUser, Question } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
 
-async function request<T>(path: string, initData: string | null, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
+type RequestOptions = {
+  body?: unknown;
+  initData?: string;
+  method?: "GET" | "POST";
+};
 
-  if (initData) {
-    headers.set("Authorization", `Bearer ${initData}`);
-  }
+type TopUsersResponse = {
+  users: LeaderboardUser[];
+};
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers
+export async function login(initData: string): Promise<AuthResponse> {
+  return request<AuthResponse>("/auth/login", {
+    method: "POST",
+    initData,
+    body: { initData }
   });
-
-  const responseBody = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(responseBody?.message ?? "Server bilan aloqa qilishda xatolik yuz berdi.");
-  }
-
-  return responseBody as T;
 }
 
-export const apiClient = {
-  login(initData: string) {
-    return request<AuthResponse>("/auth/telegram", null, {
-      method: "POST",
-      body: JSON.stringify({ initData })
+export async function getQuestion(): Promise<Question> {
+  return request<Question>("/questions/random");
+}
+
+export async function submitAnswer(
+  questionId: string,
+  userAnswer: string,
+  timeTaken: number
+): Promise<AnswerResult> {
+  return request<AnswerResult>("/answer", {
+    method: "POST",
+    body: {
+      questionId,
+      userAnswer,
+      timeTaken
+    }
+  });
+}
+
+export async function getMe(): Promise<AppUser> {
+  const response = await request<AuthResponse>("/auth/me");
+
+  return response.user;
+}
+
+export async function getTopUsers(limit = 3): Promise<LeaderboardUser[]> {
+  const response = await request<TopUsersResponse>(`/users/top?limit=${limit}`);
+
+  return response.users;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers: buildHeaders(options.initData),
+      body: options.body ? JSON.stringify(options.body) : undefined
     });
-  },
+    const responseBody = await parseResponse(response);
 
-  getRandomQuestion(initData: string) {
-    return request<Question>("/questions/random", initData);
-  },
+    if (!response.ok) {
+      console.error("API request failed", {
+        path,
+        status: response.status,
+        responseBody
+      });
+      throw new Error("API request failed");
+    }
 
-  async getLeaderboard(initData: string) {
-    const response = await request<{ leaderboard: LeaderboardUser[] }>("/users/leaderboard", initData);
-
-    return response.leaderboard;
-  },
-
-  submitAnswer(initData: string, payload: AnswerPayload) {
-    return request<AnswerResult>("/answers", initData, {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
+    return responseBody as T;
+  } catch (error) {
+    console.error("API request error", error);
+    throw error;
   }
-};
+}
+
+function buildHeaders(initDataOverride?: string) {
+  const initData = initDataOverride ?? getTelegramInitData();
+  const headers = new Headers({
+    "Content-Type": "application/json"
+  });
+
+  if (initData) {
+    headers.set("Authorization", `tma ${initData}`);
+  }
+
+  return headers;
+}
+
+async function parseResponse(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function getTelegramInitData() {
+  return window.Telegram?.WebApp?.initData ?? "";
+}

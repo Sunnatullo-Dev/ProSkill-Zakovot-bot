@@ -11,7 +11,7 @@ export const scoreService = {
     const user = await userRepository.findByTelegramId(telegramId);
 
     if (!user) {
-      throw new AppError(404, "Foydalanuvchi topilmadi.");
+      throw new AppError(404, "User not found");
     }
 
     return user.score;

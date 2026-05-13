@@ -23,14 +23,14 @@ export default function ResultScreen({ currentQuestion, result, totalQuestions, 
             color: toneColor
           }}
         >
-          {isCorrect ? "✓" : "×"}
+          {isCorrect ? "\u2713" : "\u00D7"}
         </div>
 
         <p className="mt-6 text-sm font-bold uppercase tracking-[0.25em]" style={{ color: toneColor }}>
           {isCorrect ? "To'g'ri javob" : "Noto'g'ri javob"}
         </p>
         <h1 className="mt-3 text-4xl font-black text-white">{isCorrect ? "+1 ball" : "0 ball"}</h1>
-        <p className="mt-4 text-base font-medium leading-7 text-[#94A3B8]">{result.feedback}</p>
+        <p className="mt-4 text-base font-medium leading-7 text-[#94A3B8]">{result.explanation}</p>
 
         {!isCorrect && result.correctAnswer ? (
           <div className="mt-6 rounded-2xl border border-white/10 bg-[#0F1B2D] p-4 text-left">

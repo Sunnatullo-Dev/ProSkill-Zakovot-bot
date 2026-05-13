@@ -1,50 +1,86 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "../config/env";
-import { AppError } from "../middleware/error.middleware";
+import type { CheckAnswerResult } from "../types";
 
-type CheckAnswerInput = {
-  question: string;
-  correctAnswer: string;
-  userAnswer: string;
-};
+const GEMINI_TIMEOUT_MS = 10000;
+const FALLBACK_EXPLANATION = "Tekshirib bo'lmadi";
 
-type GeminiAnswerResult = {
-  isCorrect: boolean;
-  feedback: string;
+type GeminiJsonResponse = {
+  isCorrect?: unknown;
+  explanation?: unknown;
 };
 
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: env.GEMINI_MODEL });
 
-export const geminiService = {
-  async checkAnswer(input: CheckAnswerInput): Promise<GeminiAnswerResult> {
-    const prompt = buildPrompt(input);
-    const response = await model.generateContent(prompt);
+export async function checkAnswer(
+  question: string,
+  correctAnswer: string,
+  userAnswer: string
+): Promise<CheckAnswerResult> {
+  try {
+    const response = await withTimeout(model.generateContent(buildPrompt(question, correctAnswer, userAnswer)));
     const text = response.response.text();
-    const parsed = parseGeminiJson(text);
+    const parsed = parseGeminiResponse(text);
+
+    if (!parsed) {
+      return {
+        isCorrect: false,
+        explanation: FALLBACK_EXPLANATION
+      };
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error("Gemini answer check failed", error);
 
     return {
-      isCorrect: parsed.isCorrect,
-      feedback: parsed.feedback || (parsed.isCorrect ? "To'g'ri javob." : "Noto'g'ri javob.")
+      isCorrect: false,
+      explanation: FALLBACK_EXPLANATION
     };
   }
-};
+}
 
-function buildPrompt({ question, correctAnswer, userAnswer }: CheckAnswerInput) {
+function buildPrompt(question: string, correctAnswer: string, userAnswer: string) {
   return `
-Siz Zakovot bilim o'yinida javoblarni tekshiradigan hakamsiz.
-Foydalanuvchi javobini mazmunan tekshiring. Imlo xatolari yoki kichik farqlar bo'lsa, mazmun to'g'ri bo'lsa to'g'ri deb baholang.
-
+Sen bilim o'yini hakamisisan.
 Savol: ${question}
 To'g'ri javob: ${correctAnswer}
 Foydalanuvchi javobi: ${userAnswer}
 
-Faqat valid JSON qaytaring. "isCorrect" qiymati boolean bo'lsin.
-Misol: {"isCorrect": true, "feedback": "qisqa izoh uzbek tilida"}
+Qoidalar:
+- Imlo xatolariga e'tibor berma
+- Ma'no to'g'ri bo'lsa to'g'ri deb hisobla
+- Qisqa yoki to'liq javob bo'lsin — farqi yo'q
+- Faqat JSON qaytar: {"isCorrect": true/false, "explanation": "..."}
 `.trim();
 }
 
-function parseGeminiJson(text: string): GeminiAnswerResult {
+function parseGeminiResponse(text: string): CheckAnswerResult | null {
+  try {
+    const jsonText = extractJson(text);
+
+    if (!jsonText) {
+      return null;
+    }
+
+    const parsed = JSON.parse(jsonText) as GeminiJsonResponse;
+
+    if (typeof parsed.isCorrect !== "boolean") {
+      return null;
+    }
+
+    return {
+      isCorrect: parsed.isCorrect,
+      explanation: typeof parsed.explanation === "string" ? parsed.explanation : ""
+    };
+  } catch (error) {
+    console.error("Gemini JSON parse failed", error);
+    return null;
+  }
+}
+
+function extractJson(text: string) {
   const cleaned = text
     .trim()
     .replace(/^```json\s*/i, "")
@@ -54,21 +90,26 @@ function parseGeminiJson(text: string): GeminiAnswerResult {
   const jsonEnd = cleaned.lastIndexOf("}");
 
   if (jsonStart === -1 || jsonEnd === -1 || jsonEnd < jsonStart) {
-    throw new AppError(502, "Gemini javobini o'qib bo'lmadi.");
+    return "";
   }
 
+  return cleaned.slice(jsonStart, jsonEnd + 1);
+}
+
+async function withTimeout<T>(promise: Promise<T>) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error("Gemini request timeout"));
+    }, GEMINI_TIMEOUT_MS);
+  });
+
   try {
-    const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1)) as GeminiAnswerResult;
-
-    if (typeof parsed.isCorrect !== "boolean") {
-      throw new Error("isCorrect boolean emas");
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
     }
-
-    return {
-      isCorrect: parsed.isCorrect,
-      feedback: typeof parsed.feedback === "string" ? parsed.feedback : ""
-    };
-  } catch {
-    throw new AppError(502, "Gemini javobini o'qib bo'lmadi.");
   }
 }

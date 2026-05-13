@@ -13,7 +13,7 @@ export class AppError extends Error {
 export function errorMiddleware(error: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (error instanceof ZodError) {
     return res.status(400).json({
-      message: "So'rov ma'lumotlari noto'g'ri.",
+      message: "Bad request",
       issues: error.issues
     });
   }
@@ -27,6 +27,6 @@ export function errorMiddleware(error: unknown, _req: Request, res: Response, _n
   console.error(error);
 
   return res.status(500).json({
-    message: "Serverda kutilmagan xatolik yuz berdi."
+    message: "Internal server error"
   });
 }

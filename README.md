@@ -57,8 +57,10 @@ create table users (
 
 create table questions (
   id uuid primary key default gen_random_uuid(),
-  question text not null,
+  text text not null,
   correct_answer text not null,
+  category text,
+  difficulty text,
   created_at timestamptz not null default now()
 );
 

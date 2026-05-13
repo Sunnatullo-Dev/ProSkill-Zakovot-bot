@@ -20,7 +20,9 @@ export default function FinishScreen({
   return (
     <div className="flex min-h-[calc(100vh-32px)] flex-col gap-5 py-6 transition-all duration-300">
       <section className="flex flex-1 flex-col justify-center rounded-[30px] bg-[#1E2D42] p-6 text-center shadow-2xl shadow-black/30">
-        <span className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[#4DA6FF]/15 text-4xl">🧠</span>
+        <span className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[#4DA6FF]/15 text-4xl">
+          {"\u{1F9E0}"}
+        </span>
         <p className="mt-6 text-sm font-bold uppercase tracking-[0.25em] text-[#4DA6FF]">O'yin tugadi</p>
         <h1 className="mt-3 text-5xl font-black text-white">
           {roundScore}/{totalQuestions}

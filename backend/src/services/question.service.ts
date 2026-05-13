@@ -6,20 +6,17 @@ export const questionService = {
     const question = await questionRepository.getRandomQuestion();
 
     if (!question) {
-      throw new AppError(404, "Savollar bazasida savol topilmadi.");
+      throw new AppError(404, "Question not found");
     }
 
-    return {
-      id: question.id,
-      question: question.question
-    };
+    return question;
   },
 
   async getQuestionWithAnswer(questionId: string) {
     const question = await questionRepository.getQuestionById(questionId);
 
     if (!question) {
-      throw new AppError(404, "Savol topilmadi.");
+      throw new AppError(404, "Question not found");
     }
 
     return question;

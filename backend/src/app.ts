@@ -29,7 +29,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/questions", questionRouter);
-app.use("/api/answers", answerRouter);
+app.use("/api/answer", answerRouter);
 app.use("/api/users", userRouter);
 
 app.use(errorMiddleware);

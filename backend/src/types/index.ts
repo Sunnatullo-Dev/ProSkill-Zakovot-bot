@@ -3,12 +3,6 @@ export type TelegramUser = {
   first_name?: string;
   last_name?: string;
   username?: string;
-  language_code?: string;
-};
-
-export type TelegramAuthData = {
-  authDate: number;
-  user: TelegramUser;
 };
 
 export type DbUser = {
@@ -29,16 +23,31 @@ export type AppUser = {
   score: number;
 };
 
-export type LeaderboardUser = AppUser;
-
 export type DbQuestion = {
   id: string;
-  question: string;
+  text: string;
   correct_answer: string;
+  category: string | null;
+  difficulty: string | null;
 };
 
-export type QuestionWithAnswer = {
+export type Question = {
   id: string;
-  question: string;
+  text: string;
+  category: string | null;
+  difficulty: string | null;
+};
+
+export type QuestionWithAnswer = Question & {
+  correctAnswer: string;
+};
+
+export type CheckAnswerResult = {
+  isCorrect: boolean;
+  explanation: string;
+};
+
+export type SubmitAnswerResponse = CheckAnswerResult & {
+  newScore: number;
   correctAnswer: string;
 };
