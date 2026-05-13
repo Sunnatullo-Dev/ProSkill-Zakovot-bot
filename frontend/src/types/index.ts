@@ -26,13 +26,17 @@ export type Question = {
 
 export type AnswerPayload = {
   questionId: string;
-  answer: string;
+  answer?: string;
+  timedOut?: boolean;
 };
 
 export type AnswerResult = {
   isCorrect: boolean;
   score: number;
   feedback: string;
+  correctAnswer?: string;
 };
 
 export type AnswerStatus = "idle" | "checking" | "correct" | "wrong" | "timeout";
+
+export type LeaderboardUser = AppUser;

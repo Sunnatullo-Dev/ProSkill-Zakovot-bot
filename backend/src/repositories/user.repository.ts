@@ -62,6 +62,22 @@ export const userRepository = {
     }
 
     return mapUser(data);
+  },
+
+  async getLeaderboard(limit = 3): Promise<AppUser[]> {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, telegram_id, first_name, last_name, username, score")
+      .order("score", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(limit)
+      .returns<DbUser[]>();
+
+    if (error) {
+      throw new AppError(500, "Leaderboardni olishda xatolik yuz berdi.");
+    }
+
+    return (data ?? []).map(mapUser);
   }
 };
 

@@ -1,54 +1,102 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { apiClient } from "./api/client";
-import AnswerForm from "./components/AnswerForm";
+import FinishScreen from "./components/FinishScreen";
+import HomeScreen from "./components/HomeScreen";
 import QuestionCard from "./components/QuestionCard";
-import ScoreBadge from "./components/ScoreBadge";
-import Timer from "./components/Timer";
+import ResultScreen from "./components/ResultScreen";
 import { useTelegram } from "./hooks/useTelegram";
 import { useTimer } from "./hooks/useTimer";
-import type { AnswerStatus, AppUser, Question } from "./types";
+import type { AnswerResult, AnswerStatus, AppUser, LeaderboardUser, Question } from "./types";
 
 const ROUND_SECONDS = 15;
+const TOTAL_QUESTIONS = 10;
+
+type GameScreen = "home" | "question" | "result" | "finish";
 
 export default function App() {
   const { initData, telegramUser, isReady, error: telegramError } = useTelegram();
   const [user, setUser] = useState<AppUser | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [question, setQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState("");
+  const [answerResult, setAnswerResult] = useState<AnswerResult | null>(null);
   const [status, setStatus] = useState<AnswerStatus>("idle");
-  const [message, setMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [screen, setScreen] = useState<GameScreen>("home");
+  const [currentQuestionNumber, setCurrentQuestionNumber] = useState(1);
+  const [roundScore, setRoundScore] = useState(0);
+  const [isAppLoading, setIsAppLoading] = useState(true);
+  const [isQuestionLoading, setIsQuestionLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const canPlay = useMemo(() => Boolean(initData && user && question), [initData, user, question]);
-
-  const handleTimeUp = useCallback(() => {
-    setStatus((current) => {
-      if (current !== "idle") {
-        return current;
-      }
-
-      setMessage("Vaqt tugadi. Keyingi savolni oling.");
-      return "timeout";
-    });
-  }, []);
-
-  const { remainingSeconds, resetTimer } = useTimer(
-    ROUND_SECONDS,
-    canPlay && !isLoading && status === "idle",
-    handleTimeUp
-  );
-
-  const loadQuestion = useCallback(async () => {
+  const loadLeaderboard = useCallback(async () => {
     if (!initData) {
       return;
     }
 
-    setIsLoading(true);
+    try {
+      const nextLeaderboard = await apiClient.getLeaderboard(initData);
+      setLeaderboard(nextLeaderboard);
+    } catch {
+      setLeaderboard([]);
+    }
+  }, [initData]);
+
+  const submitAnswer = useCallback(async (answerText: string, timedOut = false) => {
+    if (!initData || !question || status !== "idle") {
+      return;
+    }
+
+    if (!timedOut && !answerText.trim()) {
+      setError("Javob yozing.");
+      return;
+    }
+
+    setStatus(timedOut ? "timeout" : "checking");
     setError("");
+
+    try {
+      const result = await apiClient.submitAnswer(initData, {
+        questionId: question.id,
+        answer: answerText.trim(),
+        timedOut
+      });
+
+      if (result.isCorrect) {
+        setRoundScore((currentScore) => currentScore + 1);
+      }
+
+      setUser((currentUser) => (currentUser ? { ...currentUser, score: result.score } : currentUser));
+      setAnswerResult(result);
+      setStatus(result.isCorrect ? "correct" : timedOut ? "timeout" : "wrong");
+      setScreen("result");
+      void loadLeaderboard();
+    } catch (requestError) {
+      setStatus("idle");
+      setError(requestError instanceof Error ? requestError.message : "Javobni tekshirishda xatolik yuz berdi.");
+    }
+  }, [initData, loadLeaderboard, question, status]);
+
+  const { remainingSeconds, resetTimer } = useTimer(
+    ROUND_SECONDS,
+    screen === "question" && Boolean(question) && !isQuestionLoading && status === "idle",
+    () => {
+      void submitAnswer("", true);
+    }
+  );
+
+  const loadQuestion = useCallback(async (questionNumber: number) => {
+    if (!initData) {
+      setError("Telegram initData topilmadi.");
+      return;
+    }
+
+    setScreen("question");
+    setCurrentQuestionNumber(questionNumber);
+    setIsQuestionLoading(true);
     setAnswer("");
-    setMessage("");
+    setAnswerResult(null);
+    setError("");
     setStatus("idle");
 
     try {
@@ -57,8 +105,9 @@ export default function App() {
       resetTimer();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Savolni olishda xatolik yuz berdi.");
+      setScreen("home");
     } finally {
-      setIsLoading(false);
+      setIsQuestionLoading(false);
     }
   }, [initData, resetTimer]);
 
@@ -68,111 +117,104 @@ export default function App() {
     }
 
     if (!initData) {
-      setIsLoading(false);
+      setIsAppLoading(false);
       setError(telegramError || "Zakovotni Telegram Mini App ichida oching.");
       return;
     }
 
     async function bootstrap() {
-      setIsLoading(true);
+      setIsAppLoading(true);
       setError("");
 
       try {
         const authResponse = await apiClient.login(initData);
         setUser(authResponse.user);
-        const firstQuestion = await apiClient.getRandomQuestion(initData);
-        setQuestion(firstQuestion);
-        resetTimer();
+        const nextLeaderboard = await apiClient.getLeaderboard(initData);
+        setLeaderboard(nextLeaderboard);
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : "Ilovani yuklashda xatolik yuz berdi.");
       } finally {
-        setIsLoading(false);
+        setIsAppLoading(false);
       }
     }
 
     void bootstrap();
-  }, [initData, isReady, resetTimer, telegramError]);
+  }, [initData, isReady, telegramError]);
+
+  function handleStartGame() {
+    setRoundScore(0);
+    setCurrentQuestionNumber(1);
+    void loadQuestion(1);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!initData || !question || status !== "idle") {
-      return;
-    }
-
-    const trimmedAnswer = answer.trim();
-
-    if (!trimmedAnswer) {
-      setMessage("Javob yozing.");
-      return;
-    }
-
-    setStatus("checking");
-    setMessage("Javob tekshirilmoqda...");
-
-    try {
-      const result = await apiClient.submitAnswer(initData, {
-        questionId: question.id,
-        answer: trimmedAnswer
-      });
-
-      setUser((currentUser) => (currentUser ? { ...currentUser, score: result.score } : currentUser));
-      setStatus(result.isCorrect ? "correct" : "wrong");
-      setMessage(result.feedback);
-    } catch (requestError) {
-      setStatus("idle");
-      setMessage("");
-      setError(requestError instanceof Error ? requestError.message : "Javobni tekshirishda xatolik yuz berdi.");
-    }
+    await submitAnswer(answer);
   }
 
+  function handleNextQuestion() {
+    if (currentQuestionNumber >= TOTAL_QUESTIONS) {
+      setQuestion(null);
+      setAnswerResult(null);
+      setStatus("idle");
+      setScreen("finish");
+      return;
+    }
+
+    void loadQuestion(currentQuestionNumber + 1);
+  }
+
+  const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovotchi";
+
   return (
-    <main className="min-h-screen bg-paper px-4 py-5 text-ink">
-      <section className="mx-auto flex min-h-[calc(100vh-40px)] w-full max-w-md flex-col gap-4">
-        <header className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-brand">Zakovot</p>
-            <h1 className="text-2xl font-bold">Bilim sinovi</h1>
-          </div>
-          <ScoreBadge score={user?.score ?? 0} />
-        </header>
-
-        {telegramUser?.first_name ? (
-          <p className="text-sm text-slate-600">Salom, {telegramUser.first_name}.</p>
+    <main className="min-h-screen bg-[#0F1B2D] px-4 py-4 text-white">
+      <section className="mx-auto min-h-[calc(100vh-32px)] w-full max-w-[430px]">
+        {screen === "home" ? (
+          <HomeScreen
+            error={error}
+            isLoading={isAppLoading}
+            leaderboard={leaderboard}
+            playerName={playerName}
+            score={user?.score ?? 0}
+            onStart={handleStartGame}
+          />
         ) : null}
 
-        {error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        {screen === "question" ? (
+          <QuestionCard
+            answer={answer}
+            currentQuestion={currentQuestionNumber}
+            disabled={!question || status !== "idle" || isQuestionLoading}
+            error={error}
+            isChecking={status === "checking" || status === "timeout"}
+            isLoading={isQuestionLoading}
+            question={question?.question ?? ""}
+            remainingSeconds={remainingSeconds}
+            totalQuestions={TOTAL_QUESTIONS}
+            totalSeconds={ROUND_SECONDS}
+            onAnswerChange={setAnswer}
+            onSubmit={handleSubmit}
+          />
         ) : null}
 
-        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3">
-          <span className="text-sm font-medium text-slate-600">Raund vaqti</span>
-          <Timer seconds={remainingSeconds} totalSeconds={ROUND_SECONDS} />
-        </div>
-
-        <QuestionCard question={question?.question ?? ""} isLoading={isLoading} />
-
-        <AnswerForm
-          answer={answer}
-          disabled={!question || status !== "idle" || isLoading}
-          isChecking={status === "checking"}
-          onAnswerChange={setAnswer}
-          onSubmit={handleSubmit}
-        />
-
-        {message ? (
-          <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">{message}</div>
+        {screen === "result" && answerResult ? (
+          <ResultScreen
+            currentQuestion={currentQuestionNumber}
+            result={answerResult}
+            totalQuestions={TOTAL_QUESTIONS}
+            onNext={handleNextQuestion}
+          />
         ) : null}
 
-        {status !== "idle" && status !== "checking" ? (
-          <button
-            className="h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={!initData || isLoading}
-            type="button"
-            onClick={loadQuestion}
-          >
-            Keyingi savol
-          </button>
+        {screen === "finish" ? (
+          <FinishScreen
+            leaderboard={leaderboard}
+            playerName={playerName}
+            roundScore={roundScore}
+            totalQuestions={TOTAL_QUESTIONS}
+            totalScore={user?.score ?? 0}
+            onRestart={handleStartGame}
+          />
         ) : null}
       </section>
     </main>

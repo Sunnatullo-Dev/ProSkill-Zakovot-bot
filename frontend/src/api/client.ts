@@ -1,4 +1,4 @@
-import type { AnswerPayload, AnswerResult, AuthResponse, Question } from "../types";
+import type { AnswerPayload, AnswerResult, AuthResponse, LeaderboardUser, Question } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
@@ -35,6 +35,12 @@ export const apiClient = {
 
   getRandomQuestion(initData: string) {
     return request<Question>("/questions/random", initData);
+  },
+
+  async getLeaderboard(initData: string) {
+    const response = await request<{ leaderboard: LeaderboardUser[] }>("/users/leaderboard", initData);
+
+    return response.leaderboard;
   },
 
   submitAnswer(initData: string, payload: AnswerPayload) {

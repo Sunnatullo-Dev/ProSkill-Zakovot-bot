@@ -7,7 +7,11 @@ import { scoreService } from "../services/score.service";
 
 const answerSchema = z.object({
   questionId: z.string().uuid(),
-  answer: z.string().trim().min(1).max(500)
+  answer: z.string().trim().max(500).optional().default(""),
+  timedOut: z.boolean().optional().default(false)
+}).refine((payload) => payload.timedOut || payload.answer.length > 0, {
+  message: "Javob yozing.",
+  path: ["answer"]
 });
 
 export const answerController = {
@@ -20,17 +24,20 @@ export const answerController = {
 
     const payload = answerSchema.parse(req.body);
     const question = await questionService.getQuestionWithAnswer(payload.questionId);
-    const result = await geminiService.checkAnswer({
-      question: question.question,
-      correctAnswer: question.correctAnswer,
-      userAnswer: payload.answer
-    });
+    const result = payload.timedOut
+      ? { isCorrect: false, feedback: "Vaqt tugadi." }
+      : await geminiService.checkAnswer({
+          question: question.question,
+          correctAnswer: question.correctAnswer,
+          userAnswer: payload.answer
+        });
     const score = await scoreService.applyAnswerResult(currentUser.telegramId, result.isCorrect);
 
     res.json({
       isCorrect: result.isCorrect,
       score,
-      feedback: result.feedback
+      feedback: result.feedback,
+      correctAnswer: result.isCorrect ? undefined : question.correctAnswer
     });
   }
 };

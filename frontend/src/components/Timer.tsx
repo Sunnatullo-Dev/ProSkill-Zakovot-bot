@@ -7,11 +7,18 @@ export default function Timer({ seconds, totalSeconds }: TimerProps) {
   const percent = Math.max(0, Math.min(100, (seconds / totalSeconds) * 100));
 
   return (
-    <div className="flex min-w-28 items-center gap-2">
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
-        <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percent}%` }} />
+    <div
+      className="grid h-28 w-28 place-items-center rounded-full transition-all duration-500"
+      style={{
+        background: `conic-gradient(#4DA6FF ${percent}%, rgba(255,255,255,0.10) ${percent}% 100%)`
+      }}
+    >
+      <div className="grid h-24 w-24 place-items-center rounded-full bg-[#1E2D42] shadow-inner shadow-black/30">
+        <div className="text-center">
+          <span className="block text-3xl font-black tabular-nums text-white">{seconds}</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">soniya</span>
+        </div>
       </div>
-      <span className="w-8 text-right text-sm font-bold tabular-nums">{seconds}s</span>
     </div>
   );
 }

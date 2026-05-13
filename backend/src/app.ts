@@ -5,6 +5,7 @@ import { env } from "./config/env";
 import { answerRouter } from "./routes/answer.routes";
 import { authRouter } from "./routes/auth.routes";
 import { questionRouter } from "./routes/question.routes";
+import { userRouter } from "./routes/user.routes";
 import { errorMiddleware } from "./middleware/error.middleware";
 
 export const app = express();
@@ -29,5 +30,6 @@ app.get("/health", (_req, res) => {
 app.use("/api/auth", authRouter);
 app.use("/api/questions", questionRouter);
 app.use("/api/answers", answerRouter);
+app.use("/api/users", userRouter);
 
 app.use(errorMiddleware);

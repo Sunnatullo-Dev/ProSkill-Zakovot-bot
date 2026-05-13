@@ -4,9 +4,9 @@ type ScoreBadgeProps = {
 
 export default function ScoreBadge({ score }: ScoreBadgeProps) {
   return (
-    <div className="rounded-lg border border-teal-100 bg-teal-50 px-3 py-2 text-right">
-      <p className="text-xs font-medium text-teal-700">Ball</p>
-      <p className="text-xl font-bold text-brand">{score}</p>
+    <div className="rounded-2xl border border-white/10 bg-[#1E2D42] px-4 py-3 text-right">
+      <p className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">Ball</p>
+      <p className="text-2xl font-black text-white">{score}</p>
     </div>
   );
 }

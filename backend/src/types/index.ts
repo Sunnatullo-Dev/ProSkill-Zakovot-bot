@@ -29,6 +29,8 @@ export type AppUser = {
   score: number;
 };
 
+export type LeaderboardUser = AppUser;
+
 export type DbQuestion = {
   id: string;
   question: string;
