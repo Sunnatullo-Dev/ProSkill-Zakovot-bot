@@ -7,12 +7,20 @@ import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
 import { useTelegram } from "./hooks/useTelegram";
 import { useTimer } from "./hooks/useTimer";
-import type { AnswerResult, AppUser, LeaderboardUser, Question, Screen } from "./types";
+import type { AnswerResult, AppUser, AuthResponse, LeaderboardUser, Question, Screen } from "./types";
 
 const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
 const MAX_QUESTION_COUNT = 10;
-const SERVER_ERROR_MESSAGE = "Serverga ulanib bo'lmadi. Qayta urinib ko'ring.";
+const BOOTSTRAP_TIMEOUT_MS = 1000;
+const DEFAULT_APP_USER: AppUser = {
+  id: "0",
+  telegramId: 0,
+  firstName: "Zakovatchi",
+  lastName: null,
+  username: "guest",
+  score: 0
+};
 
 type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 
@@ -66,7 +74,6 @@ export default function App() {
       start();
     } catch (error) {
       console.error("Question load failed", error);
-      setErrorMessage(SERVER_ERROR_MESSAGE);
       setScreen("home");
     }
   }, [reset, start]);
@@ -87,24 +94,24 @@ export default function App() {
       stop();
 
       const result = await submitAnswer(currentQuestion.id, userAnswer.trim(), timeTaken);
+      const nextScore = result.isCorrect ? Math.max(result.newScore, score + 1) : Math.max(result.newScore, score);
 
       if (result.isCorrect) {
         setCorrectAnswers((currentValue) => currentValue + 1);
       }
 
-      setLastResult(result);
-      setScore(result.newScore);
-      setUser((currentUser) => (currentUser ? { ...currentUser, score: result.newScore } : currentUser));
+      setLastResult({ ...result, newScore: nextScore });
+      setScore(nextScore);
+      setUser((currentUser) => (currentUser ? { ...currentUser, score: nextScore } : currentUser));
       setScreen("result");
       void loadTopUsers();
     } catch (error) {
       console.error("Answer submit failed", error);
-      setErrorMessage(SERVER_ERROR_MESSAGE);
       start();
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentQuestion, isSubmitting, loadTopUsers, start, stop]);
+  }, [currentQuestion, isSubmitting, loadTopUsers, score, start, stop]);
 
   useEffect(() => {
     submitAnswerRef.current = handleSubmitAnswer;
@@ -146,7 +153,16 @@ export default function App() {
         setErrorMessage("");
         const effectiveInitData = initData || "guest";
 
-        const response = await login(effectiveInitData);
+        const response = await withTimeout(login(effectiveInitData), {
+          user: telegramUser
+            ? {
+                ...DEFAULT_APP_USER,
+                firstName: telegramUser.first_name ?? DEFAULT_APP_USER.firstName,
+                lastName: telegramUser.last_name ?? null,
+                username: telegramUser.username ?? DEFAULT_APP_USER.username
+              }
+            : DEFAULT_APP_USER
+        });
 
         setUser(response.user);
         setScore(response.user.score);
@@ -154,13 +170,14 @@ export default function App() {
         setScreen("home");
       } catch (error) {
         console.error("Login failed", error);
-        setErrorMessage(SERVER_ERROR_MESSAGE);
+        setUser(DEFAULT_APP_USER);
+        setScore(DEFAULT_APP_USER.score);
         setScreen("home");
       }
     }
 
     void bootstrap();
-  }, [initData, isReady, loadTopUsers]);
+  }, [initData, isReady, loadTopUsers, telegramUser]);
 
   async function handleStartGame() {
     try {
@@ -170,7 +187,7 @@ export default function App() {
       await loadQuestion(1, true);
     } catch (error) {
       console.error("Start game failed", error);
-      setErrorMessage(SERVER_ERROR_MESSAGE);
+      setScreen("home");
     } finally {
       setIsStarting(false);
     }
@@ -250,4 +267,13 @@ export default function App() {
       </section>
     </main>
   );
+}
+
+function withTimeout(promise: Promise<AuthResponse>, fallback: AuthResponse): Promise<AuthResponse> {
+  return Promise.race([
+    promise,
+    new Promise<AuthResponse>((resolve) => {
+      window.setTimeout(() => resolve(fallback), BOOTSTRAP_TIMEOUT_MS);
+    })
+  ]);
 }

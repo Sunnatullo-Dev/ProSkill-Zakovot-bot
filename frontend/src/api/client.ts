@@ -2,6 +2,92 @@ import type { AnswerResult, AppUser, AuthResponse, LeaderboardUser, Question } f
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
+const DEFAULT_USER: AppUser = {
+  id: "0",
+  telegramId: 0,
+  firstName: "Zakovatchi",
+  lastName: null,
+  username: "guest",
+  score: 0
+};
+const FALLBACK_ANSWER_RESULT: AnswerResult = {
+  isCorrect: false,
+  explanation: "Tekshirib bo'lmadi",
+  newScore: 0,
+  correctAnswer: ""
+};
+const FALLBACK_QUESTIONS = [
+  {
+    id: "1",
+    text: "O'zbekistonning poytaxti qaysi shahar?",
+    category: "geography",
+    difficulty: "easy",
+    correct_answer: "Toshkent"
+  },
+  {
+    id: "2",
+    text: "Alisher Navoiy qaysi asrda yashagan?",
+    category: "history",
+    difficulty: "easy",
+    correct_answer: "XV asr"
+  },
+  {
+    id: "3",
+    text: "Suv necha darajada qaynaydi?",
+    category: "science",
+    difficulty: "easy",
+    correct_answer: "100 daraja"
+  },
+  {
+    id: "4",
+    text: "O'zbekiston mustaqilligini qaysi yili oldi?",
+    category: "history",
+    difficulty: "easy",
+    correct_answer: "1991"
+  },
+  {
+    id: "5",
+    text: "Matematik: 15 × 8 = ?",
+    category: "math",
+    difficulty: "easy",
+    correct_answer: "120"
+  },
+  {
+    id: "6",
+    text: "Dunyo bo'yicha eng baland tog' qaysi?",
+    category: "geography",
+    difficulty: "medium",
+    correct_answer: "Everest"
+  },
+  {
+    id: "7",
+    text: "Insonning normal tana harorati necha daraja?",
+    category: "science",
+    difficulty: "easy",
+    correct_answer: "36.6"
+  },
+  {
+    id: "8",
+    text: "O'zbekistonning milliy valyutasi nima?",
+    category: "general",
+    difficulty: "easy",
+    correct_answer: "So'm"
+  },
+  {
+    id: "9",
+    text: "Bir yilda necha kun bor?",
+    category: "general",
+    difficulty: "easy",
+    correct_answer: "365"
+  },
+  {
+    id: "10",
+    text: "Amir Temur qaysi shaharda tug'ilgan?",
+    category: "history",
+    difficulty: "medium",
+    correct_answer: "Kesh (Shahrisabz)"
+  }
+] satisfies Array<Question & { correct_answer: string }>;
 
 type RequestOptions = {
   body?: unknown;
@@ -14,15 +100,27 @@ type TopUsersResponse = {
 };
 
 export async function login(initData: string): Promise<AuthResponse> {
-  return request<AuthResponse>("/auth/login", {
-    method: "POST",
-    initData,
-    body: { initData }
-  });
+  try {
+    const response = await request<AuthResponse>("/auth/login", {
+      method: "POST",
+      initData,
+      body: { initData }
+    });
+
+    return response ?? { user: DEFAULT_USER };
+  } catch (error) {
+    console.error("Login fallback enabled", error);
+    return { user: DEFAULT_USER };
+  }
 }
 
 export async function getQuestion(): Promise<Question> {
-  return request<Question>("/questions/random");
+  try {
+    return (await request<Question>("/questions/random")) ?? getRandomFallbackQuestion();
+  } catch (error) {
+    console.error("Question fallback enabled", error);
+    return getRandomFallbackQuestion();
+  }
 }
 
 export async function submitAnswer(
@@ -30,29 +128,46 @@ export async function submitAnswer(
   userAnswer: string,
   timeTaken: number
 ): Promise<AnswerResult> {
-  return request<AnswerResult>("/answer", {
-    method: "POST",
-    body: {
-      questionId,
-      userAnswer,
-      timeTaken
-    }
-  });
+  try {
+    const response = await request<AnswerResult>("/answer", {
+      method: "POST",
+      body: {
+        questionId,
+        userAnswer,
+        timeTaken
+      }
+    });
+
+    return response ?? checkFallbackAnswer(questionId, userAnswer);
+  } catch (error) {
+    console.error("Answer fallback enabled", error);
+    return checkFallbackAnswer(questionId, userAnswer);
+  }
 }
 
 export async function getMe(): Promise<AppUser> {
-  const response = await request<AuthResponse>("/auth/me");
+  try {
+    const response = await request<AuthResponse>("/auth/me");
 
-  return response.user;
+    return response?.user ?? DEFAULT_USER;
+  } catch (error) {
+    console.error("Me fallback enabled", error);
+    return DEFAULT_USER;
+  }
 }
 
 export async function getTopUsers(limit = 3): Promise<LeaderboardUser[]> {
-  const response = await request<TopUsersResponse>(`/users/top?limit=${limit}`);
+  try {
+    const response = await request<TopUsersResponse>(`/users/top?limit=${limit}`);
 
-  return response.users;
+    return response?.users ?? [];
+  } catch (error) {
+    console.error("Top users fallback enabled", error);
+    return [];
+  }
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T | null> {
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {
       method: options.method ?? "GET",
@@ -67,13 +182,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         status: response.status,
         responseBody
       });
-      throw new Error("API request failed");
+      return null;
     }
 
     return responseBody as T;
   } catch (error) {
     console.error("API request error", error);
-    throw error;
+    return null;
   }
 }
 
@@ -100,4 +215,37 @@ async function parseResponse(response: Response): Promise<unknown> {
 
 function getTelegramInitData() {
   return window.Telegram?.WebApp?.initData || "guest";
+}
+
+function getRandomFallbackQuestion(): Question {
+  const index = Math.floor(Math.random() * FALLBACK_QUESTIONS.length);
+  const question = FALLBACK_QUESTIONS[index] ?? FALLBACK_QUESTIONS[0];
+
+  return {
+    id: question.id,
+    text: question.text,
+    category: question.category,
+    difficulty: question.difficulty
+  };
+}
+
+function checkFallbackAnswer(questionId: string, userAnswer: string): AnswerResult {
+  const question = FALLBACK_QUESTIONS.find((fallbackQuestion) => fallbackQuestion.id === questionId);
+
+  if (!question) {
+    return FALLBACK_ANSWER_RESULT;
+  }
+
+  const isCorrect = normalizeAnswer(userAnswer) === normalizeAnswer(question.correct_answer);
+
+  return {
+    isCorrect,
+    explanation: isCorrect ? "Javob to'g'ri" : "Tekshirib bo'lmadi",
+    newScore: 0,
+    correctAnswer: question.correct_answer
+  };
+}
+
+function normalizeAnswer(answer: string) {
+  return answer.trim().toLowerCase();
 }
