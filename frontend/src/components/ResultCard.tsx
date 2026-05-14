@@ -1,77 +1,156 @@
-import type { AnswerResult, AnswerStatus } from "../types";
+import type { AnswerStatus } from "../types";
 import DiffDisplay from "./DiffDisplay";
 
 type ResultCardProps = {
   autoNextSeconds: number;
-  nextLabel: string;
-  result: AnswerResult;
+  correctAnswer: string;
+  explanation: string;
+  newScore: number;
+  status: AnswerStatus;
   userAnswer: string;
   onNext: () => void;
 };
 
-export default function ResultCard({ autoNextSeconds, nextLabel, result, userAnswer, onNext }: ResultCardProps) {
-  const config = getStatusConfig(result.status);
-  const showDiff = result.status === "partial" || result.status === "incorrect";
+const config = {
+  correct: {
+    bg: "#030D06",
+    icon: "\u2705",
+    title: "To'g'ri! +1 ball",
+    titleColor: "var(--success)"
+  },
+  partial: {
+    bg: "#0D0A02",
+    icon: "\u26A0\uFE0F",
+    title: "Qisman to'g'ri \u2014 imlo xatosi",
+    titleColor: "var(--warning)"
+  },
+  incorrect: {
+    bg: "#0D0203",
+    icon: "\u274C",
+    title: "Noto'g'ri",
+    titleColor: "var(--error)"
+  }
+} satisfies Record<AnswerStatus, { bg: string; icon: string; title: string; titleColor: string }>;
+
+export default function ResultCard({
+  autoNextSeconds,
+  correctAnswer,
+  explanation,
+  status,
+  userAnswer,
+  onNext
+}: ResultCardProps) {
+  const currentConfig = config[status];
 
   return (
-    <section className="px-5 text-center">
-      <div className="text-5xl leading-none">{config.icon}</div>
-      <h1 className={`mt-5 text-[32px] font-black leading-tight ${config.titleClass}`}>{config.title}</h1>
+    <div
+      className="animate-scaleIn"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: currentConfig.bg,
+        padding: "24px"
+      }}
+    >
+      <div style={{ fontSize: "64px", marginBottom: "16px" }}>{currentConfig.icon}</div>
 
-      {showDiff ? <DiffDisplay correctAnswer={result.correctAnswer} userAnswer={userAnswer} /> : null}
+      <div
+        style={{
+          fontSize: "24px",
+          fontWeight: 800,
+          color: currentConfig.titleColor,
+          marginBottom: "24px",
+          textAlign: "center"
+        }}
+      >
+        {currentConfig.title}
+      </div>
 
-      {result.status === "partial" ? (
-        <div className="mt-5 rounded-2xl border border-[#F5C842]/20 bg-[var(--color-card)] p-4 text-left shadow-xl shadow-black/20">
-          <p className="text-xs font-bold uppercase tracking-[2px] text-[var(--color-muted)]">To'g'ri yozilishi:</p>
-          <p className="mt-2 text-base font-bold leading-7 text-[var(--color-text)]">{result.correctAnswer}</p>
-        </div>
-      ) : null}
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "360px",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "20px",
+          padding: "24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px"
+        }}
+      >
+        {status !== "incorrect" ? <DiffDisplay correctAnswer={correctAnswer} userAnswer={userAnswer} /> : null}
 
-      {result.status === "incorrect" ? (
-        <div className="mt-5 rounded-2xl border border-white/10 bg-[var(--color-card)] p-4 text-left shadow-xl shadow-black/20">
-          <p className="text-xs font-bold uppercase tracking-[2px] text-[var(--color-muted)]">To'g'ri javob:</p>
-          <p className="mt-2 text-base font-bold leading-7 text-[var(--color-text)]">{result.correctAnswer}</p>
-        </div>
-      ) : null}
+        {status !== "correct" ? (
+          <div>
+            <div
+              style={{
+                fontSize: "12px",
+                color: "var(--muted)",
+                marginBottom: "6px"
+              }}
+            >
+              To'g'ri javob:
+            </div>
+            <div
+              style={{
+                fontSize: "20px",
+                fontWeight: 700,
+                color: "var(--text)"
+              }}
+            >
+              {correctAnswer}
+            </div>
+          </div>
+        ) : null}
 
-      {result.explanation ? (
-        <p className="mt-6 text-sm italic leading-6 text-[var(--color-muted)]">{result.explanation}</p>
-      ) : null}
+        {explanation ? (
+          <div
+            style={{
+              fontSize: "13px",
+              color: "var(--muted)",
+              fontStyle: "italic",
+              borderTop: "1px solid var(--border)",
+              paddingTop: "12px"
+            }}
+          >
+            {explanation}
+          </div>
+        ) : null}
+      </div>
 
       <button
-        className="mt-8 h-14 w-full rounded-xl bg-[var(--color-accent)] text-base font-bold text-white shadow-[0_4px_20px_rgba(77,166,255,0.25)] transition duration-200 hover:brightness-110 active:scale-[0.99]"
+        style={{
+          marginTop: "24px",
+          width: "100%",
+          maxWidth: "360px",
+          padding: "15px",
+          background: "var(--accent)",
+          border: "none",
+          borderRadius: "14px",
+          fontSize: "16px",
+          fontWeight: 700,
+          color: "white",
+          cursor: "pointer"
+        }}
         type="button"
         onClick={onNext}
       >
-        {nextLabel} {"\u2192"}
+        Keyingi savol {"\u2192"}
       </button>
-      <p className="mt-3 text-xs font-semibold text-[var(--color-muted)]">
+
+      <div
+        style={{
+          marginTop: "12px",
+          fontSize: "12px",
+          color: "var(--muted)"
+        }}
+      >
         {autoNextSeconds}s da avtomatik o'tadi
-      </p>
-    </section>
+      </div>
+    </div>
   );
-}
-
-function getStatusConfig(status: AnswerStatus) {
-  if (status === "correct") {
-    return {
-      icon: "\u2705",
-      title: "To'g'ri! +1 ball",
-      titleClass: "text-[var(--color-success)]"
-    };
-  }
-
-  if (status === "partial") {
-    return {
-      icon: "\u26A0\uFE0F",
-      title: "Qisman to'g'ri — imlo xatosi bor",
-      titleClass: "text-[#F5C842]"
-    };
-  }
-
-  return {
-    icon: "\u274C",
-    title: "Noto'g'ri",
-    titleClass: "text-[var(--color-error)]"
-  };
 }

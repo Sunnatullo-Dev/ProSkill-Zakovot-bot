@@ -1,119 +1,217 @@
-import type { FormEvent } from "react";
-import AnswerForm from "./AnswerForm";
-import Timer from "./Timer";
+import { useEffect, useState } from "react";
 
 type QuestionCardProps = {
-  answer: string;
-  currentQuestion: number;
-  disabled: boolean;
-  error: string;
-  isChecking: boolean;
-  isLoading: boolean;
-  question: string;
-  remainingSeconds: number;
+  question: {
+    id: string;
+    text: string;
+  };
+  questionNumber: number;
   totalQuestions: number;
-  totalSeconds: number;
-  onAnswerChange: (answer: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  timeLeft: number;
+  onSubmit: (answer: string) => void;
 };
 
 export default function QuestionCard({
-  answer,
-  currentQuestion,
-  disabled,
-  error,
-  isChecking,
-  isLoading,
   question,
-  remainingSeconds,
+  questionNumber,
   totalQuestions,
-  totalSeconds,
-  onAnswerChange,
+  timeLeft,
   onSubmit
 }: QuestionCardProps) {
-  const isAnswerEmpty = answer.trim().length === 0;
+  const [answer, setAnswer] = useState("");
+  const timerColor = timeLeft > 10 ? "var(--accent)" : timeLeft > 5 ? "var(--warning)" : "var(--error)";
+  const progress = timeLeft / 15;
+  const circumference = 2 * Math.PI * 44;
+  const strokeDashoffset = circumference * (1 - progress);
+
+  useEffect(() => {
+    setAnswer("");
+  }, [question.id]);
+
+  function handleSubmit() {
+    const trimmedAnswer = answer.trim();
+
+    if (!trimmedAnswer) {
+      return;
+    }
+
+    onSubmit(trimmedAnswer);
+  }
 
   return (
-    <div className="screen-transition flex min-h-[calc(100vh-32px)] flex-col justify-between gap-6 py-5">
-      <header className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-[var(--color-muted)]">
-            Savol {currentQuestion}/{totalQuestions}
-          </p>
-          <p className="text-xs font-semibold text-[var(--color-muted)]">{remainingSeconds}s</p>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-[3px] bg-[var(--color-card)]">
-          <div className={`h-full rounded-[3px] bg-[var(--color-accent)] transition-all duration-500 ${getProgressWidthClass(currentQuestion)}`} />
-        </div>
-      </header>
+    <div
+      className="animate-fadeInUp"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "var(--bg)",
+        padding: "20px",
+        maxWidth: "430px",
+        margin: "0 auto"
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "10px"
+        }}
+      >
+        <span
+          style={{
+            fontSize: "14px",
+            fontWeight: 600,
+            color: "var(--text)"
+          }}
+        >
+          Savol {questionNumber}/{totalQuestions}
+        </span>
+        <span
+          style={{
+            fontSize: "14px",
+            fontWeight: 600,
+            color: timerColor,
+            transition: "color 0.5s"
+          }}
+        >
+          {"\u23F1"} {timeLeft}s
+        </span>
+      </div>
 
-      <section className="rounded-[20px] border border-[#1E3A5F] bg-[var(--color-surface)] p-5 shadow-2xl shadow-black/20">
-        <div className="flex justify-center">
-          <Timer seconds={remainingSeconds} totalSeconds={totalSeconds} />
-        </div>
-
-        <div className="mt-8 rounded-2xl bg-[var(--color-card)] px-6 py-6">
-          {isLoading ? (
-            <div className="space-y-4">
-              <div className="h-5 w-11/12 animate-pulse rounded-full bg-white/10" />
-              <div className="h-5 w-10/12 animate-pulse rounded-full bg-white/10" />
-              <div className="h-5 w-8/12 animate-pulse rounded-full bg-white/10" />
-            </div>
-          ) : (
-            <h1 className="select-none text-center text-xl font-bold leading-[1.6] text-[var(--color-text)]">
-              {question || "Savol topilmadi."}
-            </h1>
-          )}
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        {error ? (
-          <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-4 py-3 text-sm font-semibold text-[var(--color-text)]">
-            {error}
-          </div>
-        ) : null}
-
-        <AnswerForm
-          answer={answer}
-          disabled={disabled}
-          isChecking={isChecking}
-          submitDisabled={disabled || isAnswerEmpty}
-          onAnswerChange={onAnswerChange}
-          onSubmit={onSubmit}
+      <div
+        style={{
+          height: "4px",
+          background: "var(--border)",
+          borderRadius: "2px",
+          marginBottom: "32px",
+          overflow: "hidden"
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${(questionNumber / totalQuestions) * 100}%`,
+            background: "linear-gradient(90deg, var(--accent), var(--accent2))",
+            borderRadius: "2px",
+            transition: "width 0.3s ease"
+          }}
         />
-      </section>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "28px"
+        }}
+      >
+        <svg height="100" viewBox="0 0 100 100" width="100">
+          <circle cx="50" cy="50" fill="none" r="44" stroke="var(--border)" strokeWidth="6" />
+          <circle
+            cx="50"
+            cy="50"
+            fill="none"
+            r="44"
+            stroke={timerColor}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            strokeWidth="6"
+            style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease" }}
+            transform="rotate(-90 50 50)"
+          />
+          <text
+            dominantBaseline="central"
+            fill={timerColor}
+            fontSize="28"
+            fontWeight="800"
+            style={{ transition: "fill 0.5s" }}
+            textAnchor="middle"
+            x="50"
+            y="50"
+          >
+            {timeLeft}
+          </text>
+        </svg>
+
+        <div
+          style={{
+            width: "100%",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "20px",
+            padding: "28px 24px",
+            fontSize: "20px",
+            fontWeight: 600,
+            color: "var(--text)",
+            textAlign: "center",
+            lineHeight: 1.6,
+            userSelect: "none",
+            WebkitUserSelect: "none"
+          }}
+        >
+          {question.text}
+        </div>
+      </div>
+
+      <div style={{ paddingTop: "24px" }}>
+        <input
+          placeholder="Javobingizni yozing..."
+          style={{
+            width: "100%",
+            padding: "16px 18px",
+            background: "var(--card)",
+            border: "1.5px solid var(--border)",
+            borderRadius: "14px",
+            fontSize: "16px",
+            color: "var(--text)",
+            outline: "none",
+            marginBottom: "12px",
+            transition: "border-color 0.2s, box-shadow 0.2s"
+          }}
+          type="text"
+          value={answer}
+          onBlur={(event) => {
+            event.target.style.borderColor = "var(--border)";
+            event.target.style.boxShadow = "none";
+          }}
+          onChange={(event) => setAnswer(event.target.value)}
+          onFocus={(event) => {
+            event.target.style.borderColor = "var(--accent)";
+            event.target.style.boxShadow = "0 0 0 3px rgba(77,166,255,0.12)";
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && answer.trim()) {
+              handleSubmit();
+            }
+          }}
+        />
+        <button
+          disabled={!answer.trim()}
+          style={{
+            width: "100%",
+            padding: "15px",
+            background: answer.trim() ? "var(--accent)" : "var(--border)",
+            border: "none",
+            borderRadius: "14px",
+            fontSize: "16px",
+            fontWeight: 700,
+            color: "white",
+            cursor: answer.trim() ? "pointer" : "not-allowed",
+            opacity: answer.trim() ? 1 : 0.4,
+            transition: "all 0.2s"
+          }}
+          type="button"
+          onClick={handleSubmit}
+        >
+          Javob berish {"\u2713"}
+        </button>
+      </div>
     </div>
   );
-}
-
-function getProgressWidthClass(currentQuestion: number) {
-  if (currentQuestion <= 1) {
-    return "w-[10%]";
-  }
-  if (currentQuestion === 2) {
-    return "w-[20%]";
-  }
-  if (currentQuestion === 3) {
-    return "w-[30%]";
-  }
-  if (currentQuestion === 4) {
-    return "w-[40%]";
-  }
-  if (currentQuestion === 5) {
-    return "w-[50%]";
-  }
-  if (currentQuestion === 6) {
-    return "w-[60%]";
-  }
-  if (currentQuestion === 7) {
-    return "w-[70%]";
-  }
-  if (currentQuestion === 8) {
-    return "w-[80%]";
-  }
-  if (currentQuestion === 9) {
-    return "w-[90%]";
-  }
-  return "w-full";
 }

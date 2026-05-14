@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
 import { getQuestion, getTopUsers, login, submitAnswer } from "./api/client";
 import FinishScreen from "./components/FinishScreen";
 import HomeScreen from "./components/HomeScreen";
@@ -36,7 +35,6 @@ export default function App() {
   const [lastUserAnswer, setLastUserAnswer] = useState("");
   const [questionCount, setQuestionCount] = useState(0);
   const [correctAnswers, setCorrectAnswers] = useState(0);
-  const [answer, setAnswer] = useState("");
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -46,7 +44,7 @@ export default function App() {
     void submitAnswerRef.current?.("", ANSWER_TIMEOUT_MS + 1);
   }, []);
   const timer = useTimer(TIMER_SECONDS, handleTimerExpire);
-  const { isExpired, reset, start, stop, timeLeft } = timer;
+  const { reset, start, stop, timeLeft } = timer;
 
   const loadTopUsers = useCallback(async () => {
     try {
@@ -61,7 +59,6 @@ export default function App() {
   const loadQuestion = useCallback(async (nextQuestionCount: number, keepCurrentScreen = false) => {
     try {
       setErrorMessage("");
-      setAnswer("");
       setLastUserAnswer("");
       setLastResult(null);
       setCurrentQuestion(null);
@@ -201,9 +198,7 @@ export default function App() {
     }
   }
 
-  async function handleAnswerSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function handleQuestionSubmit(answer: string) {
     const timeTaken = (TIMER_SECONDS - timeLeft) * 1000;
     await handleSubmitAnswer(answer, timeTaken);
   }
@@ -212,16 +207,16 @@ export default function App() {
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
 
   return (
-    <main className="min-h-screen bg-[var(--color-bg)] px-4 py-4 text-[var(--color-text)]">
-      <section className="mx-auto min-h-[calc(100vh-32px)] w-full max-w-[430px]">
+    <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <section className="mx-auto min-h-screen w-full max-w-[430px]">
         {screen === "loading" ? (
-          <div className="grid min-h-[calc(100vh-32px)] place-items-center text-center">
+          <div className="grid min-h-screen place-items-center text-center">
             <div>
-              <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[var(--color-card)] text-3xl">
+              <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[var(--card)] text-3xl">
                 {"\u{1F9E0}"}
               </span>
-              <p className="mt-4 text-lg font-black text-[var(--color-text)]">Zakovat</p>
-              <p className="mt-2 text-sm font-semibold text-[var(--color-muted)]">Yuklanmoqda...</p>
+              <p className="mt-4 text-lg font-black text-[var(--text)]">Zakovat</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--muted)]">Yuklanmoqda...</p>
             </div>
           </div>
         ) : null}
@@ -239,18 +234,14 @@ export default function App() {
 
         {screen === "question" ? (
           <QuestionCard
-            answer={answer}
-            currentQuestion={questionCount}
-            disabled={!currentQuestion || isSubmitting || isExpired}
-            error={errorMessage}
-            isChecking={isSubmitting}
-            isLoading={!currentQuestion}
-            question={currentQuestion?.text ?? ""}
-            remainingSeconds={timeLeft}
+            question={{
+              id: currentQuestion?.id ?? "loading",
+              text: currentQuestion?.text ?? "Savol yuklanmoqda..."
+            }}
+            questionNumber={questionCount}
+            timeLeft={timeLeft}
             totalQuestions={MAX_QUESTION_COUNT}
-            totalSeconds={TIMER_SECONDS}
-            onAnswerChange={setAnswer}
-            onSubmit={handleAnswerSubmit}
+            onSubmit={handleQuestionSubmit}
           />
         ) : null}
 
