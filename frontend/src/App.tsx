@@ -13,6 +13,8 @@ const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
 const MAX_QUESTION_COUNT = 10;
 const BOOTSTRAP_TIMEOUT_MS = 1000;
+const RESULT_AUTO_DELAY_MS = 3000;
+const PARTIAL_RESULT_AUTO_DELAY_MS = 3500;
 const DEFAULT_APP_USER: AppUser = {
   id: "0",
   telegramId: 0,
@@ -31,6 +33,7 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [lastResult, setLastResult] = useState<AnswerResult | null>(null);
+  const [lastUserAnswer, setLastUserAnswer] = useState("");
   const [questionCount, setQuestionCount] = useState(0);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [answer, setAnswer] = useState("");
@@ -59,6 +62,7 @@ export default function App() {
     try {
       setErrorMessage("");
       setAnswer("");
+      setLastUserAnswer("");
       setLastResult(null);
       setCurrentQuestion(null);
       if (!keepCurrentScreen) {
@@ -93,14 +97,17 @@ export default function App() {
       setErrorMessage("");
       stop();
 
-      const result = await submitAnswer(currentQuestion.id, userAnswer.trim(), timeTaken);
-      const nextScore = result.isCorrect ? Math.max(result.newScore, score + 1) : Math.max(result.newScore, score);
+      const submittedAnswer = userAnswer.trim();
+      const result = await submitAnswer(currentQuestion.id, submittedAnswer, timeTaken);
+      const isFullyCorrect = result.status === "correct";
+      const nextScore = isFullyCorrect ? Math.max(result.newScore, score + 1) : Math.max(result.newScore, score);
 
-      if (result.isCorrect) {
+      if (isFullyCorrect) {
         setCorrectAnswers((currentValue) => currentValue + 1);
       }
 
-      setLastResult({ ...result, newScore: nextScore });
+      setLastUserAnswer(submittedAnswer);
+      setLastResult({ ...result, isCorrect: isFullyCorrect, newScore: nextScore });
       setScore(nextScore);
       setUser((currentUser) => (currentUser ? { ...currentUser, score: nextScore } : currentUser));
       setScreen("result");
@@ -133,9 +140,10 @@ export default function App() {
       return;
     }
 
+    const delay = lastResult.status === "partial" ? PARTIAL_RESULT_AUTO_DELAY_MS : RESULT_AUTO_DELAY_MS;
     const timeoutId = window.setTimeout(() => {
       handleNextQuestion();
-    }, 2000);
+    }, delay);
 
     return () => {
       window.clearTimeout(timeoutId);
@@ -248,9 +256,11 @@ export default function App() {
 
         {screen === "result" && lastResult ? (
           <ResultScreen
+            autoNextSeconds={lastResult.status === "partial" ? 3.5 : 3}
             currentQuestion={questionCount}
             result={lastResult}
             totalQuestions={MAX_QUESTION_COUNT}
+            userAnswer={lastUserAnswer}
             onNext={handleNextQuestion}
           />
         ) : null}

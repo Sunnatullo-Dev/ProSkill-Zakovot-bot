@@ -42,8 +42,11 @@ export type Question = {
   difficulty: string | null;
 };
 
+export type AnswerStatus = "correct" | "partial" | "incorrect";
+
 export type AnswerResult = {
   isCorrect: boolean;
+  status: AnswerStatus;
   explanation: string;
   newScore: number;
   correctAnswer: string;

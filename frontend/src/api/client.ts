@@ -1,4 +1,4 @@
-import type { AnswerResult, AppUser, AuthResponse, LeaderboardUser, Question } from "../types";
+import type { AnswerResult, AnswerStatus, AppUser, AuthResponse, LeaderboardUser, Question } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
@@ -12,6 +12,7 @@ const DEFAULT_USER: AppUser = {
 };
 const FALLBACK_ANSWER_RESULT: AnswerResult = {
   isCorrect: false,
+  status: "incorrect",
   explanation: "Tekshirib bo'lmadi",
   newScore: 0,
   correctAnswer: ""
@@ -138,7 +139,7 @@ export async function submitAnswer(
       }
     });
 
-    return response ?? checkFallbackAnswer(questionId, userAnswer);
+    return response ? normalizeAnswerResult(response, userAnswer) : checkFallbackAnswer(questionId, userAnswer);
   } catch (error) {
     console.error("Answer fallback enabled", error);
     return checkFallbackAnswer(questionId, userAnswer);
@@ -236,17 +237,19 @@ function checkFallbackAnswer(questionId: string, userAnswer: string): AnswerResu
     return FALLBACK_ANSWER_RESULT;
   }
 
-  const isCorrect = checkAnswerLocally(userAnswer, question.correct_answer);
+  const { status } = checkAnswerLocally(userAnswer, question.correct_answer);
+  const isCorrect = status === "correct";
 
   return {
     isCorrect,
-    explanation: isCorrect ? "Javob to'g'ri" : "Tekshirib bo'lmadi",
-    newScore: 0,
+    status,
+    explanation: getFallbackExplanation(status),
+    newScore: isCorrect ? 1 : 0,
     correctAnswer: question.correct_answer
   };
 }
 
-function checkAnswerLocally(userAnswer: string, correctAnswer: string): boolean {
+function checkAnswerLocally(userAnswer: string, correctAnswer: string): { status: AnswerStatus; similarity: number } {
   const clean = (value: string) =>
     value
       .toLowerCase()
@@ -259,23 +262,86 @@ function checkAnswerLocally(userAnswer: string, correctAnswer: string): boolean 
   const correct = clean(correctAnswer);
 
   if (user === correct) {
-    return true;
+    return { status: "correct", similarity: 1 };
   }
 
-  if (correct.includes(user) && user.length >= 3) {
-    return true;
+  const maxLen = Math.max(user.length, correct.length);
+  const distance = levenshtein(user, correct);
+  const similarity = maxLen > 0 ? 1 - distance / maxLen : 0;
+  const partialMatch =
+    (similarity >= 0.5 && similarity < 0.9) ||
+    (correct.includes(user) && user.length >= 3) ||
+    user.includes(correct);
+
+  if (similarity >= 0.9) {
+    return { status: "correct", similarity };
   }
 
-  if (user.includes(correct)) {
-    return true;
+  if (partialMatch) {
+    return { status: "partial", similarity };
   }
 
   const correctWords = correct.split(" ").filter((word) => word.length > 2);
   const matchCount = correctWords.filter((word) => user.includes(word)).length;
 
   if (correctWords.length > 0 && matchCount / correctWords.length >= 0.6) {
-    return true;
+    return { status: "partial", similarity };
   }
 
-  return false;
+  return { status: "incorrect", similarity: 0 };
+}
+
+function levenshtein(a: string, b: string): number {
+  const dp = Array.from({ length: a.length + 1 }, (_, rowIndex) =>
+    Array.from({ length: b.length + 1 }, (_, columnIndex) => {
+      if (rowIndex === 0) {
+        return columnIndex;
+      }
+
+      if (columnIndex === 0) {
+        return rowIndex;
+      }
+
+      return 0;
+    })
+  );
+
+  for (let rowIndex = 1; rowIndex <= a.length; rowIndex += 1) {
+    for (let columnIndex = 1; columnIndex <= b.length; columnIndex += 1) {
+      dp[rowIndex][columnIndex] =
+        a[rowIndex - 1] === b[columnIndex - 1]
+          ? dp[rowIndex - 1][columnIndex - 1]
+          : 1 +
+            Math.min(
+              dp[rowIndex - 1][columnIndex],
+              dp[rowIndex][columnIndex - 1],
+              dp[rowIndex - 1][columnIndex - 1]
+            );
+    }
+  }
+
+  return dp[a.length][b.length];
+}
+
+function normalizeAnswerResult(result: AnswerResult, userAnswer: string): AnswerResult {
+  const localStatus = result.correctAnswer ? checkAnswerLocally(userAnswer, result.correctAnswer).status : "incorrect";
+  const status = result.status ?? (result.isCorrect ? "correct" : localStatus);
+
+  return {
+    ...result,
+    isCorrect: status === "correct",
+    status
+  };
+}
+
+function getFallbackExplanation(status: AnswerStatus) {
+  if (status === "correct") {
+    return "Javob to'g'ri";
+  }
+
+  if (status === "partial") {
+    return "Javob qisman to'g'ri, imloni tekshiring";
+  }
+
+  return "Tekshirib bo'lmadi";
 }
