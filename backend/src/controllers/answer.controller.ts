@@ -8,7 +8,7 @@ import type { SubmitAnswerResponse } from "../types";
 
 const ANSWER_TIMEOUT_MS = 15000;
 const answerSchema = z.object({
-  questionId: z.string().min(1),
+  questionId: z.string().uuid(),
   userAnswer: z.string().trim().default(""),
   timeTaken: z.coerce.number().nonnegative()
 });

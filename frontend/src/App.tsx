@@ -31,9 +31,11 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const submitAnswerRef = useRef<SubmitAnswerFn | null>(null);
-  const timer = useTimer(TIMER_SECONDS, () => {
+  const handleTimerExpire = useCallback(() => {
     void submitAnswerRef.current?.("", ANSWER_TIMEOUT_MS + 1);
-  });
+  }, []);
+  const timer = useTimer(TIMER_SECONDS, handleTimerExpire);
+  const { isExpired, reset, start, stop, timeLeft } = timer;
 
   const loadTopUsers = useCallback(async () => {
     try {
@@ -52,19 +54,19 @@ export default function App() {
       setLastResult(null);
       setCurrentQuestion(null);
       setScreen("question");
-      timer.reset();
+      reset();
 
       const question = await getQuestion();
 
       setCurrentQuestion(question);
       setQuestionCount(nextQuestionCount);
-      timer.start();
+      start();
     } catch (error) {
       console.error("Question load failed", error);
       setErrorMessage(SERVER_ERROR_MESSAGE);
       setScreen("home");
     }
-  }, [timer]);
+  }, [reset, start]);
 
   const handleSubmitAnswer = useCallback<SubmitAnswerFn>(async (userAnswer: string, timeTaken: number) => {
     if (!currentQuestion || isSubmitting) {
@@ -79,7 +81,7 @@ export default function App() {
     try {
       setIsSubmitting(true);
       setErrorMessage("");
-      timer.stop();
+      stop();
 
       const result = await submitAnswer(currentQuestion.id, userAnswer.trim(), timeTaken);
 
@@ -95,11 +97,11 @@ export default function App() {
     } catch (error) {
       console.error("Answer submit failed", error);
       setErrorMessage(SERVER_ERROR_MESSAGE);
-      timer.start();
+      start();
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentQuestion, isSubmitting, loadTopUsers, timer]);
+  }, [currentQuestion, isSubmitting, loadTopUsers, start, stop]);
 
   useEffect(() => {
     submitAnswerRef.current = handleSubmitAnswer;
@@ -152,13 +154,13 @@ export default function App() {
   async function handleAnswerSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const timeTaken = (TIMER_SECONDS - timer.timeLeft) * 1000;
+    const timeTaken = (TIMER_SECONDS - timeLeft) * 1000;
     await handleSubmitAnswer(answer, timeTaken);
   }
 
   function handleNextQuestion() {
     if (questionCount >= MAX_QUESTION_COUNT) {
-      timer.reset();
+      reset();
       setCurrentQuestion(null);
       setScreen("finish");
       return;
@@ -199,12 +201,12 @@ export default function App() {
           <QuestionCard
             answer={answer}
             currentQuestion={questionCount}
-            disabled={!currentQuestion || isSubmitting || timer.isExpired}
+            disabled={!currentQuestion || isSubmitting || isExpired}
             error={errorMessage}
             isChecking={isSubmitting}
             isLoading={!currentQuestion}
             question={currentQuestion?.text ?? ""}
-            remainingSeconds={timer.timeLeft}
+            remainingSeconds={timeLeft}
             totalQuestions={MAX_QUESTION_COUNT}
             totalSeconds={TIMER_SECONDS}
             onAnswerChange={setAnswer}
