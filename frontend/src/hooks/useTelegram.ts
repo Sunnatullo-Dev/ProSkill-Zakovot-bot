@@ -3,6 +3,11 @@ import "@twa-dev/sdk";
 import type { TelegramUser, TelegramWebApp } from "../types";
 
 export const tg: TelegramWebApp | null = window.Telegram?.WebApp ?? null;
+const BROWSER_USER: TelegramUser = {
+  id: 0,
+  first_name: "Zakovotchi",
+  username: "guest"
+};
 
 type TelegramState = {
   initData: string;
@@ -25,13 +30,12 @@ export function useTelegram(): TelegramState {
     const webApp = window.Telegram?.WebApp ?? tg;
 
     if (!webApp?.ready || !webApp?.expand) {
-      console.error("Telegram WebApp object is not available");
       setState({
-        initData: "",
+        initData: "guest",
         isReady: true,
-        user: null,
-        error: "Telegram orqali oching",
-        tg: webApp
+        user: BROWSER_USER,
+        error: "",
+        tg: null
       });
       return;
     }
@@ -41,20 +45,20 @@ export function useTelegram(): TelegramState {
       webApp.expand();
 
       setState({
-        initData: webApp.initData,
+        initData: webApp.initData || "guest",
         isReady: true,
-        user: normalizeTelegramUser(webApp.initDataUnsafe?.user),
-        error: webApp.initData ? "" : "Telegram orqali oching",
+        user: normalizeTelegramUser(webApp.initDataUnsafe?.user) ?? BROWSER_USER,
+        error: "",
         tg: webApp
       });
     } catch (error) {
       console.error("Telegram WebApp init failed", error);
       setState({
-        initData: "",
+        initData: "guest",
         isReady: true,
-        user: null,
-        error: "Telegram orqali oching",
-        tg: webApp
+        user: BROWSER_USER,
+        error: "",
+        tg: null
       });
     }
   }, []);

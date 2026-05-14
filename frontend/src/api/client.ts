@@ -99,5 +99,5 @@ async function parseResponse(response: Response): Promise<unknown> {
 }
 
 function getTelegramInitData() {
-  return window.Telegram?.WebApp?.initData ?? "";
+  return window.Telegram?.WebApp?.initData || "guest";
 }

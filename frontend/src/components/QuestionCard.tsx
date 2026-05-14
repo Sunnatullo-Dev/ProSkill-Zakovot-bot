@@ -34,50 +34,54 @@ export default function QuestionCard({
   const isAnswerEmpty = answer.trim().length === 0;
 
   return (
-    <div className="flex min-h-[calc(100vh-32px)] flex-col gap-6 pb-5 pt-3 transition-all duration-300 animate-screen-in">
+    <div className="screen-transition flex min-h-[calc(100vh-32px)] flex-col justify-between gap-6 py-5">
       <header className="space-y-3">
-        <p className="text-center text-sm font-black uppercase tracking-[0.22em] text-[#94A3B8]">
-          Savol {currentQuestion}/{totalQuestions}
-        </p>
-
-        <div className="h-2 overflow-hidden rounded-full bg-white/10">
-          <div className={`h-full rounded-full bg-[#4DA6FF] transition-all duration-500 ${getProgressWidthClass(currentQuestion)}`} />
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-[var(--color-muted)]">
+            Savol {currentQuestion}/{totalQuestions}
+          </p>
+          <p className="text-xs font-semibold text-[var(--color-muted)]">{remainingSeconds}s</p>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-[3px] bg-[var(--color-card)]">
+          <div className={`h-full rounded-[3px] bg-[var(--color-accent)] transition-all duration-500 ${getProgressWidthClass(currentQuestion)}`} />
         </div>
       </header>
 
-      <section className="flex flex-1 flex-col justify-between rounded-3xl bg-[#1E2D42] p-5 shadow-2xl shadow-black/20">
-        <div className="space-y-8">
-          <div className="flex justify-center">
-            <Timer seconds={remainingSeconds} totalSeconds={totalSeconds} />
-          </div>
+      <section className="rounded-[20px] border border-[#1E3A5F] bg-[var(--color-surface)] p-5 shadow-2xl shadow-black/20">
+        <div className="flex justify-center">
+          <Timer seconds={remainingSeconds} totalSeconds={totalSeconds} />
+        </div>
 
+        <div className="mt-8 rounded-2xl bg-[var(--color-card)] px-6 py-6">
           {isLoading ? (
-            <div className="space-y-4 pt-4">
+            <div className="space-y-4">
               <div className="h-5 w-11/12 animate-pulse rounded-full bg-white/10" />
               <div className="h-5 w-10/12 animate-pulse rounded-full bg-white/10" />
               <div className="h-5 w-8/12 animate-pulse rounded-full bg-white/10" />
             </div>
           ) : (
-            <h1 className="text-center text-2xl font-black leading-9 text-white">{question || "Savol topilmadi."}</h1>
+            <h1 className="select-none text-center text-xl font-bold leading-[1.6] text-[var(--color-text)]">
+              {question || "Savol topilmadi."}
+            </h1>
           )}
         </div>
+      </section>
 
-        <div className="mt-8 space-y-3">
-          {error ? (
-            <div className="rounded-xl border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-3 text-sm font-medium text-white">
-              {error}
-            </div>
-          ) : null}
+      <section className="space-y-4">
+        {error ? (
+          <div className="rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-4 py-3 text-sm font-semibold text-[var(--color-text)]">
+            {error}
+          </div>
+        ) : null}
 
-          <AnswerForm
-            answer={answer}
-            disabled={disabled}
-            submitDisabled={disabled || isAnswerEmpty}
-            isChecking={isChecking}
-            onAnswerChange={onAnswerChange}
-            onSubmit={onSubmit}
-          />
-        </div>
+        <AnswerForm
+          answer={answer}
+          disabled={disabled}
+          isChecking={isChecking}
+          submitDisabled={disabled || isAnswerEmpty}
+          onAnswerChange={onAnswerChange}
+          onSubmit={onSubmit}
+        />
       </section>
     </div>
   );

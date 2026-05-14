@@ -3,6 +3,12 @@ import { AppError } from "../middleware/error.middleware";
 import type { TelegramUser } from "../types";
 
 const INIT_DATA_MAX_AGE_SECONDS = 60 * 60;
+export const GUEST_INIT_DATA = "guest";
+export const GUEST_TELEGRAM_USER: TelegramUser = {
+  id: 0,
+  first_name: "Zakovotchi",
+  username: "guest"
+};
 
 type TelegramUserPayload = {
   id?: unknown;
@@ -12,6 +18,10 @@ type TelegramUserPayload = {
 };
 
 export function validateTelegramInitData(initData: string, botToken: string): TelegramUser {
+  if (initData === GUEST_INIT_DATA) {
+    return GUEST_TELEGRAM_USER;
+  }
+
   const params = new URLSearchParams(initData);
   const receivedHash = params.get("hash");
   const authDate = Number(params.get("auth_date"));

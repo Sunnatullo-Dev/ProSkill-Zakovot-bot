@@ -4,24 +4,50 @@ type TimerProps = {
 };
 
 export default function Timer({ seconds, totalSeconds }: TimerProps) {
-  const toneClass = getTimerToneClass(seconds, totalSeconds);
+  const dashOffset = getDashOffset(seconds, totalSeconds);
+  const toneClass = getTimerToneClass(seconds);
 
   return (
-    <div className={`grid h-32 w-32 place-items-center rounded-full border-8 bg-[#0F1B2D] shadow-inner shadow-black/30 transition-colors duration-500 ${toneClass}`}>
-      <div className="text-center">
-        <span className="block text-4xl font-black tabular-nums">{seconds}</span>
-        <span className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">soniya</span>
-      </div>
+    <div className="relative grid h-20 w-20 place-items-center">
+      <svg aria-hidden="true" className="-rotate-90" height="80" viewBox="0 0 80 80" width="80">
+        <circle
+          className="stroke-[var(--color-card)]"
+          cx="40"
+          cy="40"
+          fill="none"
+          r="34"
+          strokeWidth="7"
+        />
+        <circle
+          className={`transition-all duration-500 ${toneClass}`}
+          cx="40"
+          cy="40"
+          fill="none"
+          pathLength="100"
+          r="34"
+          strokeDasharray="100"
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          strokeWidth="7"
+        />
+      </svg>
+      <span className="absolute text-xl font-black tabular-nums text-[var(--color-text)]">{seconds}</span>
     </div>
   );
 }
 
-function getTimerToneClass(seconds: number, totalSeconds: number) {
-  if (seconds <= Math.ceil(totalSeconds / 3)) {
-    return "border-[#EF4444] text-[#EF4444]";
+function getDashOffset(seconds: number, totalSeconds: number) {
+  const progress = Math.max(0, Math.min(100, (seconds / totalSeconds) * 100));
+
+  return 100 - progress;
+}
+
+function getTimerToneClass(seconds: number) {
+  if (seconds <= 5) {
+    return "stroke-[var(--color-error)]";
   }
-  if (seconds <= Math.ceil((totalSeconds * 2) / 3)) {
-    return "border-yellow-400 text-yellow-300";
+  if (seconds <= 10) {
+    return "stroke-[#F5C842]";
   }
-  return "border-[#4DA6FF] text-[#4DA6FF]";
+  return "stroke-[var(--color-accent)]";
 }

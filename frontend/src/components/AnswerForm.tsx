@@ -18,12 +18,9 @@ export default function AnswerForm({
   onSubmit
 }: AnswerFormProps) {
   return (
-    <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-      <label className="text-sm font-semibold text-[#94A3B8]" htmlFor="answer">
-        Javobingiz
-      </label>
+    <form className="space-y-4" onSubmit={onSubmit}>
       <input
-        className="h-14 rounded-2xl border border-white/10 bg-[#0F1B2D] px-4 text-lg font-semibold text-white outline-none transition duration-200 placeholder:text-[#94A3B8]/60 focus:border-[#4DA6FF] focus:ring-4 focus:ring-[#4DA6FF]/15 disabled:cursor-not-allowed disabled:opacity-60"
+        className="h-14 w-full rounded-xl border-[1.5px] border-[#1E3A5F] bg-[var(--color-card)] px-4 text-base font-semibold text-[var(--color-text)] outline-none transition duration-200 placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)] focus:shadow-[0_0_0_3px_rgba(77,166,255,0.15)] disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
         id="answer"
         name="answer"
@@ -33,7 +30,7 @@ export default function AnswerForm({
         onChange={(event) => onAnswerChange(event.target.value)}
       />
       <button
-        className="h-14 rounded-xl bg-[#4DA6FF] px-4 text-base font-bold text-white shadow-lg shadow-[#4DA6FF]/25 transition duration-200 hover:bg-[#3B95EF] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-[#94A3B8] disabled:shadow-none"
+        className="h-14 w-full rounded-xl bg-[var(--color-accent)] px-4 text-base font-bold text-white shadow-[0_4px_20px_rgba(77,166,255,0.25)] transition duration-200 hover:brightness-110 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
         disabled={(submitDisabled ?? disabled) || isChecking}
         type="submit"
       >

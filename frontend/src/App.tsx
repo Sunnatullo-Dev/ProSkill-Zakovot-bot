@@ -13,12 +13,11 @@ const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
 const MAX_QUESTION_COUNT = 10;
 const SERVER_ERROR_MESSAGE = "Serverga ulanib bo'lmadi. Qayta urinib ko'ring.";
-const TELEGRAM_ERROR_MESSAGE = "Telegram orqali oching";
 
 type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 
 export default function App() {
-  const { initData, isReady, user: telegramUser, error: telegramError } = useTelegram();
+  const { initData, isReady, user: telegramUser } = useTelegram();
   const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<AppUser | null>(null);
   const [score, setScore] = useState(0);
@@ -141,19 +140,13 @@ export default function App() {
       return;
     }
 
-    if (!initData) {
-      console.error("Telegram initData is missing", telegramError);
-      setErrorMessage(TELEGRAM_ERROR_MESSAGE);
-      setScreen("home");
-      return;
-    }
-
     async function bootstrap() {
       try {
         setScreen("loading");
         setErrorMessage("");
+        const effectiveInitData = initData || "guest";
 
-        const response = await login(initData);
+        const response = await login(effectiveInitData);
 
         setUser(response.user);
         setScore(response.user.score);
@@ -167,14 +160,9 @@ export default function App() {
     }
 
     void bootstrap();
-  }, [initData, isReady, loadTopUsers, telegramError]);
+  }, [initData, isReady, loadTopUsers]);
 
   async function handleStartGame() {
-    if (!initData) {
-      setErrorMessage(TELEGRAM_ERROR_MESSAGE);
-      return;
-    }
-
     try {
       setIsStarting(true);
       setQuestionCount(0);
@@ -199,16 +187,16 @@ export default function App() {
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
 
   return (
-    <main className="min-h-screen bg-[#0F1B2D] px-4 py-4 text-white">
+    <main className="min-h-screen bg-[var(--color-bg)] px-4 py-4 text-[var(--color-text)]">
       <section className="mx-auto min-h-[calc(100vh-32px)] w-full max-w-[430px]">
         {screen === "loading" ? (
           <div className="grid min-h-[calc(100vh-32px)] place-items-center text-center">
             <div>
-              <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[#1E2D42] text-3xl">
+              <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[var(--color-card)] text-3xl">
                 {"\u{1F9E0}"}
               </span>
-              <p className="mt-4 text-lg font-black text-white">Zakovot</p>
-              <p className="mt-2 text-sm font-semibold text-[#94A3B8]">Yuklanmoqda...</p>
+              <p className="mt-4 text-lg font-black text-[var(--color-text)]">Zakovot</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--color-muted)]">Yuklanmoqda...</p>
             </div>
           </div>
         ) : null}
@@ -217,7 +205,6 @@ export default function App() {
           <HomeScreen
             error={errorMessage}
             isLoading={isStarting}
-            leaderboard={leaderboard}
             playerName={playerName}
             record={recordScore}
             score={score}
@@ -253,7 +240,6 @@ export default function App() {
 
         {screen === "finish" ? (
           <FinishScreen
-            leaderboard={leaderboard}
             playerName={playerName}
             roundScore={correctAnswers}
             totalQuestions={MAX_QUESTION_COUNT}
