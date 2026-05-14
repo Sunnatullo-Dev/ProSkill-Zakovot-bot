@@ -31,30 +31,22 @@ export default function QuestionCard({
   onAnswerChange,
   onSubmit
 }: QuestionCardProps) {
-  const progress = Math.max(0, Math.min(100, (currentQuestion / totalQuestions) * 100));
+  const isAnswerEmpty = answer.trim().length === 0;
 
   return (
-    <div className="flex min-h-[calc(100vh-32px)] flex-col gap-5 pb-4 pt-2 transition-all duration-300">
+    <div className="flex min-h-[calc(100vh-32px)] flex-col gap-6 pb-5 pt-3 transition-all duration-300 animate-screen-in">
       <header className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1E2D42] text-xl">
-              {"\u{1F9E0}"}
-            </span>
-            <span className="text-lg font-bold tracking-wide">Zakovot</span>
-          </div>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm font-semibold text-[#94A3B8]">
-            {currentQuestion}/{totalQuestions} savol
-          </span>
-        </div>
+        <p className="text-center text-sm font-black uppercase tracking-[0.22em] text-[#94A3B8]">
+          Savol {currentQuestion}/{totalQuestions}
+        </p>
 
         <div className="h-2 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-[#4DA6FF] transition-all duration-500" style={{ width: `${progress}%` }} />
+          <div className={`h-full rounded-full bg-[#4DA6FF] transition-all duration-500 ${getProgressWidthClass(currentQuestion)}`} />
         </div>
       </header>
 
-      <section className="flex flex-1 flex-col justify-between rounded-2xl bg-[#1E2D42] p-5 shadow-2xl shadow-black/20">
-        <div className="space-y-6">
+      <section className="flex flex-1 flex-col justify-between rounded-3xl bg-[#1E2D42] p-5 shadow-2xl shadow-black/20">
+        <div className="space-y-8">
           <div className="flex justify-center">
             <Timer seconds={remainingSeconds} totalSeconds={totalSeconds} />
           </div>
@@ -66,7 +58,7 @@ export default function QuestionCard({
               <div className="h-5 w-8/12 animate-pulse rounded-full bg-white/10" />
             </div>
           ) : (
-            <h1 className="text-center text-2xl font-bold leading-9 text-white">{question || "Savol topilmadi."}</h1>
+            <h1 className="text-center text-2xl font-black leading-9 text-white">{question || "Savol topilmadi."}</h1>
           )}
         </div>
 
@@ -80,6 +72,7 @@ export default function QuestionCard({
           <AnswerForm
             answer={answer}
             disabled={disabled}
+            submitDisabled={disabled || isAnswerEmpty}
             isChecking={isChecking}
             onAnswerChange={onAnswerChange}
             onSubmit={onSubmit}
@@ -88,4 +81,35 @@ export default function QuestionCard({
       </section>
     </div>
   );
+}
+
+function getProgressWidthClass(currentQuestion: number) {
+  if (currentQuestion <= 1) {
+    return "w-[10%]";
+  }
+  if (currentQuestion === 2) {
+    return "w-[20%]";
+  }
+  if (currentQuestion === 3) {
+    return "w-[30%]";
+  }
+  if (currentQuestion === 4) {
+    return "w-[40%]";
+  }
+  if (currentQuestion === 5) {
+    return "w-[50%]";
+  }
+  if (currentQuestion === 6) {
+    return "w-[60%]";
+  }
+  if (currentQuestion === 7) {
+    return "w-[70%]";
+  }
+  if (currentQuestion === 8) {
+    return "w-[80%]";
+  }
+  if (currentQuestion === 9) {
+    return "w-[90%]";
+  }
+  return "w-full";
 }

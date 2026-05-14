@@ -17,16 +17,17 @@ export default function FinishScreen({
   totalScore,
   onRestart
 }: FinishScreenProps) {
+  const message = getFinishMessage(roundScore);
+
   return (
-    <div className="flex min-h-[calc(100vh-32px)] flex-col gap-5 py-6 transition-all duration-300">
+    <div className="flex min-h-[calc(100vh-32px)] flex-col justify-center gap-5 py-6 transition-all duration-300 animate-screen-in">
       <section className="flex flex-1 flex-col justify-center rounded-[30px] bg-[#1E2D42] p-6 text-center shadow-2xl shadow-black/30">
-        <span className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[#4DA6FF]/15 text-4xl">
-          {"\u{1F9E0}"}
+        <span className="mx-auto text-7xl leading-none">
+          {"\u{1F389}"}
         </span>
         <p className="mt-6 text-sm font-bold uppercase tracking-[0.25em] text-[#4DA6FF]">O'yin tugadi</p>
-        <h1 className="mt-3 text-5xl font-black text-white">
-          {roundScore}/{totalQuestions}
-        </h1>
+        <h1 className="mt-3 text-5xl font-black text-white">Natija: {roundScore}/{totalQuestions}</h1>
+        <p className="mt-4 text-2xl font-black text-yellow-400">{message}</p>
         <p className="mt-3 text-base font-semibold text-[#94A3B8]">{playerName}, umumiy ballingiz {totalScore}</p>
 
         <button
@@ -56,4 +57,14 @@ export default function FinishScreen({
       </section>
     </div>
   );
+}
+
+function getFinishMessage(score: number) {
+  if (score >= 7) {
+    return "Ajoyib! \u{1F3C6}";
+  }
+  if (score >= 4) {
+    return "Yaxshi! \u{1F44D}";
+  }
+  return "Ko'proq o'qing \u{1F4DA}";
 }

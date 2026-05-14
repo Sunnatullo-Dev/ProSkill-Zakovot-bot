@@ -29,6 +29,7 @@ export default function App() {
   const [answer, setAnswer] = useState("");
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const submitAnswerRef = useRef<SubmitAnswerFn | null>(null);
   const handleTimerExpire = useCallback(() => {
@@ -47,19 +48,22 @@ export default function App() {
     }
   }, []);
 
-  const loadQuestion = useCallback(async (nextQuestionCount: number) => {
+  const loadQuestion = useCallback(async (nextQuestionCount: number, keepCurrentScreen = false) => {
     try {
       setErrorMessage("");
       setAnswer("");
       setLastResult(null);
       setCurrentQuestion(null);
-      setScreen("question");
+      if (!keepCurrentScreen) {
+        setScreen("question");
+      }
       reset();
 
       const question = await getQuestion();
 
       setCurrentQuestion(question);
       setQuestionCount(nextQuestionCount);
+      setScreen("question");
       start();
     } catch (error) {
       console.error("Question load failed", error);
@@ -107,6 +111,31 @@ export default function App() {
     submitAnswerRef.current = handleSubmitAnswer;
   }, [handleSubmitAnswer]);
 
+  const handleNextQuestion = useCallback(() => {
+    if (questionCount >= MAX_QUESTION_COUNT) {
+      reset();
+      setCurrentQuestion(null);
+      setScreen("finish");
+      return;
+    }
+
+    void loadQuestion(questionCount + 1, true);
+  }, [loadQuestion, questionCount, reset]);
+
+  useEffect(() => {
+    if (screen !== "result" || !lastResult) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      handleNextQuestion();
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [handleNextQuestion, lastResult, screen]);
+
   useEffect(() => {
     if (!isReady) {
       return;
@@ -140,15 +169,23 @@ export default function App() {
     void bootstrap();
   }, [initData, isReady, loadTopUsers, telegramError]);
 
-  function handleStartGame() {
+  async function handleStartGame() {
     if (!initData) {
       setErrorMessage(TELEGRAM_ERROR_MESSAGE);
       return;
     }
 
-    setQuestionCount(0);
-    setCorrectAnswers(0);
-    void loadQuestion(1);
+    try {
+      setIsStarting(true);
+      setQuestionCount(0);
+      setCorrectAnswers(0);
+      await loadQuestion(1, true);
+    } catch (error) {
+      console.error("Start game failed", error);
+      setErrorMessage(SERVER_ERROR_MESSAGE);
+    } finally {
+      setIsStarting(false);
+    }
   }
 
   async function handleAnswerSubmit(event: FormEvent<HTMLFormElement>) {
@@ -158,18 +195,8 @@ export default function App() {
     await handleSubmitAnswer(answer, timeTaken);
   }
 
-  function handleNextQuestion() {
-    if (questionCount >= MAX_QUESTION_COUNT) {
-      reset();
-      setCurrentQuestion(null);
-      setScreen("finish");
-      return;
-    }
-
-    void loadQuestion(questionCount + 1);
-  }
-
   const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovotchi";
+  const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
 
   return (
     <main className="min-h-screen bg-[#0F1B2D] px-4 py-4 text-white">
@@ -189,9 +216,10 @@ export default function App() {
         {screen === "home" ? (
           <HomeScreen
             error={errorMessage}
-            isLoading={false}
+            isLoading={isStarting}
             leaderboard={leaderboard}
             playerName={playerName}
+            record={recordScore}
             score={score}
             onStart={handleStartGame}
           />

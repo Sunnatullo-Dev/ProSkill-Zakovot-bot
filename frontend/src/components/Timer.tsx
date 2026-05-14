@@ -4,21 +4,24 @@ type TimerProps = {
 };
 
 export default function Timer({ seconds, totalSeconds }: TimerProps) {
-  const percent = Math.max(0, Math.min(100, (seconds / totalSeconds) * 100));
+  const toneClass = getTimerToneClass(seconds, totalSeconds);
 
   return (
-    <div
-      className="grid h-28 w-28 place-items-center rounded-full transition-all duration-500"
-      style={{
-        background: `conic-gradient(#4DA6FF ${percent}%, rgba(255,255,255,0.10) ${percent}% 100%)`
-      }}
-    >
-      <div className="grid h-24 w-24 place-items-center rounded-full bg-[#1E2D42] shadow-inner shadow-black/30">
-        <div className="text-center">
-          <span className="block text-3xl font-black tabular-nums text-white">{seconds}</span>
-          <span className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">soniya</span>
-        </div>
+    <div className={`grid h-32 w-32 place-items-center rounded-full border-8 bg-[#0F1B2D] shadow-inner shadow-black/30 transition-colors duration-500 ${toneClass}`}>
+      <div className="text-center">
+        <span className="block text-4xl font-black tabular-nums">{seconds}</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">soniya</span>
       </div>
     </div>
   );
+}
+
+function getTimerToneClass(seconds: number, totalSeconds: number) {
+  if (seconds <= Math.ceil(totalSeconds / 3)) {
+    return "border-[#EF4444] text-[#EF4444]";
+  }
+  if (seconds <= Math.ceil((totalSeconds * 2) / 3)) {
+    return "border-yellow-400 text-yellow-300";
+  }
+  return "border-[#4DA6FF] text-[#4DA6FF]";
 }

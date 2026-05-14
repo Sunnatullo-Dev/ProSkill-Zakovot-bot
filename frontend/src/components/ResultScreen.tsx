@@ -9,27 +9,21 @@ type ResultScreenProps = {
 
 export default function ResultScreen({ currentQuestion, result, totalQuestions, onNext }: ResultScreenProps) {
   const isCorrect = result.isCorrect;
-  const toneColor = isCorrect ? "#22C55E" : "#EF4444";
   const nextLabel = currentQuestion >= totalQuestions ? "Yakunlash" : "Keyingi savol";
 
   return (
-    <div className="flex min-h-[calc(100vh-32px)] flex-col justify-center py-6 transition-all duration-300">
+    <div className={`flex min-h-[calc(100vh-32px)] flex-col justify-center py-6 transition-all duration-300 ${isCorrect ? "animate-result-correct" : "animate-result-wrong"}`}>
       <section className="rounded-[30px] bg-[#1E2D42] p-6 text-center shadow-2xl shadow-black/30">
-        <div
-          className="mx-auto grid h-28 w-28 animate-pulse place-items-center rounded-full border-8 text-5xl font-black"
-          style={{
-            borderColor: `${toneColor}33`,
-            backgroundColor: `${toneColor}1A`,
-            color: toneColor
-          }}
-        >
-          {isCorrect ? "\u2713" : "\u00D7"}
+        <div className={`mx-auto grid h-28 w-28 place-items-center rounded-full border-8 text-5xl font-black ${isCorrect ? "border-[#22C55E]/30 bg-[#22C55E]/10 text-[#22C55E]" : "border-[#EF4444]/30 bg-[#EF4444]/10 text-[#EF4444]"}`}>
+          {isCorrect ? "\u2705" : "\u274C"}
         </div>
 
-        <p className="mt-6 text-sm font-bold uppercase tracking-[0.25em]" style={{ color: toneColor }}>
-          {isCorrect ? "To'g'ri javob" : "Noto'g'ri javob"}
+        <p className={`mt-6 text-sm font-bold uppercase tracking-[0.25em] ${isCorrect ? "text-[#22C55E]" : "text-[#EF4444]"}`}>
+          {isCorrect ? "To'g'ri" : "Noto'g'ri"}
         </p>
-        <h1 className="mt-3 text-4xl font-black text-white">{isCorrect ? "+1 ball" : "0 ball"}</h1>
+        <h1 className={`mt-3 text-4xl font-black animate-pop ${isCorrect ? "text-[#22C55E]" : "text-[#EF4444]"}`}>
+          {isCorrect ? "+1 ball!" : "Noto'g'ri"}
+        </h1>
         <p className="mt-4 text-base font-medium leading-7 text-[#94A3B8]">{result.explanation}</p>
 
         {!isCorrect && result.correctAnswer ? (
@@ -44,7 +38,7 @@ export default function ResultScreen({ currentQuestion, result, totalQuestions, 
           type="button"
           onClick={onNext}
         >
-          {nextLabel}
+          {nextLabel} {"\u2192"}
         </button>
       </section>
     </div>

@@ -4,6 +4,7 @@ type AnswerFormProps = {
   answer: string;
   disabled: boolean;
   isChecking: boolean;
+  submitDisabled?: boolean;
   onAnswerChange: (answer: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
@@ -12,6 +13,7 @@ export default function AnswerForm({
   answer,
   disabled,
   isChecking,
+  submitDisabled,
   onAnswerChange,
   onSubmit
 }: AnswerFormProps) {
@@ -25,17 +27,17 @@ export default function AnswerForm({
         disabled={disabled}
         id="answer"
         name="answer"
-        placeholder="Javobni yozing"
+        placeholder="Javobingizni yozing..."
         type="text"
         value={answer}
         onChange={(event) => onAnswerChange(event.target.value)}
       />
       <button
-        className="h-14 rounded-2xl bg-[#4DA6FF] px-4 text-base font-bold text-white shadow-lg shadow-[#4DA6FF]/25 transition duration-200 hover:bg-[#3B95EF] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-[#94A3B8] disabled:shadow-none"
-        disabled={disabled || isChecking}
+        className="h-14 rounded-xl bg-[#4DA6FF] px-4 text-base font-bold text-white shadow-lg shadow-[#4DA6FF]/25 transition duration-200 hover:bg-[#3B95EF] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-[#94A3B8] disabled:shadow-none"
+        disabled={(submitDisabled ?? disabled) || isChecking}
         type="submit"
       >
-        {isChecking ? "Tekshirilmoqda..." : "Javob berish"}
+        {isChecking ? "Tekshirilmoqda..." : "Javob berish \u2713"}
       </button>
     </form>
   );
