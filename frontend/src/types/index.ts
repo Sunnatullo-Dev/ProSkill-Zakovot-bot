@@ -40,6 +40,7 @@ export type Question = {
   text: string;
   category: string | null;
   difficulty: string | null;
+  correct_answer: string;
 };
 
 export type AnswerStatus = "correct" | "partial" | "incorrect";

@@ -95,7 +95,13 @@ export default function App() {
       stop();
 
       const submittedAnswer = userAnswer.trim();
-      const result = await submitAnswer(currentQuestion.id, submittedAnswer, timeTaken);
+      const result = await submitAnswer(
+        currentQuestion.id,
+        currentQuestion.text,
+        currentQuestion.correct_answer,
+        submittedAnswer,
+        timeTaken
+      );
       const isFullyCorrect = result.status === "correct";
       const nextScore = isFullyCorrect ? Math.max(result.newScore, score + 1) : Math.max(result.newScore, score);
 

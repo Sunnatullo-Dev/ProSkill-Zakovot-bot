@@ -1,7 +1,9 @@
-import type { AnswerResult, AnswerStatus, AppUser, AuthResponse, LeaderboardUser, Question } from "../types";
+import { checkWithGemini } from "./gemini";
+import type { AnswerResult, AppUser, AuthResponse, LeaderboardUser, Question } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
+const ANSWER_TIMEOUT_MS = 15000;
 const DEFAULT_USER: AppUser = {
   id: "0",
   telegramId: 0,
@@ -9,13 +11,6 @@ const DEFAULT_USER: AppUser = {
   lastName: null,
   username: "guest",
   score: 0
-};
-const FALLBACK_ANSWER_RESULT: AnswerResult = {
-  isCorrect: false,
-  status: "incorrect",
-  explanation: "Tekshirib bo'lmadi",
-  newScore: 0,
-  correctAnswer: ""
 };
 const FALLBACK_QUESTIONS = [
   {
@@ -88,7 +83,7 @@ const FALLBACK_QUESTIONS = [
     difficulty: "medium",
     correct_answer: "Kesh (Shahrisabz)"
   }
-] satisfies Array<Question & { correct_answer: string }>;
+] satisfies Question[];
 
 type RequestOptions = {
   body?: unknown;
@@ -98,6 +93,15 @@ type RequestOptions = {
 
 type TopUsersResponse = {
   users: LeaderboardUser[];
+};
+
+type RemoteQuestion = {
+  id: string | number;
+  text: string;
+  category: string | null;
+  difficulty: string | null;
+  correct_answer?: string;
+  correctAnswer?: string;
 };
 
 export async function login(initData: string): Promise<AuthResponse> {
@@ -117,7 +121,9 @@ export async function login(initData: string): Promise<AuthResponse> {
 
 export async function getQuestion(): Promise<Question> {
   try {
-    return (await request<Question>("/questions/random")) ?? getRandomFallbackQuestion();
+    const response = await request<RemoteQuestion>("/questions/random");
+
+    return response ? normalizeQuestion(response) : getRandomFallbackQuestion();
   } catch (error) {
     console.error("Question fallback enabled", error);
     return getRandomFallbackQuestion();
@@ -126,24 +132,32 @@ export async function getQuestion(): Promise<Question> {
 
 export async function submitAnswer(
   questionId: string,
+  questionText: string,
+  correctAnswer: string,
   userAnswer: string,
   timeTaken: number
 ): Promise<AnswerResult> {
-  try {
-    const response = await request<AnswerResult>("/answer", {
-      method: "POST",
-      body: {
-        questionId,
-        userAnswer,
-        timeTaken
-      }
-    });
+  void questionId;
 
-    return response ? normalizeAnswerResult(response, userAnswer) : checkFallbackAnswer(questionId, userAnswer);
-  } catch (error) {
-    console.error("Answer fallback enabled", error);
-    return checkFallbackAnswer(questionId, userAnswer);
+  if (timeTaken >= ANSWER_TIMEOUT_MS) {
+    return {
+      isCorrect: false,
+      status: "incorrect",
+      explanation: "",
+      newScore: 0,
+      correctAnswer
+    };
   }
+
+  const result = await checkWithGemini(questionText, correctAnswer, userAnswer);
+
+  return {
+    isCorrect: result.status === "correct",
+    status: result.status,
+    explanation: result.explanation,
+    newScore: result.status === "correct" ? 1 : 0,
+    correctAnswer
+  };
 }
 
 export async function getMe(): Promise<AppUser> {
@@ -222,126 +236,20 @@ function getRandomFallbackQuestion(): Question {
   const index = Math.floor(Math.random() * FALLBACK_QUESTIONS.length);
   const question = FALLBACK_QUESTIONS[index] ?? FALLBACK_QUESTIONS[0];
 
-  return {
-    id: question.id,
-    text: question.text,
-    category: question.category,
-    difficulty: question.difficulty
-  };
+  return { ...question };
 }
 
-function checkFallbackAnswer(questionId: string, userAnswer: string): AnswerResult {
-  const question = FALLBACK_QUESTIONS.find((fallbackQuestion) => fallbackQuestion.id === questionId);
-
-  if (!question) {
-    return FALLBACK_ANSWER_RESULT;
-  }
-
-  const { status } = checkAnswerLocally(userAnswer, question.correct_answer);
-  const isCorrect = status === "correct";
-
-  return {
-    isCorrect,
-    status,
-    explanation: getFallbackExplanation(status),
-    newScore: isCorrect ? 1 : 0,
-    correctAnswer: question.correct_answer
-  };
-}
-
-function checkAnswerLocally(userAnswer: string, correctAnswer: string): { status: AnswerStatus; similarity: number } {
-  const clean = (value: string) =>
-    value
-      .toLowerCase()
-      .trim()
-      .replace(/[().,!?-]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const user = clean(userAnswer);
-  const correct = clean(correctAnswer);
-
-  if (user === correct) {
-    return { status: "correct", similarity: 1 };
-  }
-
-  const maxLen = Math.max(user.length, correct.length);
-  const distance = levenshtein(user, correct);
-  const similarity = maxLen > 0 ? 1 - distance / maxLen : 0;
-  const partialMatch =
-    (similarity >= 0.5 && similarity < 0.9) ||
-    (correct.includes(user) && user.length >= 3) ||
-    user.includes(correct);
-
-  if (similarity >= 0.9) {
-    return { status: "correct", similarity };
-  }
-
-  if (partialMatch) {
-    return { status: "partial", similarity };
-  }
-
-  const correctWords = correct.split(" ").filter((word) => word.length > 2);
-  const matchCount = correctWords.filter((word) => user.includes(word)).length;
-
-  if (correctWords.length > 0 && matchCount / correctWords.length >= 0.6) {
-    return { status: "partial", similarity };
-  }
-
-  return { status: "incorrect", similarity: 0 };
-}
-
-function levenshtein(a: string, b: string): number {
-  const dp = Array.from({ length: a.length + 1 }, (_, rowIndex) =>
-    Array.from({ length: b.length + 1 }, (_, columnIndex) => {
-      if (rowIndex === 0) {
-        return columnIndex;
-      }
-
-      if (columnIndex === 0) {
-        return rowIndex;
-      }
-
-      return 0;
-    })
+function normalizeQuestion(question: RemoteQuestion): Question {
+  const id = String(question.id);
+  const fallbackQuestion = FALLBACK_QUESTIONS.find(
+    (fallback) => fallback.id === id || fallback.text === question.text
   );
 
-  for (let rowIndex = 1; rowIndex <= a.length; rowIndex += 1) {
-    for (let columnIndex = 1; columnIndex <= b.length; columnIndex += 1) {
-      dp[rowIndex][columnIndex] =
-        a[rowIndex - 1] === b[columnIndex - 1]
-          ? dp[rowIndex - 1][columnIndex - 1]
-          : 1 +
-            Math.min(
-              dp[rowIndex - 1][columnIndex],
-              dp[rowIndex][columnIndex - 1],
-              dp[rowIndex - 1][columnIndex - 1]
-            );
-    }
-  }
-
-  return dp[a.length][b.length];
-}
-
-function normalizeAnswerResult(result: AnswerResult, userAnswer: string): AnswerResult {
-  const localStatus = result.correctAnswer ? checkAnswerLocally(userAnswer, result.correctAnswer).status : "incorrect";
-  const status = result.status ?? (result.isCorrect ? "correct" : localStatus);
-
   return {
-    ...result,
-    isCorrect: status === "correct",
-    status
+    id,
+    text: question.text,
+    category: question.category ?? null,
+    difficulty: question.difficulty ?? null,
+    correct_answer: question.correct_answer ?? question.correctAnswer ?? fallbackQuestion?.correct_answer ?? ""
   };
-}
-
-function getFallbackExplanation(status: AnswerStatus) {
-  if (status === "correct") {
-    return "Javob to'g'ri";
-  }
-
-  if (status === "partial") {
-    return "Javob qisman to'g'ri, imloni tekshiring";
-  }
-
-  return "Tekshirib bo'lmadi";
 }

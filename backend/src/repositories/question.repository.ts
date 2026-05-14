@@ -60,7 +60,8 @@ function mapQuestion(question: DbQuestion): Question {
     id: question.id,
     text: question.text,
     category: question.category,
-    difficulty: question.difficulty
+    difficulty: question.difficulty,
+    correct_answer: question.correct_answer
   };
 }
 
