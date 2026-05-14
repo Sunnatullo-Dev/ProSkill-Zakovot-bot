@@ -1,5 +1,5 @@
 {
-  "name": "zakovot-backend",
+  "name": "zakovat-backend",
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",

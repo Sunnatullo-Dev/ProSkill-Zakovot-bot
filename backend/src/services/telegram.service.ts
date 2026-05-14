@@ -6,7 +6,7 @@ const INIT_DATA_MAX_AGE_SECONDS = 60 * 60;
 export const GUEST_INIT_DATA = "guest";
 export const GUEST_TELEGRAM_USER: TelegramUser = {
   id: 0,
-  first_name: "Zakovotchi",
+  first_name: "Zakovatchi",
   username: "guest"
 };
 

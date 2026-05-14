@@ -5,7 +5,7 @@ import type { TelegramUser, TelegramWebApp } from "../types";
 export const tg: TelegramWebApp | null = window.Telegram?.WebApp ?? null;
 const BROWSER_USER: TelegramUser = {
   id: 0,
-  first_name: "Zakovotchi",
+  first_name: "Zakovatchi",
   username: "guest"
 };
 

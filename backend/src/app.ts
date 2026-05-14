@@ -20,7 +20,7 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/", (_req, res) => {
-  res.json({ ok: true, name: "Zakovot API" });
+  res.json({ ok: true, name: "Zakovat API" });
 });
 
 app.get("/health", (_req, res) => {

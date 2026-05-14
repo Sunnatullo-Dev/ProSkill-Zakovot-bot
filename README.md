@@ -1,6 +1,6 @@
-# Zakovot
+# Zakovat
 
-Zakovot - Telegram Mini App uchun bilim tekshirish MVP o'yini.
+Zakovat - Telegram Mini App uchun bilim tekshirish MVP o'yini.
 
 ## Stack
 

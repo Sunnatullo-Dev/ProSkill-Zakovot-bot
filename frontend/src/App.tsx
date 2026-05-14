@@ -183,7 +183,7 @@ export default function App() {
     await handleSubmitAnswer(answer, timeTaken);
   }
 
-  const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovotchi";
+  const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovatchi";
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
 
   return (
@@ -195,7 +195,7 @@ export default function App() {
               <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[var(--color-card)] text-3xl">
                 {"\u{1F9E0}"}
               </span>
-              <p className="mt-4 text-lg font-black text-[var(--color-text)]">Zakovot</p>
+              <p className="mt-4 text-lg font-black text-[var(--color-text)]">Zakovat</p>
               <p className="mt-2 text-sm font-semibold text-[var(--color-muted)]">Yuklanmoqda...</p>
             </div>
           </div>

@@ -13,7 +13,7 @@ export default function HomeScreen({ error, isLoading, playerName, record, score
       <header className="text-center">
         <div className="text-[52px] leading-none">{"\u{1F9E0}"}</div>
         <h1 className="mt-4 bg-gradient-to-r from-[var(--color-accent)] to-[#A78BFA] bg-clip-text text-[28px] font-[800] tracking-[4px] text-transparent">
-          ZAKOVOT
+          ZAKOVAT
         </h1>
         <p className="mt-2 text-sm font-medium text-[var(--color-muted)]">Bilimingizni sinang</p>
       </header>
