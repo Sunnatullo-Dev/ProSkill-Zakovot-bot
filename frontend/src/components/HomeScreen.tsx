@@ -64,7 +64,8 @@ export default function HomeScreen({ isLoading, playerName, record, score, onSta
           background: "var(--card)",
           border: "1px solid var(--border)",
           borderRadius: "24px",
-          padding: "28px 24px"
+          padding: "24px 20px",
+          boxShadow: "0 0 40px rgba(77,166,255,0.08), 0 2px 0 rgba(255,255,255,0.04) inset"
         }}
       >
         <div
@@ -127,11 +128,12 @@ export default function HomeScreen({ isLoading, playerName, record, score, onSta
           style={{
             height: "1px",
             background: "var(--border)",
-            marginBottom: "24px"
+            marginTop: 0,
+            marginBottom: "20px"
           }}
         />
 
-        <div style={{ textAlign: "center", marginBottom: "28px" }}>
+        <div style={{ textAlign: "center", marginBottom: "24px" }}>
           <div
             style={{
               color: "var(--muted)",

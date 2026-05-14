@@ -21,7 +21,7 @@ export default function QuestionCard({
   const [answer, setAnswer] = useState("");
   const timerColor = timeLeft > 10 ? "var(--accent)" : timeLeft > 5 ? "var(--warning)" : "var(--error)";
   const progress = timeLeft / 15;
-  const circumference = 2 * Math.PI * 44;
+  const circumference = 2 * Math.PI * 34;
   const strokeDashoffset = circumference * (1 - progress);
 
   useEffect(() => {
@@ -53,10 +53,30 @@ export default function QuestionCard({
     >
       <div
         style={{
+          height: "4px",
+          background: "var(--border)",
+          borderRadius: "2px",
+          marginBottom: "16px",
+          overflow: "hidden"
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${(questionNumber / totalQuestions) * 100}%`,
+            background: "linear-gradient(90deg, var(--accent), var(--accent2))",
+            borderRadius: "2px",
+            transition: "width 0.3s ease"
+          }}
+        />
+      </div>
+
+      <div
+        style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "10px"
+          marginBottom: "16px"
         }}
       >
         <span
@@ -82,63 +102,14 @@ export default function QuestionCard({
 
       <div
         style={{
-          height: "4px",
-          background: "var(--border)",
-          borderRadius: "2px",
-          marginBottom: "32px",
-          overflow: "hidden"
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${(questionNumber / totalQuestions) * 100}%`,
-            background: "linear-gradient(90deg, var(--accent), var(--accent2))",
-            borderRadius: "2px",
-            transition: "width 0.3s ease"
-          }}
-        />
-      </div>
-
-      <div
-        style={{
           flex: 1,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          gap: "28px"
+          justifyContent: "flex-start",
+          paddingTop: "24px"
         }}
       >
-        <svg height="100" viewBox="0 0 100 100" width="100">
-          <circle cx="50" cy="50" fill="none" r="44" stroke="var(--border)" strokeWidth="6" />
-          <circle
-            cx="50"
-            cy="50"
-            fill="none"
-            r="44"
-            stroke={timerColor}
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            strokeWidth="6"
-            style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease" }}
-            transform="rotate(-90 50 50)"
-          />
-          <text
-            dominantBaseline="central"
-            fill={timerColor}
-            fontSize="28"
-            fontWeight="800"
-            style={{ transition: "fill 0.5s" }}
-            textAnchor="middle"
-            x="50"
-            y="50"
-          >
-            {timeLeft}
-          </text>
-        </svg>
-
         <div
           style={{
             width: "100%",
@@ -152,14 +123,42 @@ export default function QuestionCard({
             textAlign: "center",
             lineHeight: 1.6,
             userSelect: "none",
-            WebkitUserSelect: "none"
+            WebkitUserSelect: "none",
+            marginBottom: "24px"
           }}
         >
           {question.text}
         </div>
-      </div>
 
-      <div style={{ paddingTop: "24px" }}>
+        <svg height="80" style={{ marginBottom: "24px" }} viewBox="0 0 80 80" width="80">
+          <circle cx="40" cy="40" fill="none" r="34" stroke="var(--border)" strokeWidth="6" />
+          <circle
+            cx="40"
+            cy="40"
+            fill="none"
+            r="34"
+            stroke={timerColor}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            strokeWidth="6"
+            style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease" }}
+            transform="rotate(-90 40 40)"
+          />
+          <text
+            dominantBaseline="central"
+            fill={timerColor}
+            fontSize="22"
+            fontWeight="800"
+            style={{ transition: "fill 0.5s" }}
+            textAnchor="middle"
+            x="40"
+            y="40"
+          >
+            {timeLeft}
+          </text>
+        </svg>
+
         <input
           placeholder="Javobingizni yozing..."
           style={{
