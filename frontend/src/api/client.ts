@@ -236,7 +236,7 @@ function checkFallbackAnswer(questionId: string, userAnswer: string): AnswerResu
     return FALLBACK_ANSWER_RESULT;
   }
 
-  const isCorrect = normalizeAnswer(userAnswer) === normalizeAnswer(question.correct_answer);
+  const isCorrect = checkAnswerLocally(userAnswer, question.correct_answer);
 
   return {
     isCorrect,
@@ -246,6 +246,36 @@ function checkFallbackAnswer(questionId: string, userAnswer: string): AnswerResu
   };
 }
 
-function normalizeAnswer(answer: string) {
-  return answer.trim().toLowerCase();
+function checkAnswerLocally(userAnswer: string, correctAnswer: string): boolean {
+  const clean = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[().,!?-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const user = clean(userAnswer);
+  const correct = clean(correctAnswer);
+
+  if (user === correct) {
+    return true;
+  }
+
+  if (correct.includes(user) && user.length >= 3) {
+    return true;
+  }
+
+  if (user.includes(correct)) {
+    return true;
+  }
+
+  const correctWords = correct.split(" ").filter((word) => word.length > 2);
+  const matchCount = correctWords.filter((word) => user.includes(word)).length;
+
+  if (correctWords.length > 0 && matchCount / correctWords.length >= 0.6) {
+    return true;
+  }
+
+  return false;
 }
