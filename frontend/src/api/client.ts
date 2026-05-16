@@ -215,7 +215,6 @@ export async function submitAnswer(
     const status = checkAnswerLocally(offlineAnswer, userAnswer);
     const score = calculateAnswerScore({
       status,
-      difficulty: question.difficulty,
       timeTakenMs: timeTaken,
       streakBefore
     });

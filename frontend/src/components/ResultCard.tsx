@@ -94,7 +94,7 @@ export default function ResultCard({
             padding: "6px 14px"
           }}
         >
-          {"\u{1F525}"} {streak} ketma-ket {"·"} {"×"}1.5 bonus
+          {"\u{1F525}"} {streak} ketma-ket {"·"} +1 ball
         </div>
       ) : null}
 

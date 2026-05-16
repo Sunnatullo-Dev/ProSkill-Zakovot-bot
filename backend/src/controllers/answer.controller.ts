@@ -44,7 +44,6 @@ export const answerController = {
     const result = await checkAnswer(question.text, question.correctAnswer, payload.userAnswer);
     const score = calculateAnswerScore({
       status: result.status,
-      difficulty: question.difficulty,
       timeTakenMs: payload.timeTaken,
       streakBefore: payload.streak
     });

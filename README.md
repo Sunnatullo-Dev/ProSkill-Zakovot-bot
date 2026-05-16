@@ -100,11 +100,9 @@ create index idx_game_results_telegram_id on game_results (telegram_id);
 
 ## Ball tizimi
 
-Har bir to'g'ri javob uchun ball: `(asosiy + tezlik) × streak`.
-
-- Asosiy ball qiyinlikka qarab: oson 10, o'rta 15, qiyin 20.
-- Tezlik bonusi: qancha tez javob berilsa, shuncha ko'p (0..10).
-- Streak: 3 va undan ortiq ketma-ket to'g'ri javobda ball ×1.5 ga ko'paytiriladi.
+- Har to'g'ri javob: 1 ball.
+- 4 soniya yoki undan tez javob berilsa: 2 ball.
+- 3 va undan ortiq ketma-ket to'g'ri javobda: har savolga qo'shimcha +1 ball.
 
 ## Fayllar tavsifi
 
