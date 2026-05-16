@@ -15,7 +15,11 @@ const submitSchema = z.object({
 });
 
 const reviewSchema = z.object({
-  decision: z.enum(["approve", "reject"])
+  decision: z.enum(["approve", "reject"]),
+  text: z.string().trim().min(5).optional(),
+  correctAnswer: z.string().trim().min(1).optional(),
+  category: z.string().trim().max(40).optional(),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional()
 });
 
 export const submissionController = {
@@ -57,7 +61,7 @@ export const submissionController = {
   },
 
   async reviewSubmission(req: Request, res: Response) {
-    const { decision } = reviewSchema.parse(req.body);
+    const payload = reviewSchema.parse(req.body);
     const submissionId = z.string().uuid().parse(req.params.id);
     const submission = await submissionRepository.getSubmissionById(submissionId);
 
@@ -69,12 +73,12 @@ export const submissionController = {
       throw new AppError(409, "Submission allaqachon ko'rib chiqilgan");
     }
 
-    if (decision === "approve") {
+    if (payload.decision === "approve") {
       await questionRepository.createQuestion({
-        text: submission.text,
-        correctAnswer: submission.correctAnswer,
-        category: submission.category,
-        difficulty: submission.difficulty
+        text: payload.text ?? submission.text,
+        correctAnswer: payload.correctAnswer ?? submission.correctAnswer,
+        category: payload.category ?? submission.category,
+        difficulty: payload.difficulty ?? submission.difficulty
       });
       await submissionRepository.updateStatus(submissionId, "approved");
 

@@ -12,6 +12,7 @@ export type TelegramWebApp = {
   };
   ready: () => void;
   expand: () => void;
+  openTelegramLink?: (url: string) => void;
 };
 
 declare global {
@@ -68,6 +69,15 @@ export type GameStats = {
   accuracy: number;
   bestRoundScore: number;
   totalCorrect: number;
+};
+
+export type ReportedQuestion = {
+  id: string;
+  text: string;
+  correctAnswer: string;
+  category: string | null;
+  difficulty: string | null;
+  reportCount: number;
 };
 
 export type Question = {

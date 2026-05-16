@@ -1,8 +1,10 @@
+import { useState } from "react";
 import type { AnswerStatus } from "../types";
 import DiffDisplay from "./DiffDisplay";
 
 type ResultCardProps = {
   autoNextSeconds: number;
+  canReport: boolean;
   correctAnswer: string;
   explanation: string;
   pointsEarned: number;
@@ -10,6 +12,7 @@ type ResultCardProps = {
   status: AnswerStatus;
   userAnswer: string;
   onNext: () => void;
+  onReport: () => void;
 };
 
 const config = {
@@ -41,16 +44,24 @@ function resultTitle(status: AnswerStatus, pointsEarned: number) {
 
 export default function ResultCard({
   autoNextSeconds,
+  canReport,
   correctAnswer,
   explanation,
   pointsEarned,
   streak,
   status,
   userAnswer,
-  onNext
+  onNext,
+  onReport
 }: ResultCardProps) {
+  const [reported, setReported] = useState(false);
   const currentConfig = config[status];
   const showStreakBonus = status === "correct" && streak >= 3;
+
+  function handleReport() {
+    setReported(true);
+    onReport();
+  }
 
   return (
     <div
@@ -182,6 +193,26 @@ export default function ResultCard({
       >
         {autoNextSeconds}s da avtomatik o'tadi
       </div>
+
+      {canReport ? (
+        <button
+          disabled={reported}
+          style={{
+            marginTop: "14px",
+            background: "transparent",
+            border: "none",
+            fontSize: "12px",
+            fontWeight: 600,
+            color: reported ? "var(--success)" : "var(--muted)",
+            cursor: reported ? "default" : "pointer",
+            textDecoration: reported ? "none" : "underline"
+          }}
+          type="button"
+          onClick={handleReport}
+        >
+          {reported ? "Rahmat, adminga yuborildi" : "⚠️ Savolda xatolik bormi?"}
+        </button>
+      ) : null}
     </div>
   );
 }

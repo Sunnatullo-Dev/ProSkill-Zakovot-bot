@@ -42,6 +42,10 @@ export type QuestionWithAnswer = Question & {
   correctAnswer: string;
 };
 
+export type ReportedQuestion = QuestionWithAnswer & {
+  reportCount: number;
+};
+
 export type AnswerStatus = "correct" | "partial" | "incorrect";
 
 export type CheckAnswerResult = {

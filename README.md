@@ -88,11 +88,21 @@ create table game_results (
   created_at timestamptz not null default now()
 );
 
+create table question_reports (
+  id uuid primary key default gen_random_uuid(),
+  question_id uuid not null,
+  reported_by bigint not null,
+  created_at timestamptz not null default now()
+);
+
 create index idx_users_telegram_id on users (telegram_id);
 create index idx_questions_created_at on questions (created_at);
 create index idx_submissions_status on question_submissions (status);
 create index idx_game_results_telegram_id on game_results (telegram_id);
+create index idx_question_reports_question on question_reports (question_id);
 ```
+
+`question_reports` - foydalanuvchilar "savolda xato bor" deb belgilagan savollar. Admin panelida ko'rinadi, admin savolni o'chira oladi.
 
 `question_submissions` - foydalanuvchilar yuborgan savollar. `status` qiymatlari: `pending`, `approved`, `rejected`. Admin tasdiqlaganda savol `questions` jadvaliga ko'chiriladi va muallifga bonus ball qo'shiladi.
 

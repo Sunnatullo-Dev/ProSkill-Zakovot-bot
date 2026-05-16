@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCategories, getRound, getTopUsers, login, saveGameResult, submitAnswer } from "./api/client";
+import {
+  getAnswerTicket,
+  getCategories,
+  getRound,
+  getTopUsers,
+  login,
+  reportQuestion,
+  saveGameResult,
+  submitAnswer
+} from "./api/client";
 import AddQuestionScreen from "./components/AddQuestionScreen";
 import AdminScreen from "./components/AdminScreen";
 import BottomNav from "./components/BottomNav";
@@ -55,6 +64,7 @@ export default function App() {
   const [streak, setStreak] = useState(0);
   const [roundScore, setRoundScore] = useState(0);
   const [lastFilter, setLastFilter] = useState<RoundFilter>(DEFAULT_FILTER);
+  const [currentTicket, setCurrentTicket] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -98,7 +108,7 @@ export default function App() {
         stop();
 
         const submittedAnswer = userAnswer.trim();
-        const result = await submitAnswer(question, submittedAnswer, timeTaken, streak);
+        const result = await submitAnswer(question, submittedAnswer, timeTaken, streak, currentTicket);
 
         if (result.status === "correct") {
           setCorrectAnswers((value) => value + 1);
@@ -120,7 +130,7 @@ export default function App() {
         setIsSubmitting(false);
       }
     },
-    [isSubmitting, questionIndex, roundQuestions, start, stop, streak]
+    [currentTicket, isSubmitting, questionIndex, roundQuestions, start, stop, streak]
   );
 
   useEffect(() => {
@@ -145,10 +155,17 @@ export default function App() {
     setLastResult(null);
     setLastUserAnswer("");
     setQuestionIndex(nextIndex);
+    setCurrentTicket(null);
     setScreen("question");
     reset();
     start();
-  }, [correctAnswers, loadTopUsers, questionIndex, reset, roundQuestions.length, roundScore, start]);
+
+    const nextQuestion = roundQuestions[nextIndex];
+
+    if (nextQuestion) {
+      void getAnswerTicket(nextQuestion.id).then(setCurrentTicket);
+    }
+  }, [correctAnswers, loadTopUsers, questionIndex, reset, roundQuestions, roundScore, start]);
 
   useEffect(() => {
     if (screen !== "result" || !lastResult) {
@@ -228,9 +245,11 @@ export default function App() {
         setLastResult(null);
         setLastUserAnswer("");
         setLastFilter(filter);
+        setCurrentTicket(null);
         setScreen("question");
         reset();
         start();
+        void getAnswerTicket(questions[0].id).then(setCurrentTicket);
       } catch (error) {
         console.error("Start game failed", error);
         setScreen("home");
@@ -249,6 +268,14 @@ export default function App() {
   function handleNavigate(tab: NavTab) {
     setErrorMessage("");
     setScreen(tab);
+  }
+
+  function handleReportQuestion() {
+    const question = roundQuestions[questionIndex];
+
+    if (question) {
+      void reportQuestion(question.id);
+    }
   }
 
   const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovatchi";
@@ -301,9 +328,11 @@ export default function App() {
         {screen === "result" && lastResult ? (
           <ResultScreen
             autoNextSeconds={lastResult.status === "partial" ? 3.5 : 3}
+            canReport={Boolean(currentTicket)}
             result={lastResult}
             userAnswer={lastUserAnswer}
             onNext={handleNextQuestion}
+            onReport={handleReportQuestion}
           />
         ) : null}
 

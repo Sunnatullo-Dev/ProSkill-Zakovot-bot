@@ -4,10 +4,12 @@ import type {
   AnswerStatus,
   AppUser,
   AuthResponse,
+  Difficulty,
   GameStats,
   LeaderboardUser,
   NewQuestionInput,
   Question,
+  ReportedQuestion,
   RoundFilter,
   Submission
 } from "../types";
@@ -104,7 +106,14 @@ const FALLBACK_QUESTIONS: FallbackQuestion[] = [
 type RequestOptions = {
   body?: unknown;
   initData?: string;
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "DELETE";
+};
+
+export type SubmissionEdits = {
+  text?: string;
+  correctAnswer?: string;
+  category?: string;
+  difficulty?: Difficulty;
 };
 
 type TopUsersResponse = {
@@ -192,32 +201,38 @@ export async function getRound(
   return getFallbackRound(filter, count);
 }
 
+export async function getAnswerTicket(questionId: string): Promise<string | null> {
+  const response = await request<{ ticket: string }>("/answer/ticket", {
+    method: "POST",
+    body: { questionId }
+  });
+
+  return response?.ticket ?? null;
+}
+
 export async function submitAnswer(
   question: Question,
   userAnswer: string,
   timeTaken: number,
-  streakBefore: number
+  streakBefore: number,
+  ticket: string | null
 ): Promise<AnswerResult> {
   const offlineAnswer = findFallbackAnswer(question.id);
 
-  if (timeTaken >= ANSWER_TIMEOUT_MS) {
-    return {
-      isCorrect: false,
-      status: "incorrect",
-      explanation: "Vaqt tugadi",
-      correctAnswer: offlineAnswer ?? "",
-      pointsEarned: 0,
-      streak: 0
-    };
-  }
-
   if (offlineAnswer !== undefined) {
+    if (timeTaken >= ANSWER_TIMEOUT_MS) {
+      return {
+        isCorrect: false,
+        status: "incorrect",
+        explanation: "Vaqt tugadi",
+        correctAnswer: offlineAnswer,
+        pointsEarned: 0,
+        streak: 0
+      };
+    }
+
     const status = checkAnswerLocally(offlineAnswer, userAnswer);
-    const score = calculateAnswerScore({
-      status,
-      timeTakenMs: timeTaken,
-      streakBefore
-    });
+    const score = calculateAnswerScore({ status, timeTakenMs: timeTaken, streakBefore });
 
     return {
       isCorrect: status === "correct",
@@ -229,20 +244,22 @@ export async function submitAnswer(
     };
   }
 
-  const response = await request<SubmitAnswerApiResponse>("/answer", {
-    method: "POST",
-    body: { questionId: question.id, userAnswer, timeTaken, streak: streakBefore }
-  });
+  if (ticket) {
+    const response = await request<SubmitAnswerApiResponse>("/answer", {
+      method: "POST",
+      body: { ticket, userAnswer, streak: streakBefore }
+    });
 
-  if (response) {
-    return {
-      isCorrect: response.isCorrect,
-      status: response.status,
-      explanation: response.explanation,
-      correctAnswer: response.correctAnswer,
-      pointsEarned: response.pointsEarned,
-      streak: response.streak
-    };
+    if (response) {
+      return {
+        isCorrect: response.isCorrect,
+        status: response.status,
+        explanation: response.explanation,
+        correctAnswer: response.correctAnswer,
+        pointsEarned: response.pointsEarned,
+        streak: response.streak
+      };
+    }
   }
 
   return {
@@ -253,6 +270,27 @@ export async function submitAnswer(
     pointsEarned: 0,
     streak: 0
   };
+}
+
+export async function reportQuestion(questionId: string): Promise<boolean> {
+  const response = await request<{ ok: boolean }>(`/questions/${questionId}/report`, {
+    method: "POST",
+    body: {}
+  });
+
+  return Boolean(response?.ok);
+}
+
+export async function getReportedQuestions(): Promise<ReportedQuestion[]> {
+  const response = await request<{ questions: ReportedQuestion[] }>("/questions/reported");
+
+  return response?.questions ?? [];
+}
+
+export async function deleteQuestion(questionId: string): Promise<boolean> {
+  const response = await request<{ ok: boolean }>(`/questions/${questionId}`, { method: "DELETE" });
+
+  return Boolean(response?.ok);
 }
 
 export async function getTopUsers(limit = 3): Promise<LeaderboardUser[]> {
@@ -306,11 +344,12 @@ export async function getPendingSubmissions(): Promise<Submission[]> {
 
 export async function reviewSubmission(
   submissionId: string,
-  decision: "approve" | "reject"
+  decision: "approve" | "reject",
+  edits?: SubmissionEdits
 ): Promise<boolean> {
   const response = await request<{ status: string }>(`/submissions/${submissionId}/review`, {
     method: "POST",
-    body: { decision }
+    body: { decision, ...edits }
   });
 
   return Boolean(response?.status);

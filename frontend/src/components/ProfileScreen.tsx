@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getGameStats, getMySubmissions } from "../api/client";
 import type { AppUser, GameStats, Submission } from "../types";
+import { computeAchievements } from "../utils/achievements";
 
 const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
 
@@ -86,6 +87,12 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
   const approved = submissions.filter((item) => item.status === "approved").length;
   const pending = submissions.filter((item) => item.status === "pending").length;
   const rejected = submissions.filter((item) => item.status === "rejected").length;
+  const achievements = computeAchievements({
+    gamesPlayed: stats.gamesPlayed,
+    totalScore: score,
+    bestRoundScore: stats.bestRoundScore,
+    approvedSubmissions: approved
+  });
   const userInitial = playerName[0]?.toUpperCase() ?? "Z";
   const username = user?.username ? `@${user.username}` : "—";
   const telegramId = user && user.telegramId > 0 ? String(user.telegramId) : "Mehmon";
@@ -180,6 +187,44 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
           {statCard("Eng yaxshi", stats.bestRoundScore, "var(--gold)")}
         </div>
       )}
+
+      <h2 style={{ fontSize: "15px", fontWeight: 800, color: "var(--text)", marginBottom: "12px" }}>
+        Yutuqlar
+      </h2>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "24px" }}>
+        {achievements.map((achievement) => (
+          <div
+            key={achievement.id}
+            style={{
+              width: "calc(33.333% - 7px)",
+              background: "var(--card)",
+              border: `1px solid ${achievement.unlocked ? "rgba(245,200,66,0.35)" : "var(--border)"}`,
+              borderRadius: "14px",
+              padding: "12px 6px",
+              textAlign: "center",
+              opacity: achievement.unlocked ? 1 : 0.4
+            }}
+          >
+            <div style={{ fontSize: "26px", lineHeight: 1, filter: achievement.unlocked ? "none" : "grayscale(1)" }}>
+              {achievement.unlocked ? achievement.icon : "\u{1F512}"}
+            </div>
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: achievement.unlocked ? "var(--text)" : "var(--muted)",
+                marginTop: "6px"
+              }}
+            >
+              {achievement.label}
+            </div>
+            <div style={{ fontSize: "9px", color: "var(--muted)", marginTop: "2px" }}>
+              {achievement.description}
+            </div>
+          </div>
+        ))}
+      </div>
 
       <h2 style={{ fontSize: "15px", fontWeight: 800, color: "var(--text)", marginBottom: "12px" }}>
         Mening savollarim

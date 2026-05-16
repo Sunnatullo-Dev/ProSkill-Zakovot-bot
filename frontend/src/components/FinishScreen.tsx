@@ -1,3 +1,5 @@
+import { shareRoundResult } from "../utils/share";
+
 type FinishScreenProps = {
   correctCount: number;
   totalQuestions: number;
@@ -150,6 +152,26 @@ export default function FinishScreen({
         onClick={onRestart}
       >
         Qayta o'ynash {"\u{1F504}"}
+      </button>
+
+      <button
+        style={{
+          width: "100%",
+          maxWidth: "360px",
+          marginTop: "12px",
+          padding: "15px",
+          background: "var(--card)",
+          border: "1.5px solid var(--accent)",
+          borderRadius: "16px",
+          fontSize: "15px",
+          fontWeight: 700,
+          color: "var(--accent)",
+          cursor: "pointer"
+        }}
+        type="button"
+        onClick={() => shareRoundResult(roundPoints, correctCount, totalQuestions)}
+      >
+        Do'stlarga ulashish {"\u{1F4E4}"}
       </button>
     </div>
   );

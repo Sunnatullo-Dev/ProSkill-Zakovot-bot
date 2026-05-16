@@ -3,19 +3,31 @@ import { z } from "zod";
 import { AppError } from "../middleware/error.middleware";
 import { questionRepository } from "../repositories/question.repository";
 import { userRepository } from "../repositories/user.repository";
+import { issueAnswerTicket, verifyAnswerTicket } from "../services/answerTicket.service";
 import { checkAnswer } from "../services/gemini.service";
 import { calculateAnswerScore } from "../services/scoring.service";
 import type { SubmitAnswerResponse } from "../types";
 
 const ANSWER_TIMEOUT_MS = 15000;
+const TIMEOUT_GRACE_MS = 2000;
+
+const ticketSchema = z.object({
+  questionId: z.string().uuid()
+});
+
 const answerSchema = z.object({
-  questionId: z.string().uuid(),
+  ticket: z.string().min(1),
   userAnswer: z.string().trim().default(""),
-  timeTaken: z.coerce.number().nonnegative(),
   streak: z.coerce.number().int().nonnegative().default(0)
 });
 
 export const answerController = {
+  issueTicket(req: Request, res: Response) {
+    const { questionId } = ticketSchema.parse(req.body);
+
+    return res.json({ ticket: issueAnswerTicket(questionId) });
+  },
+
   async submitAnswer(req: Request, res: Response) {
     const currentUser = req.currentUser;
 
@@ -24,13 +36,16 @@ export const answerController = {
     }
 
     const payload = answerSchema.parse(req.body);
-    const question = await questionRepository.getQuestionById(payload.questionId);
+    const { questionId, issuedAt } = verifyAnswerTicket(payload.ticket);
+    const question = await questionRepository.getQuestionById(questionId);
 
     if (!question) {
       throw new AppError(404, "Question not found");
     }
 
-    if (payload.timeTaken > ANSWER_TIMEOUT_MS) {
+    const timeTaken = Date.now() - issuedAt;
+
+    if (timeTaken > ANSWER_TIMEOUT_MS + TIMEOUT_GRACE_MS) {
       return res.json({
         status: "incorrect",
         isCorrect: false,
@@ -44,7 +59,7 @@ export const answerController = {
     const result = await checkAnswer(question.text, question.correctAnswer, payload.userAnswer);
     const score = calculateAnswerScore({
       status: result.status,
-      timeTakenMs: payload.timeTaken,
+      timeTakenMs: Math.min(timeTaken, ANSWER_TIMEOUT_MS),
       streakBefore: payload.streak
     });
 
