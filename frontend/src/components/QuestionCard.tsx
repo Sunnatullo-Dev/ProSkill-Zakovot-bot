@@ -8,6 +8,7 @@ type QuestionCardProps = {
   questionNumber: number;
   totalQuestions: number;
   timeLeft: number;
+  streak: number;
   onSubmit: (answer: string) => void;
 };
 
@@ -16,6 +17,7 @@ export default function QuestionCard({
   questionNumber,
   totalQuestions,
   timeLeft,
+  streak,
   onSubmit
 }: QuestionCardProps) {
   const [answer, setAnswer] = useState("");
@@ -79,14 +81,31 @@ export default function QuestionCard({
           marginBottom: "16px"
         }}
       >
-        <span
-          style={{
-            fontSize: "14px",
-            fontWeight: 600,
-            color: "var(--text)"
-          }}
-        >
-          Savol {questionNumber}/{totalQuestions}
+        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span
+            style={{
+              fontSize: "14px",
+              fontWeight: 600,
+              color: "var(--text)"
+            }}
+          >
+            Savol {questionNumber}/{totalQuestions}
+          </span>
+          {streak >= 2 ? (
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                color: streak >= 3 ? "var(--gold)" : "var(--muted)",
+                background: streak >= 3 ? "rgba(245,200,66,0.14)" : "var(--card)",
+                border: `1px solid ${streak >= 3 ? "rgba(245,200,66,0.3)" : "var(--border)"}`,
+                borderRadius: "20px",
+                padding: "2px 9px"
+              }}
+            >
+              {"\u{1F525}"} {streak}
+            </span>
+          ) : null}
         </span>
         <span
           style={{

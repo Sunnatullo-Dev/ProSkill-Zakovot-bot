@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getQuestion, getTopUsers, login, submitAnswer } from "./api/client";
+import { getCategories, getRound, getTopUsers, login, saveGameResult, submitAnswer } from "./api/client";
 import AddQuestionScreen from "./components/AddQuestionScreen";
 import AdminScreen from "./components/AdminScreen";
 import BottomNav from "./components/BottomNav";
@@ -17,6 +17,7 @@ import type {
   LeaderboardUser,
   NavTab,
   Question,
+  RoundFilter,
   Screen
 } from "./types";
 
@@ -24,10 +25,10 @@ const NAV_SCREENS: Screen[] = ["home", "finish", "add", "profile", "admin"];
 
 const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
-const MAX_QUESTION_COUNT = 10;
 const BOOTSTRAP_TIMEOUT_MS = 1000;
 const RESULT_AUTO_DELAY_MS = 3000;
 const PARTIAL_RESULT_AUTO_DELAY_MS = 3500;
+const DEFAULT_FILTER: RoundFilter = { category: null, difficulty: null };
 const DEFAULT_APP_USER: AppUser = {
   id: "0",
   telegramId: 0,
@@ -45,11 +46,15 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [score, setScore] = useState(0);
-  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [roundQuestions, setRoundQuestions] = useState<Question[]>([]);
+  const [questionIndex, setQuestionIndex] = useState(0);
   const [lastResult, setLastResult] = useState<AnswerResult | null>(null);
   const [lastUserAnswer, setLastUserAnswer] = useState("");
-  const [questionCount, setQuestionCount] = useState(0);
   const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [roundScore, setRoundScore] = useState(0);
+  const [lastFilter, setLastFilter] = useState<RoundFilter>(DEFAULT_FILTER);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -61,6 +66,9 @@ export default function App() {
   const timer = useTimer(TIMER_SECONDS, handleTimerExpire);
   const { reset, start, stop, timeLeft } = timer;
 
+  const currentQuestion = roundQuestions[questionIndex] ?? null;
+  const totalQuestions = roundQuestions.length;
+
   const loadTopUsers = useCallback(async () => {
     try {
       const users = await getTopUsers(3);
@@ -71,81 +79,76 @@ export default function App() {
     }
   }, []);
 
-  const loadQuestion = useCallback(async (nextQuestionCount: number, keepCurrentScreen = false) => {
-    try {
-      setErrorMessage("");
-      setLastUserAnswer("");
-      setLastResult(null);
-      setCurrentQuestion(null);
-      if (!keepCurrentScreen) {
-        setScreen("question");
-      }
-      reset();
+  const handleSubmitAnswer = useCallback<SubmitAnswerFn>(
+    async (userAnswer: string, timeTaken: number) => {
+      const question = roundQuestions[questionIndex];
 
-      const question = await getQuestion();
-
-      setCurrentQuestion(question);
-      setQuestionCount(nextQuestionCount);
-      setScreen("question");
-      start();
-    } catch (error) {
-      console.error("Question load failed", error);
-      setScreen("home");
-    }
-  }, [reset, start]);
-
-  const handleSubmitAnswer = useCallback<SubmitAnswerFn>(async (userAnswer: string, timeTaken: number) => {
-    if (!currentQuestion || isSubmitting) {
-      return;
-    }
-
-    if (timeTaken <= ANSWER_TIMEOUT_MS && !userAnswer.trim()) {
-      setErrorMessage("Javob yozing.");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setErrorMessage("");
-      stop();
-
-      const submittedAnswer = userAnswer.trim();
-      const result = await submitAnswer(currentQuestion, submittedAnswer, timeTaken);
-      const isFullyCorrect = result.status === "correct";
-      const nextScore = isFullyCorrect ? Math.max(result.newScore, score + 1) : Math.max(result.newScore, score);
-
-      if (isFullyCorrect) {
-        setCorrectAnswers((currentValue) => currentValue + 1);
+      if (!question || isSubmitting) {
+        return;
       }
 
-      setLastUserAnswer(submittedAnswer);
-      setLastResult({ ...result, isCorrect: isFullyCorrect, newScore: nextScore });
-      setScore(nextScore);
-      setUser((currentUser) => (currentUser ? { ...currentUser, score: nextScore } : currentUser));
-      setScreen("result");
-      void loadTopUsers();
-    } catch (error) {
-      console.error("Answer submit failed", error);
-      start();
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [currentQuestion, isSubmitting, loadTopUsers, score, start, stop]);
+      if (timeTaken <= ANSWER_TIMEOUT_MS && !userAnswer.trim()) {
+        setErrorMessage("Javob yozing.");
+        return;
+      }
+
+      try {
+        setIsSubmitting(true);
+        setErrorMessage("");
+        stop();
+
+        const submittedAnswer = userAnswer.trim();
+        const result = await submitAnswer(question, submittedAnswer, timeTaken, streak);
+
+        if (result.status === "correct") {
+          setCorrectAnswers((value) => value + 1);
+        }
+
+        setStreak(result.streak);
+        setRoundScore((value) => value + result.pointsEarned);
+        setScore((value) => value + result.pointsEarned);
+        setUser((currentUser) =>
+          currentUser ? { ...currentUser, score: currentUser.score + result.pointsEarned } : currentUser
+        );
+        setLastUserAnswer(submittedAnswer);
+        setLastResult(result);
+        setScreen("result");
+      } catch (error) {
+        console.error("Answer submit failed", error);
+        start();
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [isSubmitting, questionIndex, roundQuestions, start, stop, streak]
+  );
 
   useEffect(() => {
     submitAnswerRef.current = handleSubmitAnswer;
   }, [handleSubmitAnswer]);
 
   const handleNextQuestion = useCallback(() => {
-    if (questionCount >= MAX_QUESTION_COUNT) {
+    const nextIndex = questionIndex + 1;
+
+    if (nextIndex >= roundQuestions.length) {
       reset();
-      setCurrentQuestion(null);
       setScreen("finish");
+      void saveGameResult({
+        correctCount: correctAnswers,
+        totalCount: roundQuestions.length,
+        roundScore
+      });
+      void loadTopUsers();
       return;
     }
 
-    void loadQuestion(questionCount + 1, true);
-  }, [loadQuestion, questionCount, reset]);
+    setLastResult(null);
+    setLastUserAnswer("");
+    setQuestionIndex(nextIndex);
+    setScreen("question");
+    reset();
+    start();
+  }, [correctAnswers, loadTopUsers, questionIndex, reset, roundQuestions.length, roundScore, start]);
 
   useEffect(() => {
     if (screen !== "result" || !lastResult) {
@@ -189,6 +192,7 @@ export default function App() {
         setScore(response.user.score);
         setIsAdmin(response.isAdmin);
         await loadTopUsers();
+        setCategories(await getCategories());
         setScreen("home");
       } catch (error) {
         console.error("Login failed", error);
@@ -202,19 +206,40 @@ export default function App() {
     void bootstrap();
   }, [initData, isReady, loadTopUsers, telegramUser]);
 
-  async function handleStartGame() {
-    try {
+  const startGame = useCallback(
+    async (filter: RoundFilter) => {
       setIsStarting(true);
-      setQuestionCount(0);
-      setCorrectAnswers(0);
-      await loadQuestion(1, true);
-    } catch (error) {
-      console.error("Start game failed", error);
-      setScreen("home");
-    } finally {
-      setIsStarting(false);
-    }
-  }
+      setErrorMessage("");
+
+      try {
+        const questions = await getRound(filter);
+
+        if (questions.length === 0) {
+          setErrorMessage("Bu mavzu bo'yicha savol topilmadi.");
+          setScreen("home");
+          return;
+        }
+
+        setRoundQuestions(questions);
+        setQuestionIndex(0);
+        setCorrectAnswers(0);
+        setStreak(0);
+        setRoundScore(0);
+        setLastResult(null);
+        setLastUserAnswer("");
+        setLastFilter(filter);
+        setScreen("question");
+        reset();
+        start();
+      } catch (error) {
+        console.error("Start game failed", error);
+        setScreen("home");
+      } finally {
+        setIsStarting(false);
+      }
+    },
+    [reset, start]
+  );
 
   async function handleQuestionSubmit(answer: string) {
     const timeTaken = (TIMER_SECONDS - timeLeft) * 1000;
@@ -249,12 +274,13 @@ export default function App() {
 
         {screen === "home" ? (
           <HomeScreen
+            categories={categories}
             error={errorMessage}
             isLoading={isStarting}
             playerName={playerName}
             record={recordScore}
             score={score}
-            onStart={handleStartGame}
+            onStart={startGame}
           />
         ) : null}
 
@@ -264,9 +290,10 @@ export default function App() {
               id: currentQuestion?.id ?? "loading",
               text: currentQuestion?.text ?? "Savol yuklanmoqda..."
             }}
-            questionNumber={questionCount}
+            questionNumber={questionIndex + 1}
+            streak={streak}
             timeLeft={timeLeft}
-            totalQuestions={MAX_QUESTION_COUNT}
+            totalQuestions={totalQuestions}
             onSubmit={handleQuestionSubmit}
           />
         ) : null}
@@ -274,9 +301,7 @@ export default function App() {
         {screen === "result" && lastResult ? (
           <ResultScreen
             autoNextSeconds={lastResult.status === "partial" ? 3.5 : 3}
-            currentQuestion={questionCount}
             result={lastResult}
-            totalQuestions={MAX_QUESTION_COUNT}
             userAnswer={lastUserAnswer}
             onNext={handleNextQuestion}
           />
@@ -284,11 +309,11 @@ export default function App() {
 
         {screen === "finish" ? (
           <FinishScreen
-            playerName={playerName}
-            roundScore={correctAnswers}
-            totalQuestions={MAX_QUESTION_COUNT}
+            correctCount={correctAnswers}
+            roundPoints={roundScore}
+            totalQuestions={totalQuestions}
             totalScore={score}
-            onRestart={handleStartGame}
+            onRestart={() => void startGame(lastFilter)}
           />
         ) : null}
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { getMySubmissions } from "../api/client";
-import type { AppUser, Submission } from "../types";
+import { getGameStats, getMySubmissions } from "../api/client";
+import type { AppUser, GameStats, Submission } from "../types";
+
+const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
 
 type ProfileScreenProps = {
   user: AppUser | null;
@@ -57,6 +59,7 @@ function infoRow(label: string, value: string) {
 
 export default function ProfileScreen({ user, playerName, score, record, isAdmin }: ProfileScreenProps) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -64,10 +67,11 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
 
     async function load() {
       setIsLoading(true);
-      const items = await getMySubmissions();
+      const [items, gameStats] = await Promise.all([getMySubmissions(), getGameStats()]);
 
       if (active) {
         setSubmissions(items);
+        setStats(gameStats);
         setIsLoading(false);
       }
     }
@@ -162,6 +166,20 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
         {infoRow("Foydalanuvchi nomi", username)}
         {infoRow("Telegram ID", telegramId)}
       </div>
+
+      <h2 style={{ fontSize: "15px", fontWeight: 800, color: "var(--text)", marginBottom: "12px" }}>
+        O'yin statistikasi
+      </h2>
+
+      {isLoading ? (
+        <p style={{ fontSize: "13px", color: "var(--muted)", marginBottom: "24px" }}>Yuklanmoqda...</p>
+      ) : (
+        <div style={{ display: "flex", gap: "10px", marginBottom: "24px" }}>
+          {statCard("O'ynalgan", stats.gamesPlayed, "var(--accent)")}
+          {statCard("Aniqlik", `${stats.accuracy}%`, "var(--success)")}
+          {statCard("Eng yaxshi", stats.bestRoundScore, "var(--gold)")}
+        </div>
+      )}
 
       <h2 style={{ fontSize: "15px", fontWeight: 800, color: "var(--text)", marginBottom: "12px" }}>
         Mening savollarim

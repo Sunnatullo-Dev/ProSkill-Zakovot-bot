@@ -79,12 +79,32 @@ create table question_submissions (
   reviewed_at timestamptz
 );
 
+create table game_results (
+  id uuid primary key default gen_random_uuid(),
+  telegram_id bigint not null,
+  correct_count integer not null,
+  total_count integer not null,
+  round_score integer not null,
+  created_at timestamptz not null default now()
+);
+
 create index idx_users_telegram_id on users (telegram_id);
 create index idx_questions_created_at on questions (created_at);
 create index idx_submissions_status on question_submissions (status);
+create index idx_game_results_telegram_id on game_results (telegram_id);
 ```
 
 `question_submissions` - foydalanuvchilar yuborgan savollar. `status` qiymatlari: `pending`, `approved`, `rejected`. Admin tasdiqlaganda savol `questions` jadvaliga ko'chiriladi va muallifga bonus ball qo'shiladi.
+
+`game_results` - har bir tugatilgan raund natijasi (to'g'ri javoblar soni, savollar soni, raund bali). Profil ekranidagi statistika shu jadval asosida hisoblanadi.
+
+## Ball tizimi
+
+Har bir to'g'ri javob uchun ball: `(asosiy + tezlik) × streak`.
+
+- Asosiy ball qiyinlikka qarab: oson 10, o'rta 15, qiyin 20.
+- Tezlik bonusi: qancha tez javob berilsa, shuncha ko'p (0..10).
+- Streak: 3 va undan ortiq ketma-ket to'g'ri javobda ball ×1.5 ga ko'paytiriladi.
 
 ## Fayllar tavsifi
 

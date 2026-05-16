@@ -5,7 +5,8 @@ type ResultCardProps = {
   autoNextSeconds: number;
   correctAnswer: string;
   explanation: string;
-  newScore: number;
+  pointsEarned: number;
+  streak: number;
   status: AnswerStatus;
   userAnswer: string;
   onNext: () => void;
@@ -14,30 +15,42 @@ type ResultCardProps = {
 const config = {
   correct: {
     background: "linear-gradient(180deg, #030D06 0%, #080F1E 100%)",
-    title: "To'g'ri! +1 ball",
     titleColor: "var(--success)"
   },
   partial: {
     background: "linear-gradient(180deg, #0D0A02 0%, #080F1E 100%)",
-    title: "Qisman to'g'ri \u2014 imlo xatosi",
     titleColor: "var(--warning)"
   },
   incorrect: {
     background: "linear-gradient(180deg, #200508 0%, #080F1E 100%)",
-    title: "Noto'g'ri",
     titleColor: "var(--error)"
   }
-} satisfies Record<AnswerStatus, { background: string; title: string; titleColor: string }>;
+} satisfies Record<AnswerStatus, { background: string; titleColor: string }>;
+
+function resultTitle(status: AnswerStatus, pointsEarned: number) {
+  if (status === "correct") {
+    return `To'g'ri! +${pointsEarned} ball`;
+  }
+
+  if (status === "partial") {
+    return "Qisman to'g'ri — imlo xatosi";
+  }
+
+  return "Noto'g'ri";
+}
 
 export default function ResultCard({
   autoNextSeconds,
   correctAnswer,
   explanation,
+  pointsEarned,
+  streak,
   status,
   userAnswer,
   onNext
 }: ResultCardProps) {
   const currentConfig = config[status];
+  const showStreakBonus = status === "correct" && streak >= 3;
 
   return (
     <div
@@ -61,12 +74,29 @@ export default function ResultCard({
           fontSize: "24px",
           fontWeight: 800,
           color: currentConfig.titleColor,
-          marginBottom: "24px",
+          marginBottom: showStreakBonus ? "10px" : "24px",
           textAlign: "center"
         }}
       >
-        {currentConfig.title}
+        {resultTitle(status, pointsEarned)}
       </div>
+
+      {showStreakBonus ? (
+        <div
+          style={{
+            marginBottom: "24px",
+            fontSize: "13px",
+            fontWeight: 700,
+            color: "var(--gold)",
+            background: "rgba(245,200,66,0.14)",
+            border: "1px solid rgba(245,200,66,0.3)",
+            borderRadius: "20px",
+            padding: "6px 14px"
+          }}
+        >
+          {"\u{1F525}"} {streak} ketma-ket {"·"} {"×"}1.5 bonus
+        </div>
+      ) : null}
 
       <div
         style={{
@@ -140,7 +170,7 @@ export default function ResultCard({
         type="button"
         onClick={onNext}
       >
-        Keyingi savol {"\u2192"}
+        Keyingi savol {"→"}
       </button>
 
       <div

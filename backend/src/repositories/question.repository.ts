@@ -2,35 +2,76 @@ import { AppError } from "../middleware/error.middleware";
 import { supabase } from "../db/supabase";
 import type { DbQuestion, NewQuestion, Question, QuestionWithAnswer } from "../types";
 
+type RoundFilter = {
+  count: number;
+  category: string | null;
+  difficulty: string | null;
+};
+
 export const questionRepository = {
-  async getRandomQuestion(): Promise<Question | null> {
+  async getRoundQuestions(filter: RoundFilter): Promise<Question[]> {
     try {
-      const { count, error: countError } = await supabase
-        .from("questions")
-        .select("id", { count: "exact", head: true });
+      let idQuery = supabase.from("questions").select("id");
 
-      if (countError) {
-        throw new AppError(500, "Question count failed");
+      if (filter.category) {
+        idQuery = idQuery.eq("category", filter.category);
       }
 
-      if (!count) {
-        return null;
+      if (filter.difficulty) {
+        idQuery = idQuery.eq("difficulty", filter.difficulty);
       }
 
-      const randomIndex = Math.floor(Math.random() * count);
+      const { data: idRows, error: idError } = await idQuery.returns<Array<{ id: string }>>();
+
+      if (idError) {
+        throw new AppError(500, "Question ids lookup failed");
+      }
+
+      const ids = shuffle((idRows ?? []).map((row) => row.id)).slice(0, filter.count);
+
+      if (ids.length === 0) {
+        return [];
+      }
+
       const { data, error } = await supabase
         .from("questions")
         .select("id, text, category, difficulty")
-        .range(randomIndex, randomIndex)
-        .single<DbQuestion>();
+        .in("id", ids)
+        .returns<DbQuestion[]>();
 
-      if (error || !data) {
-        throw new AppError(500, "Random question failed");
+      if (error) {
+        throw new AppError(500, "Round questions lookup failed");
       }
 
-      return mapQuestion(data);
+      return shuffle((data ?? []).map(mapQuestion));
     } catch (error) {
-      console.error("getRandomQuestion failed", error);
+      console.error("getRoundQuestions failed", error);
+      throw error;
+    }
+  },
+
+  async getCategories(): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from("questions")
+        .select("category")
+        .returns<Array<{ category: string | null }>>();
+
+      if (error) {
+        throw new AppError(500, "Categories lookup failed");
+      }
+
+      const categories = new Set<string>();
+
+      for (const row of data ?? []) {
+        if (row.category) {
+          categories.add(row.category);
+        }
+      }
+
+      return [...categories].sort((left, right) => left.localeCompare(right));
+    } catch (error) {
+      console.error("getCategories failed", error);
       throw error;
     }
   },
@@ -87,4 +128,15 @@ function mapQuestionWithAnswer(question: DbQuestion): QuestionWithAnswer {
     ...mapQuestion(question),
     correctAnswer: question.correct_answer
   };
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const result = [...items];
+
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+
+  return result;
 }

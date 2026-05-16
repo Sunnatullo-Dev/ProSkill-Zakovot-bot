@@ -1,18 +1,27 @@
 type FinishScreenProps = {
-  playerName: string;
-  roundScore: number;
+  correctCount: number;
   totalQuestions: number;
+  roundPoints: number;
   totalScore: number;
   onRestart: () => void;
 };
 
 export default function FinishScreen({
-  playerName: _playerName,
-  roundScore,
+  correctCount,
   totalQuestions,
-  totalScore: _totalScore,
+  roundPoints,
+  totalScore,
   onRestart
 }: FinishScreenProps) {
+  const ratio = totalQuestions > 0 ? correctCount / totalQuestions : 0;
+  const message =
+    ratio >= 0.8
+      ? "Ajoyib natija! \u{1F3C6}"
+      : ratio >= 0.5
+        ? "Yaxshi! Davom eting \u{1F44D}"
+        : "Ko'proq mashq qiling \u{1F4DA}";
+  const messageColor = ratio >= 0.8 ? "var(--gold)" : ratio >= 0.5 ? "var(--accent)" : "var(--muted)";
+
   return (
     <div
       className="animate-scaleIn"
@@ -26,23 +35,23 @@ export default function FinishScreen({
         padding: "24px 24px 104px"
       }}
     >
-      <div style={{ fontSize: "72px", marginBottom: "8px" }}>{"\u{1F389}"}</div>
+      <div style={{ fontSize: "64px", marginBottom: "4px" }}>{"\u{1F389}"}</div>
 
       <div
         style={{
-          fontSize: "14px",
+          fontSize: "13px",
           color: "var(--muted)",
           letterSpacing: "2px",
           textTransform: "uppercase",
-          marginBottom: "8px"
+          marginBottom: "6px"
         }}
       >
-        Natija
+        Raund bali
       </div>
 
       <div
         style={{
-          fontSize: "72px",
+          fontSize: "68px",
           fontWeight: 900,
           background: "linear-gradient(135deg, #4DA6FF, #A78BFA)",
           WebkitBackgroundClip: "text",
@@ -51,22 +60,11 @@ export default function FinishScreen({
           marginBottom: "8px"
         }}
       >
-        {roundScore}/{totalQuestions}
+        +{roundPoints}
       </div>
 
-      <div
-        style={{
-          fontSize: "18px",
-          fontWeight: 600,
-          marginBottom: "32px",
-          color: roundScore >= 8 ? "var(--gold)" : roundScore >= 5 ? "var(--accent)" : "var(--muted)"
-        }}
-      >
-        {roundScore >= 8
-          ? "Ajoyib natija! \u{1F3C6}"
-          : roundScore >= 5
-            ? "Yaxshi! Davom eting \u{1F44D}"
-            : "Ko'proq mashq qiling \u{1F4DA}"}
+      <div style={{ fontSize: "17px", fontWeight: 600, marginBottom: "28px", color: messageColor }}>
+        {message}
       </div>
 
       <div
@@ -77,7 +75,7 @@ export default function FinishScreen({
           border: "1px solid var(--border)",
           borderRadius: "20px",
           padding: "20px",
-          marginBottom: "24px",
+          marginBottom: "16px",
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
           gap: "16px",
@@ -95,14 +93,8 @@ export default function FinishScreen({
           >
             TO'G'RI
           </div>
-          <div
-            style={{
-              fontSize: "36px",
-              fontWeight: 900,
-              color: "var(--success)"
-            }}
-          >
-            {roundScore}
+          <div style={{ fontSize: "34px", fontWeight: 900, color: "var(--success)" }}>
+            {correctCount}
           </div>
         </div>
         <div>
@@ -116,16 +108,28 @@ export default function FinishScreen({
           >
             NOTO'G'RI
           </div>
-          <div
-            style={{
-              fontSize: "36px",
-              fontWeight: 900,
-              color: "var(--error)"
-            }}
-          >
-            {totalQuestions - roundScore}
+          <div style={{ fontSize: "34px", fontWeight: 900, color: "var(--error)" }}>
+            {totalQuestions - correctCount}
           </div>
         </div>
+      </div>
+
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "360px",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "16px",
+          padding: "14px 18px",
+          marginBottom: "24px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}
+      >
+        <span style={{ fontSize: "13px", color: "var(--muted)" }}>Umumiy ball</span>
+        <span style={{ fontSize: "20px", fontWeight: 800, color: "var(--gold)" }}>{totalScore}</span>
       </div>
 
       <button

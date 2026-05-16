@@ -49,11 +49,25 @@ export type Submission = {
   createdAt: string;
 };
 
+export type Difficulty = "easy" | "medium" | "hard";
+
 export type NewQuestionInput = {
   text: string;
   correctAnswer: string;
   category?: string;
-  difficulty?: "easy" | "medium" | "hard";
+  difficulty?: Difficulty;
+};
+
+export type RoundFilter = {
+  category: string | null;
+  difficulty: Difficulty | null;
+};
+
+export type GameStats = {
+  gamesPlayed: number;
+  accuracy: number;
+  bestRoundScore: number;
+  totalCorrect: number;
 };
 
 export type Question = {
@@ -69,8 +83,9 @@ export type AnswerResult = {
   isCorrect: boolean;
   status: AnswerStatus;
   explanation: string;
-  newScore: number;
   correctAnswer: string;
+  pointsEarned: number;
+  streak: number;
 };
 
 export type Screen =

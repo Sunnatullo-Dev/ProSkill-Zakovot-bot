@@ -1,17 +1,22 @@
+import { calculateAnswerScore } from "../utils/scoring";
 import type {
   AnswerResult,
   AnswerStatus,
   AppUser,
   AuthResponse,
+  GameStats,
   LeaderboardUser,
   NewQuestionInput,
   Question,
+  RoundFilter,
   Submission
 } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
 const ANSWER_TIMEOUT_MS = 15000;
+const DEFAULT_ROUND_COUNT = 10;
+const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
 const DEFAULT_USER: AppUser = {
   id: "0",
   telegramId: 0,
@@ -115,6 +120,12 @@ export type SubmitQuestionResult = {
   message: string;
 };
 
+export type SaveGameResultInput = {
+  correctCount: number;
+  totalCount: number;
+  roundScore: number;
+};
+
 type RemoteQuestion = {
   id: string | number;
   text: string;
@@ -126,8 +137,9 @@ type SubmitAnswerApiResponse = {
   status: AnswerStatus;
   isCorrect: boolean;
   explanation: string;
-  newScore: number;
   correctAnswer: string;
+  pointsEarned: number;
+  streak: number;
 };
 
 const FALLBACK_AUTH: AuthResponse = { user: DEFAULT_USER, isAdmin: false };
@@ -147,21 +159,44 @@ export async function login(initData: string): Promise<AuthResponse> {
   }
 }
 
-export async function getQuestion(): Promise<Question> {
-  try {
-    const response = await request<RemoteQuestion>("/questions/random");
+export async function getCategories(): Promise<string[]> {
+  const response = await request<{ categories: string[] }>("/questions/categories");
 
-    return response ? normalizeQuestion(response) : getRandomFallbackQuestion();
-  } catch (error) {
-    console.error("Question fallback enabled", error);
-    return getRandomFallbackQuestion();
+  if (response?.categories?.length) {
+    return response.categories;
   }
+
+  return [...new Set(FALLBACK_QUESTIONS.map((question) => question.category).filter(isText))].sort();
+}
+
+export async function getRound(
+  filter: RoundFilter,
+  count = DEFAULT_ROUND_COUNT
+): Promise<Question[]> {
+  const params = new URLSearchParams({ count: String(count) });
+
+  if (filter.category) {
+    params.set("category", filter.category);
+  }
+
+  if (filter.difficulty) {
+    params.set("difficulty", filter.difficulty);
+  }
+
+  const response = await request<{ questions: RemoteQuestion[] }>(`/questions/round?${params}`);
+
+  if (response?.questions?.length) {
+    return response.questions.map(normalizeQuestion);
+  }
+
+  return getFallbackRound(filter, count);
 }
 
 export async function submitAnswer(
   question: Question,
   userAnswer: string,
-  timeTaken: number
+  timeTaken: number,
+  streakBefore: number
 ): Promise<AnswerResult> {
   const offlineAnswer = findFallbackAnswer(question.id);
 
@@ -170,26 +205,34 @@ export async function submitAnswer(
       isCorrect: false,
       status: "incorrect",
       explanation: "Vaqt tugadi",
-      newScore: 0,
-      correctAnswer: offlineAnswer ?? ""
+      correctAnswer: offlineAnswer ?? "",
+      pointsEarned: 0,
+      streak: 0
     };
   }
 
   if (offlineAnswer !== undefined) {
     const status = checkAnswerLocally(offlineAnswer, userAnswer);
+    const score = calculateAnswerScore({
+      status,
+      difficulty: question.difficulty,
+      timeTakenMs: timeTaken,
+      streakBefore
+    });
 
     return {
       isCorrect: status === "correct",
       status,
       explanation: "",
-      newScore: status === "correct" ? 1 : 0,
-      correctAnswer: offlineAnswer
+      correctAnswer: offlineAnswer,
+      pointsEarned: score.pointsEarned,
+      streak: score.streakAfter
     };
   }
 
   const response = await request<SubmitAnswerApiResponse>("/answer", {
     method: "POST",
-    body: { questionId: question.id, userAnswer, timeTaken }
+    body: { questionId: question.id, userAnswer, timeTaken, streak: streakBefore }
   });
 
   if (response) {
@@ -197,8 +240,9 @@ export async function submitAnswer(
       isCorrect: response.isCorrect,
       status: response.status,
       explanation: response.explanation,
-      newScore: response.newScore,
-      correctAnswer: response.correctAnswer
+      correctAnswer: response.correctAnswer,
+      pointsEarned: response.pointsEarned,
+      streak: response.streak
     };
   }
 
@@ -206,8 +250,9 @@ export async function submitAnswer(
     isCorrect: false,
     status: "incorrect",
     explanation: "Javobni tekshirib bo'lmadi",
-    newScore: 0,
-    correctAnswer: ""
+    correctAnswer: "",
+    pointsEarned: 0,
+    streak: 0
   };
 }
 
@@ -220,6 +265,16 @@ export async function getTopUsers(limit = 3): Promise<LeaderboardUser[]> {
     console.error("Top users fallback enabled", error);
     return [];
   }
+}
+
+export async function saveGameResult(input: SaveGameResultInput): Promise<void> {
+  await request("/game-results", { method: "POST", body: input });
+}
+
+export async function getGameStats(): Promise<GameStats> {
+  const response = await request<{ stats: GameStats }>("/game-results/stats");
+
+  return response?.stats ?? EMPTY_STATS;
 }
 
 export async function submitQuestion(input: NewQuestionInput): Promise<SubmitQuestionResult> {
@@ -312,16 +367,18 @@ function getTelegramInitData() {
   return window.Telegram?.WebApp?.initData || "guest";
 }
 
-function getRandomFallbackQuestion(): Question {
-  const index = Math.floor(Math.random() * FALLBACK_QUESTIONS.length);
-  const question = FALLBACK_QUESTIONS[index] ?? FALLBACK_QUESTIONS[0];
+function getFallbackRound(filter: RoundFilter, count: number): Question[] {
+  const matching = FALLBACK_QUESTIONS.filter((question) => {
+    const categoryOk = !filter.category || question.category === filter.category;
+    const difficultyOk = !filter.difficulty || question.difficulty === filter.difficulty;
 
-  return {
-    id: question.id,
-    text: question.text,
-    category: question.category,
-    difficulty: question.difficulty
-  };
+    return categoryOk && difficultyOk;
+  });
+  const pool = matching.length > 0 ? matching : FALLBACK_QUESTIONS;
+
+  return shuffle(pool)
+    .slice(0, count)
+    .map(normalizeQuestion);
 }
 
 function normalizeQuestion(question: RemoteQuestion): Question {
@@ -362,4 +419,19 @@ function checkAnswerLocally(correctAnswer: string, userAnswer: string): AnswerSt
   }
 
   return "incorrect";
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const result = [...items];
+
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+
+  return result;
+}
+
+function isText(value: string | null): value is string {
+  return Boolean(value);
 }

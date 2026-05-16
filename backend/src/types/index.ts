@@ -53,8 +53,32 @@ export type SubmitAnswerResponse = {
   status: AnswerStatus;
   isCorrect: boolean;
   explanation: string;
-  newScore: number;
   correctAnswer: string;
+  pointsEarned: number;
+  streak: number;
+};
+
+export type GameStats = {
+  gamesPlayed: number;
+  accuracy: number;
+  bestRoundScore: number;
+  totalCorrect: number;
+};
+
+export type DbGameResult = {
+  id: string;
+  telegram_id: number;
+  correct_count: number;
+  total_count: number;
+  round_score: number;
+  created_at: string;
+};
+
+export type NewGameResult = {
+  telegramId: number;
+  correctCount: number;
+  totalCount: number;
+  roundScore: number;
 };
 
 export type SubmissionStatus = "pending" | "approved" | "rejected";

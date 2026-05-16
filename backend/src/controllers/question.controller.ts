@@ -1,15 +1,31 @@
 import type { Request, Response } from "express";
-import { AppError } from "../middleware/error.middleware";
+import { z } from "zod";
 import { questionRepository } from "../repositories/question.repository";
 
+const DEFAULT_ROUND_COUNT = 10;
+const MAX_ROUND_COUNT = 20;
+
+const roundQuerySchema = z.object({
+  count: z.coerce.number().int().positive().max(MAX_ROUND_COUNT).default(DEFAULT_ROUND_COUNT),
+  category: z.string().trim().min(1).optional(),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional()
+});
+
 export const questionController = {
-  async getRandomQuestion(_req: Request, res: Response) {
-    const question = await questionRepository.getRandomQuestion();
+  async getRound(req: Request, res: Response) {
+    const query = roundQuerySchema.parse(req.query);
+    const questions = await questionRepository.getRoundQuestions({
+      count: query.count,
+      category: query.category ?? null,
+      difficulty: query.difficulty ?? null
+    });
 
-    if (!question) {
-      throw new AppError(404, "Question not found");
-    }
+    return res.json({ questions });
+  },
 
-    return res.json(question);
+  async getCategories(_req: Request, res: Response) {
+    const categories = await questionRepository.getCategories();
+
+    return res.json({ categories });
   }
 };
