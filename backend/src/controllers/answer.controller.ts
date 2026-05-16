@@ -35,6 +35,7 @@ export const answerController = {
 
     if (payload.timeTaken > ANSWER_TIMEOUT_MS) {
       return res.json({
+        status: "incorrect",
         isCorrect: false,
         explanation: "Vaqt tugadi",
         newScore: currentUser.score,
@@ -43,12 +44,14 @@ export const answerController = {
     }
 
     const result = await checkAnswer(question.text, question.correctAnswer, payload.userAnswer);
-    const updatedUser = result.isCorrect
-      ? await userRepository.incrementScore(currentUser.telegramId)
+    const isCorrect = result.status === "correct";
+    const updatedUser = isCorrect
+      ? await userRepository.addScore(currentUser.telegramId, 1)
       : currentUser;
 
     return res.json({
-      isCorrect: result.isCorrect,
+      status: result.status,
+      isCorrect,
       explanation: result.explanation,
       newScore: updatedUser.score,
       correctAnswer: question.correctAnswer

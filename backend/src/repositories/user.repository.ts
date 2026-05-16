@@ -55,7 +55,7 @@ export const userRepository = {
     }
   },
 
-  async incrementScore(telegramId: number): Promise<AppUser> {
+  async addScore(telegramId: number, amount: number): Promise<AppUser> {
     try {
       const user = await userRepository.findByTelegramId(telegramId);
 
@@ -66,7 +66,7 @@ export const userRepository = {
       const { data, error } = await supabase
         .from("users")
         .update({
-          score: user.score + 1,
+          score: user.score + amount,
           updated_at: new Date().toISOString()
         })
         .eq("telegram_id", telegramId)
@@ -79,7 +79,7 @@ export const userRepository = {
 
       return mapUser(data);
     } catch (error) {
-      console.error("incrementScore failed", error);
+      console.error("addScore failed", error);
       throw error;
     }
   },

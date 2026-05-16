@@ -1,12 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getQuestion, getTopUsers, login, submitAnswer } from "./api/client";
+import AddQuestionScreen from "./components/AddQuestionScreen";
+import AdminScreen from "./components/AdminScreen";
+import BottomNav from "./components/BottomNav";
 import FinishScreen from "./components/FinishScreen";
 import HomeScreen from "./components/HomeScreen";
+import ProfileScreen from "./components/ProfileScreen";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
 import { useTelegram } from "./hooks/useTelegram";
 import { useTimer } from "./hooks/useTimer";
-import type { AnswerResult, AppUser, AuthResponse, LeaderboardUser, Question, Screen } from "./types";
+import type {
+  AnswerResult,
+  AppUser,
+  AuthResponse,
+  LeaderboardUser,
+  NavTab,
+  Question,
+  Screen
+} from "./types";
+
+const NAV_SCREENS: Screen[] = ["home", "finish", "add", "profile", "admin"];
 
 const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
@@ -28,6 +42,7 @@ type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 export default function App() {
   const { initData, isReady, user: telegramUser } = useTelegram();
   const [screen, setScreen] = useState<Screen>("loading");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [score, setScore] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -95,13 +110,7 @@ export default function App() {
       stop();
 
       const submittedAnswer = userAnswer.trim();
-      const result = await submitAnswer(
-        currentQuestion.id,
-        currentQuestion.text,
-        currentQuestion.correct_answer,
-        submittedAnswer,
-        timeTaken
-      );
+      const result = await submitAnswer(currentQuestion, submittedAnswer, timeTaken);
       const isFullyCorrect = result.status === "correct";
       const nextScore = isFullyCorrect ? Math.max(result.newScore, score + 1) : Math.max(result.newScore, score);
 
@@ -165,6 +174,7 @@ export default function App() {
         const effectiveInitData = initData || "guest";
 
         const response = await withTimeout(login(effectiveInitData), {
+          isAdmin: false,
           user: telegramUser
             ? {
                 ...DEFAULT_APP_USER,
@@ -177,12 +187,14 @@ export default function App() {
 
         setUser(response.user);
         setScore(response.user.score);
+        setIsAdmin(response.isAdmin);
         await loadTopUsers();
         setScreen("home");
       } catch (error) {
         console.error("Login failed", error);
         setUser(DEFAULT_APP_USER);
         setScore(DEFAULT_APP_USER.score);
+        setIsAdmin(false);
         setScreen("home");
       }
     }
@@ -209,8 +221,16 @@ export default function App() {
     await handleSubmitAnswer(answer, timeTaken);
   }
 
+  function handleNavigate(tab: NavTab) {
+    setErrorMessage("");
+    setScreen(tab);
+  }
+
   const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovatchi";
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
+  const showBottomNav = NAV_SCREENS.includes(screen);
+  const navActive: NavTab =
+    screen === "add" ? "add" : screen === "profile" ? "profile" : screen === "admin" ? "admin" : "home";
 
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
@@ -270,6 +290,24 @@ export default function App() {
             totalScore={score}
             onRestart={handleStartGame}
           />
+        ) : null}
+
+        {screen === "add" ? <AddQuestionScreen /> : null}
+
+        {screen === "profile" ? (
+          <ProfileScreen
+            isAdmin={isAdmin}
+            playerName={playerName}
+            record={recordScore}
+            score={score}
+            user={user}
+          />
+        ) : null}
+
+        {screen === "admin" && isAdmin ? <AdminScreen /> : null}
+
+        {showBottomNav ? (
+          <BottomNav active={navActive} isAdmin={isAdmin} onNavigate={handleNavigate} />
         ) : null}
       </section>
     </main>

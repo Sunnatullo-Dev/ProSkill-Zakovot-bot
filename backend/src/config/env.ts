@@ -11,7 +11,16 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url("SUPABASE_URL noto'g'ri"),
   SUPABASE_SERVICE_KEY: z.string().min(1, "SUPABASE_SERVICE_KEY kerak"),
   GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY kerak"),
-  GEMINI_MODEL: z.string().min(1).default("gemini-1.5-flash")
+  GEMINI_MODEL: z.string().min(1).default("gemini-1.5-flash"),
+  ADMIN_TELEGRAM_IDS: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((part) => Number(part.trim()))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )
 });
 
 export const env = envSchema.parse(process.env);

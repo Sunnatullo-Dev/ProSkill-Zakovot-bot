@@ -33,6 +33,27 @@ export type AppUser = {
 
 export type AuthResponse = {
   user: AppUser;
+  isAdmin: boolean;
+};
+
+export type SubmissionStatus = "pending" | "approved" | "rejected";
+
+export type Submission = {
+  id: string;
+  text: string;
+  correctAnswer: string;
+  category: string | null;
+  difficulty: string | null;
+  submittedBy: number;
+  status: SubmissionStatus;
+  createdAt: string;
+};
+
+export type NewQuestionInput = {
+  text: string;
+  correctAnswer: string;
+  category?: string;
+  difficulty?: "easy" | "medium" | "hard";
 };
 
 export type Question = {
@@ -40,7 +61,6 @@ export type Question = {
   text: string;
   category: string | null;
   difficulty: string | null;
-  correct_answer: string;
 };
 
 export type AnswerStatus = "correct" | "partial" | "incorrect";
@@ -53,6 +73,16 @@ export type AnswerResult = {
   correctAnswer: string;
 };
 
-export type Screen = "loading" | "home" | "question" | "result" | "finish";
+export type Screen =
+  | "loading"
+  | "home"
+  | "question"
+  | "result"
+  | "finish"
+  | "add"
+  | "profile"
+  | "admin";
+
+export type NavTab = "home" | "add" | "profile" | "admin";
 
 export type LeaderboardUser = AppUser;

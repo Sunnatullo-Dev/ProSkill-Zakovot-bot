@@ -1,6 +1,6 @@
 import { AppError } from "../middleware/error.middleware";
 import { supabase } from "../db/supabase";
-import type { DbQuestion, Question, QuestionWithAnswer } from "../types";
+import type { DbQuestion, NewQuestion, Question, QuestionWithAnswer } from "../types";
 
 export const questionRepository = {
   async getRandomQuestion(): Promise<Question | null> {
@@ -20,7 +20,7 @@ export const questionRepository = {
       const randomIndex = Math.floor(Math.random() * count);
       const { data, error } = await supabase
         .from("questions")
-        .select("id, text, correct_answer, category, difficulty")
+        .select("id, text, category, difficulty")
         .range(randomIndex, randomIndex)
         .single<DbQuestion>();
 
@@ -52,6 +52,24 @@ export const questionRepository = {
       console.error("getQuestionById failed", error);
       throw error;
     }
+  },
+
+  async createQuestion(input: NewQuestion): Promise<void> {
+    try {
+      const { error } = await supabase.from("questions").insert({
+        text: input.text,
+        correct_answer: input.correctAnswer,
+        category: input.category,
+        difficulty: input.difficulty
+      });
+
+      if (error) {
+        throw new AppError(500, "Question create failed");
+      }
+    } catch (error) {
+      console.error("createQuestion failed", error);
+      throw error;
+    }
   }
 };
 
@@ -60,8 +78,7 @@ function mapQuestion(question: DbQuestion): Question {
     id: question.id,
     text: question.text,
     category: question.category,
-    difficulty: question.difficulty,
-    correct_answer: question.correct_answer
+    difficulty: question.difficulty
   };
 }
 

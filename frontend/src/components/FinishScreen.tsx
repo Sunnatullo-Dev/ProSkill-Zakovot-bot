@@ -23,7 +23,7 @@ export default function FinishScreen({
         alignItems: "center",
         justifyContent: "center",
         background: "var(--bg)",
-        padding: "24px"
+        padding: "24px 24px 104px"
       }}
     >
       <div style={{ fontSize: "72px", marginBottom: "8px" }}>{"\u{1F389}"}</div>

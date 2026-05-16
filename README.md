@@ -30,7 +30,10 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your_supabase_service_role_key
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-1.5-flash
+ADMIN_TELEGRAM_IDS=123456789,987654321
 ```
+
+`ADMIN_TELEGRAM_IDS` - vergul bilan ajratilgan admin Telegram ID lari. Shu hisoblar ilovada "Admin" bo'limini ko'radi va yuborilgan savollarni tasdiqlaydi.
 
 `frontend/.env`
 
@@ -64,9 +67,24 @@ create table questions (
   created_at timestamptz not null default now()
 );
 
+create table question_submissions (
+  id uuid primary key default gen_random_uuid(),
+  text text not null,
+  correct_answer text not null,
+  category text,
+  difficulty text,
+  submitted_by bigint not null,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz
+);
+
 create index idx_users_telegram_id on users (telegram_id);
 create index idx_questions_created_at on questions (created_at);
+create index idx_submissions_status on question_submissions (status);
 ```
+
+`question_submissions` - foydalanuvchilar yuborgan savollar. `status` qiymatlari: `pending`, `approved`, `rejected`. Admin tasdiqlaganda savol `questions` jadvaliga ko'chiriladi va muallifga bonus ball qo'shiladi.
 
 ## Fayllar tavsifi
 

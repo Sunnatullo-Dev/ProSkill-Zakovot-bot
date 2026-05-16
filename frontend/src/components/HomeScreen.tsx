@@ -20,7 +20,7 @@ export default function HomeScreen({ isLoading, playerName, record, score, onSta
         alignItems: "center",
         justifyContent: "center",
         background: "var(--bg)",
-        padding: "24px"
+        padding: "24px 24px 104px"
       }}
     >
       <div style={{ textAlign: "center", marginBottom: "36px" }}>

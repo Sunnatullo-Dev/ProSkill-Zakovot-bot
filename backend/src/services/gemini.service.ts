@@ -1,12 +1,12 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "../config/env";
-import type { CheckAnswerResult } from "../types";
+import type { AnswerStatus, CheckAnswerResult } from "../types";
 
 const GEMINI_TIMEOUT_MS = 10000;
 const FALLBACK_EXPLANATION = "Tekshirib bo'lmadi";
 
 type GeminiJsonResponse = {
-  isCorrect?: unknown;
+  status?: unknown;
   explanation?: unknown;
 };
 
@@ -25,7 +25,7 @@ export async function checkAnswer(
 
     if (!parsed) {
       return {
-        isCorrect: false,
+        status: "incorrect",
         explanation: FALLBACK_EXPLANATION
       };
     }
@@ -35,7 +35,7 @@ export async function checkAnswer(
     console.error("Gemini answer check failed", error);
 
     return {
-      isCorrect: false,
+      status: "incorrect",
       explanation: FALLBACK_EXPLANATION
     };
   }
@@ -43,16 +43,20 @@ export async function checkAnswer(
 
 function buildPrompt(question: string, correctAnswer: string, userAnswer: string) {
   return `
-Sen bilim o'yini hakamisisan.
+Sen bilim o'yini hakamisisan. Faqat JSON qaytarasan.
 Savol: ${question}
 To'g'ri javob: ${correctAnswer}
 Foydalanuvchi javobi: ${userAnswer}
 
 Qoidalar:
 - Imlo xatolariga e'tibor berma
-- Ma'no to'g'ri bo'lsa to'g'ri deb hisobla
-- Qisqa yoki to'liq javob bo'lsin — farqi yo'q
-- Faqat JSON qaytar: {"isCorrect": true/false, "explanation": "..."}
+- Ma'no to'g'ri bo'lsa "correct" ber
+- Qisman to'g'ri (yaqin, lekin to'liq emas) bo'lsa "partial"
+- Umuman noto'g'ri bo'lsa "incorrect"
+- explanation o'zbek tilida, qisqa (1 gap)
+
+Faqat JSON qaytar, boshqa hech narsa yozma:
+{"status":"correct"|"partial"|"incorrect","explanation":"..."}
 `.trim();
 }
 
@@ -66,18 +70,22 @@ function parseGeminiResponse(text: string): CheckAnswerResult | null {
 
     const parsed = JSON.parse(jsonText) as GeminiJsonResponse;
 
-    if (typeof parsed.isCorrect !== "boolean") {
+    if (!isAnswerStatus(parsed.status)) {
       return null;
     }
 
     return {
-      isCorrect: parsed.isCorrect,
+      status: parsed.status,
       explanation: typeof parsed.explanation === "string" ? parsed.explanation : ""
     };
   } catch (error) {
     console.error("Gemini JSON parse failed", error);
     return null;
   }
+}
+
+function isAnswerStatus(value: unknown): value is AnswerStatus {
+  return value === "correct" || value === "partial" || value === "incorrect";
 }
 
 function extractJson(text: string) {

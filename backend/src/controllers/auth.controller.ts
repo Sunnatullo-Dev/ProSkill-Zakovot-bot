@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { env } from "../config/env";
+import { isAdmin } from "../middleware/admin.middleware";
 import { AppError } from "../middleware/error.middleware";
 import { userRepository } from "../repositories/user.repository";
 import { validateTelegramInitData } from "../services/telegram.service";
@@ -20,7 +21,7 @@ export const authController = {
       telegramUser.username
     );
 
-    return res.json({ user });
+    return res.json({ user, isAdmin: isAdmin(user.telegramId) });
   },
 
   async me(req: Request, res: Response) {
@@ -30,6 +31,6 @@ export const authController = {
       throw new AppError(401, "Unauthorized");
     }
 
-    return res.json({ user: currentUser });
+    return res.json({ user: currentUser, isAdmin: isAdmin(currentUser.telegramId) });
   }
 };
