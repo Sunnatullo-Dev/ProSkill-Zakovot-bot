@@ -185,10 +185,12 @@ export async function getCategories(): Promise<string[]> {
   const response = await request<{ categories: string[] }>("/questions/categories");
 
   if (response?.categories?.length) {
-    return response.categories;
+    return [...response.categories].sort((left, right) => left.localeCompare(right));
   }
 
-  return [...new Set(FALLBACK_QUESTIONS.map((question) => question.category).filter(isText))].sort();
+  return [...new Set(FALLBACK_QUESTIONS.map((question) => question.category).filter(isText))].sort(
+    (left, right) => left.localeCompare(right)
+  );
 }
 
 export async function getRound(

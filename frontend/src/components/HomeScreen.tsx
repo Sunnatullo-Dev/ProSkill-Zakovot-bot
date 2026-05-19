@@ -65,6 +65,7 @@ export default function HomeScreen({
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
   const userInitial = playerName[0]?.toUpperCase() ?? "Z";
+  const sortedCategories = [...categories].sort((left, right) => left.localeCompare(right));
 
   return (
     <div
@@ -191,7 +192,7 @@ export default function HomeScreen({
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "18px" }}>
           {chip("Barchasi", selectedCategory === null, () => setSelectedCategory(null))}
-          {categories.map((category) =>
+          {sortedCategories.map((category) =>
             chip(categoryLabel(category), selectedCategory === category, () =>
               setSelectedCategory(category)
             )
