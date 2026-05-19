@@ -1,4 +1,7 @@
+import type { ComponentType } from "react";
 import type { NavTab } from "../types";
+import type { IconProps } from "./icons";
+import { HomeIcon, PlusIcon, ShieldIcon, TrophyIcon, UserIcon } from "./icons";
 
 type BottomNavProps = {
   active: NavTab;
@@ -9,17 +12,17 @@ type BottomNavProps = {
 type NavItem = {
   tab: NavTab;
   label: string;
-  icon: string;
+  Icon: ComponentType<IconProps>;
 };
 
 const BASE_ITEMS: NavItem[] = [
-  { tab: "home", label: "Asosiy", icon: "\u{1F3E0}" },
-  { tab: "leaderboard", label: "Reyting", icon: "\u{1F3C6}" },
-  { tab: "add", label: "Qo'shish", icon: "➕" },
-  { tab: "profile", label: "Profil", icon: "\u{1F464}" }
+  { tab: "home", label: "Asosiy", Icon: HomeIcon },
+  { tab: "leaderboard", label: "Reyting", Icon: TrophyIcon },
+  { tab: "add", label: "Qo'shish", Icon: PlusIcon },
+  { tab: "profile", label: "Profil", Icon: UserIcon }
 ];
 
-const ADMIN_ITEM: NavItem = { tab: "admin", label: "Admin", icon: "\u{1F6E1}" };
+const ADMIN_ITEM: NavItem = { tab: "admin", label: "Admin", Icon: ShieldIcon };
 
 export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavProps) {
   const items = showAdmin ? [...BASE_ITEMS, ADMIN_ITEM] : BASE_ITEMS;
@@ -42,6 +45,7 @@ export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavPr
     >
       {items.map((item) => {
         const isActive = item.tab === active;
+        const Icon = item.Icon;
 
         return (
           <button
@@ -53,8 +57,8 @@ export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavPr
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: "3px",
-              padding: "9px 4px 11px",
+              gap: "4px",
+              padding: "10px 4px 12px",
               background: "transparent",
               border: "none",
               cursor: "pointer",
@@ -64,7 +68,7 @@ export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavPr
             type="button"
             onClick={() => onNavigate(item.tab)}
           >
-            <span style={{ fontSize: "20px", lineHeight: 1 }}>{item.icon}</span>
+            <Icon size={22} />
             <span
               style={{
                 fontSize: "10px",

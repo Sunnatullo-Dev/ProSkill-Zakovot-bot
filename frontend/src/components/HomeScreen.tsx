@@ -1,5 +1,7 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import type { Difficulty, RoundFilter } from "../types";
+import { PlayIcon, StarIcon, TrophyIcon } from "./icons";
 
 type HomeScreenProps = {
   categories: string[];
@@ -18,6 +20,13 @@ const DIFFICULTY_OPTIONS: Array<{ value: Difficulty | null; label: string }> = [
   { value: "hard", label: "Qiyin" }
 ];
 
+const cardStyle = {
+  background: "var(--card)",
+  border: "1px solid var(--border)",
+  borderRadius: "20px",
+  padding: "18px"
+};
+
 const labelStyle = {
   fontSize: "11px",
   fontWeight: 700,
@@ -34,7 +43,7 @@ function chip(label: string, isActive: boolean, onClick: () => void) {
         padding: "8px 15px",
         borderRadius: "999px",
         border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
-        background: isActive ? "var(--accent)" : "var(--card)",
+        background: isActive ? "var(--accent)" : "var(--surface)",
         color: isActive ? "#ffffff" : "var(--muted)",
         fontSize: "13px",
         fontWeight: 600,
@@ -50,6 +59,18 @@ function chip(label: string, isActive: boolean, onClick: () => void) {
   );
 }
 
+function statCell(icon: ReactNode, value: number, label: string, color: string) {
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" }}>
+      <span style={{ color, display: "flex" }}>{icon}</span>
+      <span style={{ fontSize: "22px", fontWeight: 900, color: "var(--text)", lineHeight: 1 }}>{value}</span>
+      <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "1.5px", color: "var(--muted)" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export default function HomeScreen({
   categories,
   error,
@@ -62,6 +83,7 @@ export default function HomeScreen({
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
   const sortedCategories = [...categories].sort((left, right) => left.localeCompare(right));
+  const userInitial = playerName.trim()[0]?.toUpperCase() ?? "Z";
 
   return (
     <div
@@ -70,26 +92,27 @@ export default function HomeScreen({
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
+        gap: "16px",
         background: "var(--bg)",
-        padding: "clamp(36px, 8vh, 72px) 24px 104px"
+        padding: "32px 20px 104px"
       }}
     >
-      <div style={{ textAlign: "center", marginBottom: "32px" }}>
+      <div style={{ textAlign: "center" }}>
         <div
           style={{
-            fontSize: "68px",
+            fontSize: "60px",
             lineHeight: 1,
-            filter: "drop-shadow(0 0 30px rgba(77,166,255,0.45))"
+            filter: "drop-shadow(0 0 28px rgba(77,166,255,0.45))"
           }}
         >
           {"\u{1F9E0}"}
         </div>
         <div
           style={{
-            fontSize: "38px",
+            fontSize: "33px",
             fontWeight: 900,
-            letterSpacing: "8px",
-            marginTop: "12px",
+            letterSpacing: "7px",
+            marginTop: "8px",
             background: "linear-gradient(135deg, #4DA6FF, #A78BFA)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent"
@@ -97,37 +120,66 @@ export default function HomeScreen({
         >
           ZAKOVAT
         </div>
-        <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "8px" }}>
+        <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "6px" }}>
           Bilimingizni sinang
         </div>
       </div>
 
-      <div style={{ textAlign: "center", marginBottom: "36px" }}>
-        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text)" }}>
-          Salom, {playerName} {"\u{1F44B}"}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: "13px" }}>
+          <div
+            style={{
+              width: "46px",
+              height: "46px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "19px",
+              fontWeight: 800,
+              color: "white",
+              flex: "0 0 auto"
+            }}
+          >
+            {userInitial}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: "16px",
+                fontWeight: 800,
+                color: "var(--text)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap"
+              }}
+            >
+              {playerName}
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+              Bilim sinovchisi
+            </div>
+          </div>
         </div>
+
         <div
           style={{
             display: "flex",
-            justifyContent: "center",
-            gap: "24px",
-            marginTop: "12px",
-            fontSize: "13px",
-            color: "var(--muted)"
+            marginTop: "16px",
+            paddingTop: "16px",
+            borderTop: "1px solid var(--border)"
           }}
         >
-          <span>
-            {"⭐"} <strong style={{ color: "var(--gold)", fontWeight: 800 }}>{score}</strong> ball
-          </span>
-          <span>
-            {"\u{1F3C6}"} <strong style={{ color: "var(--accent)", fontWeight: 800 }}>{record}</strong> rekord
-          </span>
+          {statCell(<StarIcon size={18} />, score, "BALL", "var(--gold)")}
+          <div style={{ width: "1px", background: "var(--border)" }} />
+          {statCell(<TrophyIcon size={18} />, record, "REKORD", "var(--accent)")}
         </div>
       </div>
 
-      <div style={{ marginBottom: "auto" }}>
+      <div style={cardStyle}>
         <div style={labelStyle}>MAVZU</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "22px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "18px" }}>
           {chip("Barchasi", selectedCategory === null, () => setSelectedCategory(null))}
           {sortedCategories.map((category) =>
             chip(category, selectedCategory === category, () => setSelectedCategory(category))
@@ -147,7 +199,6 @@ export default function HomeScreen({
       {error ? (
         <div
           style={{
-            marginTop: "20px",
             fontSize: "13px",
             fontWeight: 600,
             color: "var(--error)",
@@ -161,9 +212,13 @@ export default function HomeScreen({
       <button
         disabled={isLoading}
         style={{
-          marginTop: "24px",
+          marginTop: "auto",
           width: "100%",
           padding: "17px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "9px",
           background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
           border: "none",
           borderRadius: "16px",
@@ -178,7 +233,14 @@ export default function HomeScreen({
         type="button"
         onClick={() => onStart({ category: selectedCategory, difficulty: selectedDifficulty })}
       >
-        {isLoading ? "Yuklanmoqda..." : "O'yinni boshlash \u{1F680}"}
+        {isLoading ? (
+          "Yuklanmoqda..."
+        ) : (
+          <>
+            <PlayIcon size={18} />
+            O'yinni boshlash
+          </>
+        )}
       </button>
     </div>
   );
