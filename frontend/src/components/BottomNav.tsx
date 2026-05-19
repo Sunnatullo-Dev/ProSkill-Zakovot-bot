@@ -14,7 +14,8 @@ type NavItem = {
 
 const BASE_ITEMS: NavItem[] = [
   { tab: "home", label: "Asosiy", icon: "\u{1F3E0}" },
-  { tab: "add", label: "Savol qo'shish", icon: "➕" },
+  { tab: "leaderboard", label: "Reyting", icon: "\u{1F3C6}" },
+  { tab: "add", label: "Qo'shish", icon: "➕" },
   { tab: "profile", label: "Profil", icon: "\u{1F464}" }
 ];
 

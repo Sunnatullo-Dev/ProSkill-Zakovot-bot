@@ -123,8 +123,14 @@ export type Screen =
   | "finish"
   | "add"
   | "profile"
-  | "admin";
+  | "admin"
+  | "leaderboard";
 
-export type NavTab = "home" | "add" | "profile" | "admin";
+export type NavTab = "home" | "leaderboard" | "add" | "profile" | "admin";
 
 export type LeaderboardUser = AppUser;
+
+export type LeaderboardData = {
+  users: LeaderboardUser[];
+  rank: number;
+};

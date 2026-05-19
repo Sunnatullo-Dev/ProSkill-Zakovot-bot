@@ -6,6 +6,7 @@ import type {
   AuthResponse,
   Difficulty,
   GameStats,
+  LeaderboardData,
   LeaderboardUser,
   NewQuestionInput,
   Question,
@@ -301,6 +302,17 @@ export async function getTopUsers(limit = 3): Promise<LeaderboardUser[]> {
   } catch (error) {
     console.error("Top users fallback enabled", error);
     return [];
+  }
+}
+
+export async function getLeaderboard(): Promise<LeaderboardData> {
+  try {
+    const response = await request<LeaderboardData>("/users/leaderboard");
+
+    return response ?? { users: [], rank: 0 };
+  } catch (error) {
+    console.error("Leaderboard fallback enabled", error);
+    return { users: [], rank: 0 };
   }
 }
 

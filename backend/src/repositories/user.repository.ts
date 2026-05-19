@@ -103,6 +103,30 @@ export const userRepository = {
       console.error("getTopUsers failed", error);
       throw error;
     }
+  },
+
+  async getUserRank(telegramId: number): Promise<number> {
+    try {
+      const user = await userRepository.findByTelegramId(telegramId);
+
+      if (!user) {
+        return 0;
+      }
+
+      const { count, error } = await supabase
+        .from("users")
+        .select("id", { count: "exact", head: true })
+        .gt("score", user.score);
+
+      if (error) {
+        throw new AppError(500, "User rank lookup failed");
+      }
+
+      return (count ?? 0) + 1;
+    } catch (error) {
+      console.error("getUserRank failed", error);
+      throw error;
+    }
   }
 };
 

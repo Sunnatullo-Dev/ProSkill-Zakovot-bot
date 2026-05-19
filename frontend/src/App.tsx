@@ -14,6 +14,7 @@ import AdminScreen from "./components/AdminScreen";
 import BottomNav from "./components/BottomNav";
 import FinishScreen from "./components/FinishScreen";
 import HomeScreen from "./components/HomeScreen";
+import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
@@ -31,7 +32,7 @@ import type {
   Screen
 } from "./types";
 
-const NAV_SCREENS: Screen[] = ["home", "finish", "add", "profile", "admin"];
+const NAV_SCREENS: Screen[] = ["home", "finish", "add", "profile", "admin", "leaderboard"];
 
 const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
@@ -239,7 +240,13 @@ export default function App() {
       setScreen("home");
     };
 
-    if (screen === "add" || screen === "profile" || screen === "admin" || screen === "finish") {
+    if (
+      screen === "add" ||
+      screen === "profile" ||
+      screen === "admin" ||
+      screen === "finish" ||
+      screen === "leaderboard"
+    ) {
       backButton.onClick(handleBack);
       backButton.show();
     } else {
@@ -312,7 +319,15 @@ export default function App() {
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
   const navActive: NavTab =
-    screen === "add" ? "add" : screen === "profile" ? "profile" : screen === "admin" ? "admin" : "home";
+    screen === "add"
+      ? "add"
+      : screen === "profile"
+        ? "profile"
+        : screen === "admin"
+          ? "admin"
+          : screen === "leaderboard"
+            ? "leaderboard"
+            : "home";
 
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
@@ -373,6 +388,14 @@ export default function App() {
             totalQuestions={totalQuestions}
             totalScore={score}
             onRestart={() => void startGame(lastFilter)}
+          />
+        ) : null}
+
+        {screen === "leaderboard" ? (
+          <LeaderboardScreen
+            currentUserId={user?.telegramId ?? 0}
+            playerName={playerName}
+            score={score}
           />
         ) : null}
 

@@ -7,3 +7,7 @@ export const userRouter = Router();
 userRouter.get("/top", authMiddleware, (req, res, next) => {
   userController.getTopUsers(req, res).catch(next);
 });
+
+userRouter.get("/leaderboard", authMiddleware, (req, res, next) => {
+  userController.getLeaderboard(req, res).catch(next);
+});

@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { env } from "./config/env";
 import { answerRouter } from "./routes/answer.routes";
@@ -12,6 +13,25 @@ import { errorMiddleware } from "./middleware/error.middleware";
 
 export const app = express();
 
+const TOO_MANY_REQUESTS = { message: "Juda ko'p so'rov yuborildi, biroz kuting" };
+
+const apiLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: TOO_MANY_REQUESTS
+});
+
+const writeLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: TOO_MANY_REQUESTS
+});
+
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(
   cors({
@@ -29,11 +49,13 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.use("/api", apiLimiter);
+
 app.use("/api/auth", authRouter);
 app.use("/api/questions", questionRouter);
 app.use("/api/answer", answerRouter);
 app.use("/api/users", userRouter);
-app.use("/api/submissions", submissionRouter);
+app.use("/api/submissions", writeLimiter, submissionRouter);
 app.use("/api/game-results", gameResultRouter);
 
 app.use(errorMiddleware);

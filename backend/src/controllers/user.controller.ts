@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
+import { AppError } from "../middleware/error.middleware";
 import { userRepository } from "../repositories/user.repository";
 
 const DEFAULT_TOP_USERS_LIMIT = 10;
+const LEADERBOARD_LIMIT = 20;
 
 export const userController = {
   async getTopUsers(req: Request, res: Response) {
@@ -10,5 +12,20 @@ export const userController = {
     const users = await userRepository.getTopUsers(limit);
 
     return res.json({ users });
+  },
+
+  async getLeaderboard(req: Request, res: Response) {
+    const currentUser = req.currentUser;
+
+    if (!currentUser) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const [users, rank] = await Promise.all([
+      userRepository.getTopUsers(LEADERBOARD_LIMIT),
+      userRepository.getUserRank(currentUser.telegramId)
+    ]);
+
+    return res.json({ users, rank });
   }
 };
