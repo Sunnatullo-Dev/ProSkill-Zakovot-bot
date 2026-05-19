@@ -11,3 +11,7 @@ userRouter.get("/top", authMiddleware, (req, res, next) => {
 userRouter.get("/leaderboard", authMiddleware, (req, res, next) => {
   userController.getLeaderboard(req, res).catch(next);
 });
+
+userRouter.get("/referrals", authMiddleware, (req, res, next) => {
+  userController.getReferrals(req, res).catch(next);
+});

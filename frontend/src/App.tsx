@@ -52,7 +52,7 @@ const DEFAULT_APP_USER: AppUser = {
 type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 
 export default function App() {
-  const { initData, isReady, user: telegramUser } = useTelegram();
+  const { initData, isReady, startParam, user: telegramUser } = useTelegram();
   const [screen, setScreen] = useState<Screen>("loading");
   const [isAdmin, setIsAdmin] = useState(false);
   const [user, setUser] = useState<AppUser | null>(null);
@@ -197,8 +197,9 @@ export default function App() {
         setScreen("loading");
         setErrorMessage("");
         const effectiveInitData = initData || "guest";
+        const referrerId = /^\d+$/.test(startParam) ? Number(startParam) : undefined;
 
-        const response = await withTimeout(login(effectiveInitData), {
+        const response = await withTimeout(login(effectiveInitData, referrerId), {
           isAdmin: false,
           user: telegramUser
             ? {
@@ -226,7 +227,7 @@ export default function App() {
     }
 
     void bootstrap();
-  }, [initData, isReady, loadTopUsers, telegramUser]);
+  }, [initData, isReady, loadTopUsers, startParam, telegramUser]);
 
   useEffect(() => {
     const backButton = window.Telegram?.WebApp?.BackButton;

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { getGameStats, getMySubmissions } from "../api/client";
+import { getGameStats, getMySubmissions, getReferrals } from "../api/client";
 import type { AppUser, GameStats, Submission } from "../types";
 import { computeAchievements } from "../utils/achievements";
+import { shareInvite } from "../utils/share";
 
 const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
 
@@ -61,6 +62,7 @@ function infoRow(label: string, value: string) {
 export default function ProfileScreen({ user, playerName, score, record, isAdmin }: ProfileScreenProps) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
+  const [referralCount, setReferralCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -68,11 +70,16 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
 
     async function load() {
       setIsLoading(true);
-      const [items, gameStats] = await Promise.all([getMySubmissions(), getGameStats()]);
+      const [items, gameStats, referrals] = await Promise.all([
+        getMySubmissions(),
+        getGameStats(),
+        getReferrals()
+      ]);
 
       if (active) {
         setSubmissions(items);
         setStats(gameStats);
+        setReferralCount(referrals.myCount);
         setIsLoading(false);
       }
     }
@@ -172,6 +179,40 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
       >
         {infoRow("Foydalanuvchi nomi", username)}
         {infoRow("Telegram ID", telegramId)}
+      </div>
+
+      <div
+        style={{
+          background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+          borderRadius: "18px",
+          padding: "18px 18px 16px",
+          marginBottom: "24px"
+        }}
+      >
+        <div style={{ fontSize: "16px", fontWeight: 800, color: "white" }}>
+          Do'stlarni taklif qiling {"\u{1F465}"}
+        </div>
+        <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.85)", marginTop: "4px" }}>
+          Siz {referralCount} ta do'st taklif qildingiz. Eng ko'p taklif qilganlar reytingda!
+        </div>
+        <button
+          style={{
+            marginTop: "14px",
+            width: "100%",
+            padding: "12px",
+            background: "white",
+            border: "none",
+            borderRadius: "12px",
+            fontSize: "14px",
+            fontWeight: 800,
+            color: "#4DA6FF",
+            cursor: "pointer"
+          }}
+          type="button"
+          onClick={() => shareInvite(user?.telegramId ?? 0)}
+        >
+          Havolani ulashish {"\u{1F4E4}"}
+        </button>
       </div>
 
       <h2 style={{ fontSize: "15px", fontWeight: 800, color: "var(--text)", marginBottom: "12px" }}>

@@ -54,6 +54,7 @@ create table users (
   last_name text,
   username text,
   score integer not null default 0,
+  referred_by bigint,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -96,6 +97,7 @@ create table question_reports (
 );
 
 create index idx_users_telegram_id on users (telegram_id);
+create index idx_users_referred_by on users (referred_by);
 create index idx_questions_created_at on questions (created_at);
 create index idx_submissions_status on question_submissions (status);
 create index idx_game_results_telegram_id on game_results (telegram_id);
@@ -103,6 +105,10 @@ create index idx_question_reports_question on question_reports (question_id);
 ```
 
 `question_reports` - foydalanuvchilar "savolda xato bor" deb belgilagan savollar. Admin panelida ko'rinadi, admin savolni o'chira oladi.
+
+`users.referred_by` - foydalanuvchini taklif qilgan odamning `telegram_id` si. Taklif havolasi orqali kelganda bir marta yoziladi. Takliflar reytingi shu ustun bo'yicha hisoblanadi.
+
+Mavjud bazaga ustun qo'shish uchun: `alter table users add column referred_by bigint;`
 
 `question_submissions` - foydalanuvchilar yuborgan savollar. `status` qiymatlari: `pending`, `approved`, `rejected`. Admin tasdiqlaganda savol `questions` jadvaliga ko'chiriladi va muallifga bonus ball qo'shiladi.
 

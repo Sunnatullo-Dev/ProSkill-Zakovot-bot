@@ -7,12 +7,13 @@ import { userRepository } from "../repositories/user.repository";
 import { validateTelegramInitData } from "../services/telegram.service";
 
 const loginSchema = z.object({
-  initData: z.string().min(1)
+  initData: z.string().min(1),
+  referrerId: z.coerce.number().int().positive().optional()
 });
 
 export const authController = {
   async login(req: Request, res: Response) {
-    const { initData } = loginSchema.parse(req.body);
+    const { initData, referrerId } = loginSchema.parse(req.body);
     const telegramUser = validateTelegramInitData(initData, env.TELEGRAM_BOT_TOKEN);
     const user = await userRepository.upsertUser(
       telegramUser.id,
@@ -20,6 +21,10 @@ export const authController = {
       telegramUser.last_name,
       telegramUser.username
     );
+
+    if (referrerId && telegramUser.id > 0) {
+      await userRepository.setReferrer(telegramUser.id, referrerId);
+    }
 
     return res.json({ user, isAdmin: isAdmin(user.telegramId) });
   },

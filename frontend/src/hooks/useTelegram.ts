@@ -13,6 +13,7 @@ type TelegramState = {
   initData: string;
   isReady: boolean;
   user: TelegramUser | null;
+  startParam: string;
   error: string;
   tg: TelegramWebApp | null;
 };
@@ -22,6 +23,7 @@ export function useTelegram(): TelegramState {
     initData: "",
     isReady: false,
     user: null,
+    startParam: "",
     error: "",
     tg
   });
@@ -34,6 +36,7 @@ export function useTelegram(): TelegramState {
         initData: "guest",
         isReady: true,
         user: BROWSER_USER,
+        startParam: "",
         error: "",
         tg: null
       });
@@ -50,6 +53,7 @@ export function useTelegram(): TelegramState {
         initData: webApp.initData || "guest",
         isReady: true,
         user: normalizeTelegramUser(webApp.initDataUnsafe?.user) ?? BROWSER_USER,
+        startParam: webApp.initDataUnsafe?.start_param ?? "",
         error: "",
         tg: webApp
       });
@@ -59,6 +63,7 @@ export function useTelegram(): TelegramState {
         initData: "guest",
         isReady: true,
         user: BROWSER_USER,
+        startParam: "",
         error: "",
         tg: null
       });

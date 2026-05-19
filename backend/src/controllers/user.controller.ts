@@ -27,5 +27,20 @@ export const userController = {
     ]);
 
     return res.json({ users, rank });
+  },
+
+  async getReferrals(req: Request, res: Response) {
+    const currentUser = req.currentUser;
+
+    if (!currentUser) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const [referrers, myCount] = await Promise.all([
+      userRepository.getReferralLeaderboard(),
+      userRepository.getReferralCount(currentUser.telegramId)
+    ]);
+
+    return res.json({ referrers, myCount });
   }
 };

@@ -22,6 +22,7 @@ export type TelegramWebApp = {
   initData: string;
   initDataUnsafe: {
     user?: TelegramUser;
+    start_param?: string;
   };
   ready: () => void;
   expand: () => void;
@@ -133,4 +134,14 @@ export type LeaderboardUser = AppUser;
 export type LeaderboardData = {
   users: LeaderboardUser[];
   rank: number;
+};
+
+export type ReferralEntry = {
+  user: LeaderboardUser;
+  count: number;
+};
+
+export type ReferralData = {
+  referrers: ReferralEntry[];
+  myCount: number;
 };

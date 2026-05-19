@@ -10,6 +10,7 @@ import type {
   LeaderboardUser,
   NewQuestionInput,
   Question,
+  ReferralData,
   ReportedQuestion,
   RoundFilter,
   Submission
@@ -154,18 +155,29 @@ type SubmitAnswerApiResponse = {
 
 const FALLBACK_AUTH: AuthResponse = { user: DEFAULT_USER, isAdmin: false };
 
-export async function login(initData: string): Promise<AuthResponse> {
+export async function login(initData: string, referrerId?: number): Promise<AuthResponse> {
   try {
     const response = await request<AuthResponse>("/auth/login", {
       method: "POST",
       initData,
-      body: { initData }
+      body: referrerId ? { initData, referrerId } : { initData }
     });
 
     return response ?? FALLBACK_AUTH;
   } catch (error) {
     console.error("Login fallback enabled", error);
     return FALLBACK_AUTH;
+  }
+}
+
+export async function getReferrals(): Promise<ReferralData> {
+  try {
+    const response = await request<ReferralData>("/users/referrals");
+
+    return response ?? { referrers: [], myCount: 0 };
+  } catch (error) {
+    console.error("Referrals fallback enabled", error);
+    return { referrers: [], myCount: 0 };
   }
 }
 

@@ -23,6 +23,11 @@ export type AppUser = {
   score: number;
 };
 
+export type ReferralEntry = {
+  user: AppUser;
+  count: number;
+};
+
 export type DbQuestion = {
   id: string;
   text: string;
