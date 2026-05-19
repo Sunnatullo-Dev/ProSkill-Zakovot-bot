@@ -51,6 +51,9 @@ const DEFAULT_APP_USER: AppUser = {
 
 type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 
+// Browserda /admin yo'li orqali admin panelini ochish (Telegramsiz sinash uchun).
+const isAdminRoute = window.location.pathname.replace(/\/+$/, "").endsWith("/admin");
+
 export default function App() {
   const { initData, isReady, startParam, user: telegramUser } = useTelegram();
   const [screen, setScreen] = useState<Screen>("loading");
@@ -213,16 +216,16 @@ export default function App() {
 
         setUser(response.user);
         setScore(response.user.score);
-        setIsAdmin(response.isAdmin);
+        setIsAdmin(response.isAdmin || isAdminRoute);
         await loadTopUsers();
         setCategories(await getCategories());
-        setScreen("home");
+        setScreen(isAdminRoute ? "admin" : "home");
       } catch (error) {
         console.error("Login failed", error);
         setUser(DEFAULT_APP_USER);
         setScore(DEFAULT_APP_USER.score);
-        setIsAdmin(false);
-        setScreen("home");
+        setIsAdmin(isAdminRoute);
+        setScreen(isAdminRoute ? "admin" : "home");
       }
     }
 

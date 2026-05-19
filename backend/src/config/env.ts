@@ -18,8 +18,10 @@ const envSchema = z.object({
     .transform((value) =>
       value
         .split(",")
-        .map((part) => Number(part.trim()))
-        .filter((id) => Number.isFinite(id) && id > 0)
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+        .map((part) => Number(part))
+        .filter((id) => Number.isFinite(id) && id >= 0)
     )
 });
 
