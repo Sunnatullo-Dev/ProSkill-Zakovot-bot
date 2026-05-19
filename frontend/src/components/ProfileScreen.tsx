@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { getGameStats, getMySubmissions, getReferrals } from "../api/client";
 import type { AppUser, GameStats, Submission } from "../types";
 import { computeAchievements } from "../utils/achievements";
-import { shareInvite } from "../utils/share";
+import { buildInviteShare } from "../utils/share";
+import ShareSheet from "./ShareSheet";
 
 const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
 
@@ -64,6 +65,7 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
   const [referralCount, setReferralCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -209,7 +211,7 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
             cursor: "pointer"
           }}
           type="button"
-          onClick={() => shareInvite(user?.telegramId ?? 0)}
+          onClick={() => setShareOpen(true)}
         >
           Havolani ulashish {"\u{1F4E4}"}
         </button>
@@ -280,6 +282,13 @@ export default function ProfileScreen({ user, playerName, score, record, isAdmin
           {statCard("Rad etilgan", rejected, "var(--error)")}
         </div>
       )}
+
+      {shareOpen ? (
+        <ShareSheet
+          content={buildInviteShare(user?.telegramId ?? 0)}
+          onClose={() => setShareOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

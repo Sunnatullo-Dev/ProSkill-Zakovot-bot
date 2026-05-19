@@ -1,15 +1,47 @@
 const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || "zakovot_robot";
 
-function botLink(startParam?: number): string {
-  if (!BOT_USERNAME) {
-    return "https://t.me";
-  }
+export type ShareContent = {
+  url: string;
+  text: string;
+};
 
-  return startParam ? `https://t.me/${BOT_USERNAME}?startapp=${startParam}` : `https://t.me/${BOT_USERNAME}`;
+function botLink(startParam?: number): string {
+  const base = `https://t.me/${BOT_USERNAME}`;
+
+  return startParam ? `${base}?startapp=${startParam}` : base;
 }
 
-function openShare(linkUrl: string, text: string): void {
-  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(linkUrl)}&text=${encodeURIComponent(text)}`;
+export function buildRoundShare(
+  roundPoints: number,
+  correctCount: number,
+  totalQuestions: number
+): ShareContent {
+  return {
+    url: botLink(),
+    text: `\u{1F9E0} Zakovat o'yinida ${roundPoints} ball to'pladim — ${correctCount}/${totalQuestions} to'g'ri javob! Sen ham sinab ko'r:`
+  };
+}
+
+export function buildInviteShare(referrerId: number): ShareContent {
+  return {
+    url: botLink(referrerId),
+    text: "\u{1F9E0} Zakovat — bilim o'yiniga qo'shil! Birga o'ynab, kim ko'proq biladi sinab ko'ramiz:"
+  };
+}
+
+function openExternal(url: string): void {
+  const telegram = window.Telegram?.WebApp;
+
+  if (telegram?.openLink) {
+    telegram.openLink(url);
+    return;
+  }
+
+  window.open(url, "_blank", "noopener");
+}
+
+export function shareToTelegram(content: ShareContent): void {
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(content.url)}&text=${encodeURIComponent(content.text)}`;
   const telegram = window.Telegram?.WebApp;
 
   if (telegram?.openTelegramLink) {
@@ -20,14 +52,34 @@ function openShare(linkUrl: string, text: string): void {
   window.open(shareUrl, "_blank", "noopener");
 }
 
-export function shareRoundResult(roundPoints: number, correctCount: number, totalQuestions: number): void {
-  const text = `\u{1F9E0} Zakovat o'yinida ${roundPoints} ball to'pladim — ${correctCount}/${totalQuestions} to'g'ri javob! Sen ham sinab ko'r:`;
-
-  openShare(botLink(), text);
+export function shareToWhatsApp(content: ShareContent): void {
+  openExternal(`https://wa.me/?text=${encodeURIComponent(`${content.text} ${content.url}`)}`);
 }
 
-export function shareInvite(referrerId: number): void {
-  const text = "\u{1F9E0} Zakovat — bilim o'yiniga qo'shil! Birga o'ynab, kim ko'proq biladi sinab ko'ramiz:";
+export async function copyShareLink(content: ShareContent): Promise<boolean> {
+  const value = `${content.text} ${content.url}`;
 
-  openShare(botLink(referrerId), text);
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return legacyCopy(value);
+  }
+}
+
+function legacyCopy(value: string): boolean {
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+
+    return ok;
+  } catch {
+    return false;
+  }
 }

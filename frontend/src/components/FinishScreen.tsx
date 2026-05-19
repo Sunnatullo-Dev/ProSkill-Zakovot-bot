@@ -1,4 +1,6 @@
-import { shareRoundResult } from "../utils/share";
+import { useState } from "react";
+import { buildRoundShare } from "../utils/share";
+import ShareSheet from "./ShareSheet";
 
 type FinishScreenProps = {
   correctCount: number;
@@ -15,6 +17,7 @@ export default function FinishScreen({
   totalScore,
   onRestart
 }: FinishScreenProps) {
+  const [shareOpen, setShareOpen] = useState(false);
   const ratio = totalQuestions > 0 ? correctCount / totalQuestions : 0;
   const message =
     ratio >= 0.8
@@ -169,10 +172,17 @@ export default function FinishScreen({
           cursor: "pointer"
         }}
         type="button"
-        onClick={() => shareRoundResult(roundPoints, correctCount, totalQuestions)}
+        onClick={() => setShareOpen(true)}
       >
         Do'stlarga ulashish {"\u{1F4E4}"}
       </button>
+
+      {shareOpen ? (
+        <ShareSheet
+          content={buildRoundShare(roundPoints, correctCount, totalQuestions)}
+          onClose={() => setShareOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

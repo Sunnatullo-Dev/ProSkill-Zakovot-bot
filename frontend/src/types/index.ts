@@ -27,6 +27,7 @@ export type TelegramWebApp = {
   ready: () => void;
   expand: () => void;
   openTelegramLink?: (url: string) => void;
+  openLink?: (url: string) => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
   HapticFeedback?: TelegramHapticFeedback;
