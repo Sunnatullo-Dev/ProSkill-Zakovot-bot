@@ -45,6 +45,22 @@ VITE_BOT_USERNAME=zakovot_robot
 
 `VITE_BOT_USERNAME` - Telegram bot username (@ belgisiz). Taklif va ulashish havolalari shu bot orqali ochiladi.
 
+`bot/.env`
+
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+ADMIN_ID=123456789
+MINI_APP_URL=https://your-deployed-frontend-url
+```
+
+## Bot
+
+`bot/` papkasida Telegram boti joylashgan (grammy kutubxonasi). Bot `/start` buyrug'iga "Assalomu Aleykum, {ism}" deb javob beradi va Mini App'ni ochuvchi tugma ko'rsatadi.
+
+- `bot/.env.example` ni nusxalab `bot/.env` qiling va qiymatlarni to'ldiring.
+- Ishga tushirish: `npm run bot` (yoki `npm run dev --workspace bot`).
+- `MINI_APP_URL` HTTPS bo'lishi shart — Telegram localhost'ni qabul qilmaydi, shuning uchun frontend deploy qilingach to'ldiriladi.
+
 ## Database schema
 
 ```sql
