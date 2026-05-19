@@ -40,8 +40,10 @@ ADMIN_TELEGRAM_IDS=123456789,987654321
 
 ```env
 VITE_API_URL=http://localhost:3000
-VITE_BOT_USERNAME=your_bot_username
+VITE_BOT_USERNAME=zakovot_robot
 ```
+
+`VITE_BOT_USERNAME` - Telegram bot username (@ belgisiz). Taklif va ulashish havolalari shu bot orqali ochiladi.
 
 ## Database schema
 

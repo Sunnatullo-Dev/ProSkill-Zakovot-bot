@@ -1,4 +1,4 @@
-const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? "";
+const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || "zakovot_robot";
 
 function botLink(startParam?: number): string {
   if (!BOT_USERNAME) {
