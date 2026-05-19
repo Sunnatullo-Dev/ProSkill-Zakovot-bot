@@ -6,6 +6,7 @@ import {
   getTopUsers,
   login,
   reportQuestion,
+  revealAnswer,
   saveGameResult,
   submitAnswer
 } from "./api/client";
@@ -28,6 +29,7 @@ import type {
   LeaderboardUser,
   NavTab,
   Question,
+  RevealInfo,
   RoundFilter,
   Screen
 } from "./types";
@@ -70,6 +72,8 @@ export default function App() {
   const [roundScore, setRoundScore] = useState(0);
   const [lastFilter, setLastFilter] = useState<RoundFilter>(DEFAULT_FILTER);
   const [currentTicket, setCurrentTicket] = useState<string | null>(null);
+  const [revealInfo, setRevealInfo] = useState<RevealInfo | null>(null);
+  const [isRevealing, setIsRevealing] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -164,6 +168,7 @@ export default function App() {
     setLastUserAnswer("");
     setQuestionIndex(nextIndex);
     setCurrentTicket(null);
+    setRevealInfo(null);
     setScreen("question");
     reset();
     start();
@@ -286,6 +291,7 @@ export default function App() {
         setLastUserAnswer("");
         setLastFilter(filter);
         setCurrentTicket(null);
+        setRevealInfo(null);
         setScreen("question");
         reset();
         start();
@@ -317,6 +323,33 @@ export default function App() {
     if (question) {
       void reportQuestion(question.id);
     }
+  }
+
+  async function handleGiveUp() {
+    const question = roundQuestions[questionIndex];
+
+    if (!question || isRevealing || revealInfo) {
+      return;
+    }
+
+    hapticTap();
+    stop();
+    setIsRevealing(true);
+
+    try {
+      const info = await revealAnswer(question, currentTicket);
+      setRevealInfo(info);
+    } catch (error) {
+      console.error("Reveal failed", error);
+      setRevealInfo({ correctAnswer: "", explanation: "" });
+    } finally {
+      setIsRevealing(false);
+    }
+  }
+
+  function handleContinue() {
+    setStreak(0);
+    handleNextQuestion();
   }
 
   const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovatchi";
@@ -370,7 +403,11 @@ export default function App() {
             streak={streak}
             timeLeft={timeLeft}
             totalQuestions={totalQuestions}
+            reveal={revealInfo}
+            isRevealing={isRevealing}
             onSubmit={handleQuestionSubmit}
+            onGiveUp={handleGiveUp}
+            onContinue={handleContinue}
           />
         ) : null}
 

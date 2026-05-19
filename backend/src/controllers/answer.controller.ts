@@ -4,7 +4,7 @@ import { AppError } from "../middleware/error.middleware";
 import { questionRepository } from "../repositories/question.repository";
 import { userRepository } from "../repositories/user.repository";
 import { issueAnswerTicket, verifyAnswerTicket } from "../services/answerTicket.service";
-import { checkAnswer } from "../services/gemini.service";
+import { checkAnswer, explainQuestion } from "../services/gemini.service";
 import { calculateAnswerScore } from "../services/scoring.service";
 import type { SubmitAnswerResponse } from "../types";
 
@@ -19,6 +19,10 @@ const answerSchema = z.object({
   ticket: z.string().min(1),
   userAnswer: z.string().trim().default(""),
   streak: z.coerce.number().int().nonnegative().default(0)
+});
+
+const revealSchema = z.object({
+  ticket: z.string().min(1)
 });
 
 export const answerController = {
@@ -75,5 +79,20 @@ export const answerController = {
       pointsEarned: score.pointsEarned,
       streak: score.streakAfter
     } satisfies SubmitAnswerResponse);
+  },
+
+  // "Javobni bilmayman" — to'g'ri javob va mavzu haqida ma'lumot.
+  async revealAnswer(req: Request, res: Response) {
+    const { ticket } = revealSchema.parse(req.body);
+    const { questionId } = verifyAnswerTicket(ticket);
+    const question = await questionRepository.getQuestionById(questionId);
+
+    if (!question) {
+      throw new AppError(404, "Question not found");
+    }
+
+    const explanation = await explainQuestion(question.text, question.correctAnswer);
+
+    return res.json({ correctAnswer: question.correctAnswer, explanation });
   }
 };

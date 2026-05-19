@@ -12,6 +12,7 @@ import type {
   Question,
   ReferralData,
   ReportedQuestion,
+  RevealInfo,
   RoundFilter,
   Submission
 } from "../types";
@@ -285,6 +286,27 @@ export async function submitAnswer(
     pointsEarned: 0,
     streak: 0
   };
+}
+
+export async function revealAnswer(question: Question, ticket: string | null): Promise<RevealInfo> {
+  const offlineAnswer = findFallbackAnswer(question.id);
+
+  if (offlineAnswer !== undefined) {
+    return { correctAnswer: offlineAnswer, explanation: "" };
+  }
+
+  if (ticket) {
+    const response = await request<RevealInfo>("/answer/reveal", {
+      method: "POST",
+      body: { ticket }
+    });
+
+    if (response) {
+      return response;
+    }
+  }
+
+  return { correctAnswer: "", explanation: "" };
 }
 
 export async function reportQuestion(questionId: string): Promise<boolean> {

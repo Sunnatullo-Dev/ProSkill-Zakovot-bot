@@ -106,6 +106,11 @@ export type Question = {
   difficulty: string | null;
 };
 
+export type RevealInfo = {
+  correctAnswer: string;
+  explanation: string;
+};
+
 export type AnswerStatus = "correct" | "partial" | "incorrect";
 
 export type AnswerResult = {

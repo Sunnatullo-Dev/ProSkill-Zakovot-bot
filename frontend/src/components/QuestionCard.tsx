@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { RevealInfo } from "../types";
 
 type QuestionCardProps = {
   question: {
@@ -9,7 +10,11 @@ type QuestionCardProps = {
   totalQuestions: number;
   timeLeft: number;
   streak: number;
+  reveal: RevealInfo | null;
+  isRevealing: boolean;
   onSubmit: (answer: string) => void;
+  onGiveUp: () => void;
+  onContinue: () => void;
 };
 
 export default function QuestionCard({
@@ -18,7 +23,11 @@ export default function QuestionCard({
   totalQuestions,
   timeLeft,
   streak,
-  onSubmit
+  reveal,
+  isRevealing,
+  onSubmit,
+  onGiveUp,
+  onContinue
 }: QuestionCardProps) {
   const [answer, setAnswer] = useState("");
   const timerColor = timeLeft > 10 ? "var(--accent)" : timeLeft > 5 ? "var(--warning)" : "var(--error)";
@@ -178,57 +187,143 @@ export default function QuestionCard({
           </text>
         </svg>
 
-        <input
-          placeholder="Javobingizni yozing..."
-          style={{
-            width: "100%",
-            padding: "16px 18px",
-            background: "var(--card)",
-            border: "1.5px solid var(--border)",
-            borderRadius: "14px",
-            fontSize: "16px",
-            color: "var(--text)",
-            outline: "none",
-            marginBottom: "12px",
-            transition: "border-color 0.2s, box-shadow 0.2s"
-          }}
-          type="text"
-          value={answer}
-          onBlur={(event) => {
-            event.target.style.borderColor = "var(--border)";
-            event.target.style.boxShadow = "none";
-          }}
-          onChange={(event) => setAnswer(event.target.value)}
-          onFocus={(event) => {
-            event.target.style.borderColor = "var(--accent)";
-            event.target.style.boxShadow = "0 0 0 3px rgba(77,166,255,0.12)";
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && answer.trim()) {
-              handleSubmit();
-            }
-          }}
-        />
-        <button
-          disabled={!answer.trim()}
-          style={{
-            width: "100%",
-            padding: "15px",
-            background: answer.trim() ? "var(--accent)" : "var(--border)",
-            border: "none",
-            borderRadius: "14px",
-            fontSize: "16px",
-            fontWeight: 700,
-            color: "white",
-            cursor: answer.trim() ? "pointer" : "not-allowed",
-            opacity: answer.trim() ? 1 : 0.4,
-            transition: "all 0.2s"
-          }}
-          type="button"
-          onClick={handleSubmit}
-        >
-          Javob berish {"\u2713"}
-        </button>
+        {reveal ? (
+          <div
+            style={{
+              width: "100%",
+              background: "var(--card)",
+              border: "1px solid var(--accent)",
+              borderRadius: "16px",
+              padding: "18px"
+            }}
+          >
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)", marginBottom: "12px" }}>
+              {"\u{1F4DA}"} Bilib oling
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "2px" }}>
+              TO'G'RI JAVOB
+            </div>
+            <div style={{ fontSize: "20px", fontWeight: 800, color: "var(--success)", marginTop: "4px" }}>
+              {reveal.correctAnswer || "\u2014"}
+            </div>
+            <div
+              style={{
+                fontSize: "14px",
+                color: reveal.explanation ? "var(--text)" : "var(--muted)",
+                fontStyle: reveal.explanation ? "normal" : "italic",
+                lineHeight: 1.6,
+                borderTop: "1px solid var(--border)",
+                marginTop: "12px",
+                paddingTop: "12px"
+              }}
+            >
+              {reveal.explanation || "To'g'ri javobni eslab qoling."}
+            </div>
+            <button
+              style={{
+                width: "100%",
+                marginTop: "16px",
+                padding: "15px",
+                background: "var(--accent)",
+                border: "none",
+                borderRadius: "14px",
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "white",
+                cursor: "pointer"
+              }}
+              type="button"
+              onClick={onContinue}
+            >
+              Davom qilish {"\u2192"}
+            </button>
+          </div>
+        ) : isRevealing ? (
+          <div
+            style={{
+              width: "100%",
+              textAlign: "center",
+              padding: "28px",
+              fontSize: "14px",
+              fontWeight: 600,
+              color: "var(--muted)"
+            }}
+          >
+            Ma'lumot yuklanmoqda...
+          </div>
+        ) : (
+          <>
+            <input
+              placeholder="Javobingizni yozing..."
+              style={{
+                width: "100%",
+                padding: "16px 18px",
+                background: "var(--card)",
+                border: "1.5px solid var(--border)",
+                borderRadius: "14px",
+                fontSize: "16px",
+                color: "var(--text)",
+                outline: "none",
+                marginBottom: "12px",
+                transition: "border-color 0.2s, box-shadow 0.2s"
+              }}
+              type="text"
+              value={answer}
+              onBlur={(event) => {
+                event.target.style.borderColor = "var(--border)";
+                event.target.style.boxShadow = "none";
+              }}
+              onChange={(event) => setAnswer(event.target.value)}
+              onFocus={(event) => {
+                event.target.style.borderColor = "var(--accent)";
+                event.target.style.boxShadow = "0 0 0 3px rgba(77,166,255,0.12)";
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && answer.trim()) {
+                  handleSubmit();
+                }
+              }}
+            />
+            <button
+              disabled={!answer.trim()}
+              style={{
+                width: "100%",
+                padding: "15px",
+                background: answer.trim() ? "var(--accent)" : "var(--border)",
+                border: "none",
+                borderRadius: "14px",
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "white",
+                cursor: answer.trim() ? "pointer" : "not-allowed",
+                opacity: answer.trim() ? 1 : 0.4,
+                transition: "all 0.2s"
+              }}
+              type="button"
+              onClick={handleSubmit}
+            >
+              Javob berish {"\u2713"}
+            </button>
+            <button
+              style={{
+                width: "100%",
+                marginTop: "10px",
+                padding: "11px",
+                background: "transparent",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "var(--muted)",
+                textDecoration: "underline",
+                cursor: "pointer"
+              }}
+              type="button"
+              onClick={onGiveUp}
+            >
+              Javobni bilmayman
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

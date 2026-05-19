@@ -33,6 +33,26 @@ export async function checkAnswer(
   }
 }
 
+// "Javobni bilmayman" uchun savol mavzusi haqida qisqa ma'lumot.
+export async function explainQuestion(question: string, correctAnswer: string): Promise<string> {
+  try {
+    const prompt = `
+Sen bilimli o'qituvchisan. Quyidagi savol mavzusi haqida o'zbek tilida
+2-3 jumlalik qisqa, sodda va foydali ma'lumot ber.
+Savol: ${question}
+To'g'ri javob: ${correctAnswer}
+Faqat ma'lumot matnini yoz, boshqa hech narsa qo'shma.
+`.trim();
+    const response = await withTimeout(model.generateContent(prompt));
+
+    return response.response.text().trim();
+  } catch (error) {
+    console.error("Gemini explain failed", error);
+
+    return "";
+  }
+}
+
 // Gemini mavjud bo'lmaganda zaxira: normallashtirilgan matn solishtirish.
 function localCheck(correctAnswer: string, userAnswer: string): CheckAnswerResult {
   const normalize = (value: string) =>

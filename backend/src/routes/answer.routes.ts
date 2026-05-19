@@ -12,6 +12,10 @@ answerRouter.post("/ticket", authMiddleware, (req, res, next) => {
   }
 });
 
+answerRouter.post("/reveal", authMiddleware, (req, res, next) => {
+  answerController.revealAnswer(req, res).catch(next);
+});
+
 answerRouter.post("/", authMiddleware, (req, res, next) => {
   answerController.submitAnswer(req, res).catch(next);
 });
