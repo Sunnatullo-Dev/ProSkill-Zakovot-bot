@@ -59,7 +59,6 @@ const isAdminRoute = window.location.pathname.replace(/\/+$/, "").endsWith("/adm
 export default function App() {
   const { initData, isReady, startParam, user: telegramUser } = useTelegram();
   const [screen, setScreen] = useState<Screen>("loading");
-  const [isAdmin, setIsAdmin] = useState(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [score, setScore] = useState(0);
   const [categories, setCategories] = useState<string[]>([]);
@@ -221,7 +220,6 @@ export default function App() {
 
         setUser(response.user);
         setScore(response.user.score);
-        setIsAdmin(response.isAdmin || isAdminRoute);
         await loadTopUsers();
         setCategories(await getCategories());
         setScreen(isAdminRoute ? "admin" : "home");
@@ -229,7 +227,6 @@ export default function App() {
         console.error("Login failed", error);
         setUser(DEFAULT_APP_USER);
         setScore(DEFAULT_APP_USER.score);
-        setIsAdmin(isAdminRoute);
         setScreen(isAdminRoute ? "admin" : "home");
       }
     }
@@ -444,7 +441,7 @@ export default function App() {
 
         {screen === "profile" ? (
           <ProfileScreen
-            isAdmin={isAdmin}
+            isAdmin={isAdminRoute}
             playerName={playerName}
             record={recordScore}
             score={score}
@@ -452,10 +449,10 @@ export default function App() {
           />
         ) : null}
 
-        {screen === "admin" && isAdmin ? <AdminScreen /> : null}
+        {screen === "admin" && isAdminRoute ? <AdminScreen /> : null}
 
         {showBottomNav ? (
-          <BottomNav active={navActive} isAdmin={isAdmin} onNavigate={handleNavigate} />
+          <BottomNav active={navActive} showAdmin={isAdminRoute} onNavigate={handleNavigate} />
         ) : null}
       </section>
     </main>

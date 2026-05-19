@@ -2,7 +2,7 @@ import type { NavTab } from "../types";
 
 type BottomNavProps = {
   active: NavTab;
-  isAdmin: boolean;
+  showAdmin: boolean;
   onNavigate: (tab: NavTab) => void;
 };
 
@@ -21,8 +21,8 @@ const BASE_ITEMS: NavItem[] = [
 
 const ADMIN_ITEM: NavItem = { tab: "admin", label: "Admin", icon: "\u{1F6E1}" };
 
-export default function BottomNav({ active, isAdmin, onNavigate }: BottomNavProps) {
-  const items = isAdmin ? [...BASE_ITEMS, ADMIN_ITEM] : BASE_ITEMS;
+export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavProps) {
+  const items = showAdmin ? [...BASE_ITEMS, ADMIN_ITEM] : BASE_ITEMS;
 
   return (
     <nav
