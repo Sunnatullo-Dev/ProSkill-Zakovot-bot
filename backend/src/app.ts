@@ -35,7 +35,9 @@ app.set("trust proxy", 1);
 app.use(helmet());
 app.use(
   cors({
-    origin: env.FRONTEND_URL,
+    // Production: faqat FRONTEND_URL. Development: har qanday origin
+    // (localhost va LAN IP — masalan 192.168.x.x:5173 — ham ishlashi uchun).
+    origin: env.NODE_ENV === "production" ? env.FRONTEND_URL : true,
     credentials: true
   })
 );
