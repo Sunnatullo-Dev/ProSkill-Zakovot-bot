@@ -128,12 +128,12 @@ export type Screen =
   | "question"
   | "result"
   | "finish"
-  | "add"
+  | "team"
   | "profile"
   | "admin"
   | "leaderboard";
 
-export type NavTab = "home" | "leaderboard" | "add" | "profile" | "admin";
+export type NavTab = "home" | "leaderboard" | "team" | "profile" | "admin";
 
 export type LeaderboardUser = AppUser;
 

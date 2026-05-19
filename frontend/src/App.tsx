@@ -10,7 +10,7 @@ import {
   saveGameResult,
   submitAnswer
 } from "./api/client";
-import AddQuestionScreen from "./components/AddQuestionScreen";
+import TeamScreen from "./components/TeamScreen";
 import AdminScreen from "./components/AdminScreen";
 import BottomNav from "./components/BottomNav";
 import FinishScreen from "./components/FinishScreen";
@@ -34,7 +34,7 @@ import type {
   Screen
 } from "./types";
 
-const NAV_SCREENS: Screen[] = ["home", "finish", "add", "profile", "admin", "leaderboard"];
+const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "admin", "leaderboard"];
 
 const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
@@ -247,7 +247,7 @@ export default function App() {
     };
 
     if (
-      screen === "add" ||
+      screen === "team" ||
       screen === "profile" ||
       screen === "admin" ||
       screen === "finish" ||
@@ -353,8 +353,8 @@ export default function App() {
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
   const navActive: NavTab =
-    screen === "add"
-      ? "add"
+    screen === "team"
+      ? "team"
       : screen === "profile"
         ? "profile"
         : screen === "admin"
@@ -437,7 +437,7 @@ export default function App() {
           />
         ) : null}
 
-        {screen === "add" ? <AddQuestionScreen /> : null}
+        {screen === "team" ? <TeamScreen /> : null}
 
         {screen === "profile" ? (
           <ProfileScreen

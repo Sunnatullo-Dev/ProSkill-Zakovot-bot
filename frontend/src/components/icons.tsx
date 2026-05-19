@@ -47,6 +47,17 @@ export function PlusIcon({ size = 22 }: IconProps) {
   );
 }
 
+export function TeamIcon({ size = 22 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <circle cx="9" cy="8" r="3.4" />
+      <path d="M3.2 19.5c.6-3.6 3-5.4 5.8-5.4s5.2 1.8 5.8 5.4" />
+      <path d="M15.6 5.2a3.4 3.4 0 0 1 0 6.4" />
+      <path d="M17 14.4c2.4.5 3.9 2.2 4.3 5.1" />
+    </svg>
+  );
+}
+
 export function UserIcon({ size = 22 }: IconProps) {
   return (
     <svg {...strokeProps(size)}>

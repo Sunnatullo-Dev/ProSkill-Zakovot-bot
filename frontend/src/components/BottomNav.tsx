@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import type { NavTab } from "../types";
 import type { IconProps } from "./icons";
-import { HomeIcon, PlusIcon, ShieldIcon, TrophyIcon, UserIcon } from "./icons";
+import { HomeIcon, ShieldIcon, TeamIcon, TrophyIcon, UserIcon } from "./icons";
 
 type BottomNavProps = {
   active: NavTab;
@@ -18,7 +18,7 @@ type NavItem = {
 const BASE_ITEMS: NavItem[] = [
   { tab: "home", label: "Asosiy", Icon: HomeIcon },
   { tab: "leaderboard", label: "Reyting", Icon: TrophyIcon },
-  { tab: "add", label: "Qo'shish", Icon: PlusIcon },
+  { tab: "team", label: "Jamoa", Icon: TeamIcon },
   { tab: "profile", label: "Profil", Icon: UserIcon }
 ];
 
