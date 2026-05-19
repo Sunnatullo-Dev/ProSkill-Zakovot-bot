@@ -36,70 +36,70 @@ const FALLBACK_QUESTIONS: FallbackQuestion[] = [
   {
     id: "1",
     text: "O'zbekistonning poytaxti qaysi shahar?",
-    category: "geography",
+    category: "Geografiya",
     difficulty: "easy",
     correctAnswer: "Toshkent"
   },
   {
     id: "2",
     text: "Alisher Navoiy qaysi asrda yashagan?",
-    category: "history",
+    category: "Tarix",
     difficulty: "easy",
     correctAnswer: "XV asr"
   },
   {
     id: "3",
     text: "Suv necha darajada qaynaydi?",
-    category: "science",
+    category: "Fan",
     difficulty: "easy",
     correctAnswer: "100 daraja"
   },
   {
     id: "4",
     text: "O'zbekiston mustaqilligini qaysi yili oldi?",
-    category: "history",
+    category: "Tarix",
     difficulty: "easy",
     correctAnswer: "1991"
   },
   {
     id: "5",
     text: "Matematik: 15 × 8 = ?",
-    category: "math",
+    category: "Matematika",
     difficulty: "easy",
     correctAnswer: "120"
   },
   {
     id: "6",
     text: "Dunyo bo'yicha eng baland tog' qaysi?",
-    category: "geography",
+    category: "Geografiya",
     difficulty: "medium",
     correctAnswer: "Everest"
   },
   {
     id: "7",
     text: "Insonning normal tana harorati necha daraja?",
-    category: "science",
+    category: "Fan",
     difficulty: "easy",
     correctAnswer: "36.6"
   },
   {
     id: "8",
     text: "O'zbekistonning milliy valyutasi nima?",
-    category: "general",
+    category: "Umumiy",
     difficulty: "easy",
     correctAnswer: "So'm"
   },
   {
     id: "9",
     text: "Bir yilda necha kun bor?",
-    category: "general",
+    category: "Umumiy",
     difficulty: "easy",
     correctAnswer: "365"
   },
   {
     id: "10",
     text: "Amir Temur qaysi shaharda tug'ilgan?",
-    category: "history",
+    category: "Tarix",
     difficulty: "medium",
     correctAnswer: "Kesh (Shahrisabz)"
   }

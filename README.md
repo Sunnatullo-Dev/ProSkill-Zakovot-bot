@@ -15,7 +15,8 @@ Zakovat - Telegram Mini App uchun bilim tekshirish MVP o'yini.
 2. `frontend/.env` ichidagi `VITE_BOT_USERNAME` qiymatini bot username bilan almashtiring.
 3. `backend/.env` ichidagi Supabase, Telegram va Gemini secretlarini haqiqiy qiymatlar bilan almashtiring.
 4. Supabase SQL editor ichida quyidagi schema'ni bajaring.
-5. `npm run dev`
+5. Namuna savollar uchun `backend/seed.sql` faylini Supabase SQL editorda bajaring (60 ta savol).
+6. `npm run dev`
 
 ## Environment
 
