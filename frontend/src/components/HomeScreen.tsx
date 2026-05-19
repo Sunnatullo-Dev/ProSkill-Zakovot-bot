@@ -11,14 +11,6 @@ type HomeScreenProps = {
   onStart: (filter: RoundFilter) => void;
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  geography: "Geografiya",
-  history: "Tarix",
-  science: "Fan",
-  math: "Matematika",
-  general: "Umumiy"
-};
-
 const DIFFICULTY_OPTIONS: Array<{ value: Difficulty | null; label: string }> = [
   { value: null, label: "Barchasi" },
   { value: "easy", label: "Oson" },
@@ -26,24 +18,29 @@ const DIFFICULTY_OPTIONS: Array<{ value: Difficulty | null; label: string }> = [
   { value: "hard", label: "Qiyin" }
 ];
 
-function categoryLabel(category: string) {
-  return CATEGORY_LABELS[category] ?? category.charAt(0).toUpperCase() + category.slice(1);
-}
+const labelStyle = {
+  fontSize: "11px",
+  fontWeight: 700,
+  color: "var(--muted)",
+  letterSpacing: "2px",
+  marginBottom: "10px"
+};
 
 function chip(label: string, isActive: boolean, onClick: () => void) {
   return (
     <button
       key={label}
       style={{
-        padding: "9px 14px",
-        borderRadius: "20px",
-        border: `1.5px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
-        background: isActive ? "rgba(77,166,255,0.14)" : "var(--card)",
-        color: isActive ? "var(--accent)" : "var(--muted)",
+        padding: "8px 15px",
+        borderRadius: "999px",
+        border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
+        background: isActive ? "var(--accent)" : "var(--card)",
+        color: isActive ? "#ffffff" : "var(--muted)",
         fontSize: "13px",
-        fontWeight: 700,
+        fontWeight: 600,
         cursor: "pointer",
-        whiteSpace: "nowrap"
+        whiteSpace: "nowrap",
+        transition: "background 0.15s, color 0.15s, border-color 0.15s"
       }}
       type="button"
       onClick={onClick}
@@ -64,7 +61,6 @@ export default function HomeScreen({
 }: HomeScreenProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
-  const userInitial = playerName[0]?.toUpperCase() ?? "Z";
   const sortedCategories = [...categories].sort((left, right) => left.localeCompare(right));
 
   return (
@@ -75,142 +71,70 @@ export default function HomeScreen({
         display: "flex",
         flexDirection: "column",
         background: "var(--bg)",
-        padding: "32px 20px 104px"
+        padding: "clamp(36px, 8vh, 72px) 24px 104px"
       }}
     >
-      <div style={{ textAlign: "center", marginBottom: "24px" }}>
+      <div style={{ textAlign: "center", marginBottom: "32px" }}>
         <div
           style={{
-            fontSize: "56px",
-            filter: "drop-shadow(0 0 24px rgba(77,166,255,0.4))",
-            lineHeight: 1
+            fontSize: "68px",
+            lineHeight: 1,
+            filter: "drop-shadow(0 0 30px rgba(77,166,255,0.45))"
           }}
         >
           {"\u{1F9E0}"}
         </div>
         <div
           style={{
-            fontSize: "30px",
+            fontSize: "38px",
             fontWeight: 900,
-            letterSpacing: "6px",
+            letterSpacing: "8px",
+            marginTop: "12px",
             background: "linear-gradient(135deg, #4DA6FF, #A78BFA)",
             WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            marginTop: "6px"
+            WebkitTextFillColor: "transparent"
           }}
         >
           ZAKOVAT
         </div>
-        <div style={{ color: "var(--muted)", fontSize: "13px", marginTop: "4px" }}>
+        <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "8px" }}>
           Bilimingizni sinang
         </div>
       </div>
 
-      <div
-        style={{
-          background: "var(--card)",
-          border: "1px solid var(--border)",
-          borderRadius: "20px",
-          padding: "16px 18px",
-          marginBottom: "16px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "12px"
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-          <div
-            style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "17px",
-              fontWeight: 700,
-              color: "white",
-              flex: "0 0 auto"
-            }}
-          >
-            {userInitial}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: "15px",
-                fontWeight: 700,
-                color: "var(--text)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap"
-              }}
-            >
-              {playerName}
-            </div>
-            <div style={{ fontSize: "12px", color: "var(--muted)" }}>Joriy ball: {score}</div>
-          </div>
+      <div style={{ textAlign: "center", marginBottom: "36px" }}>
+        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text)" }}>
+          Salom, {playerName} {"\u{1F44B}"}
         </div>
         <div
           style={{
-            background: "rgba(245,200,66,0.12)",
-            color: "var(--gold)",
-            fontSize: "12px",
-            fontWeight: 700,
-            padding: "5px 12px",
-            borderRadius: "20px",
-            border: "1px solid rgba(245,200,66,0.2)",
-            whiteSpace: "nowrap"
+            display: "flex",
+            justifyContent: "center",
+            gap: "24px",
+            marginTop: "12px",
+            fontSize: "13px",
+            color: "var(--muted)"
           }}
         >
-          {"\u{1F3C6}"} {record}
+          <span>
+            {"⭐"} <strong style={{ color: "var(--gold)", fontWeight: 800 }}>{score}</strong> ball
+          </span>
+          <span>
+            {"\u{1F3C6}"} <strong style={{ color: "var(--accent)", fontWeight: 800 }}>{record}</strong> rekord
+          </span>
         </div>
       </div>
 
-      <div
-        style={{
-          background: "var(--card)",
-          border: "1px solid var(--border)",
-          borderRadius: "20px",
-          padding: "18px",
-          marginBottom: "16px"
-        }}
-      >
-        <div
-          style={{
-            fontSize: "11px",
-            fontWeight: 700,
-            color: "var(--muted)",
-            letterSpacing: "1.5px",
-            textTransform: "uppercase",
-            marginBottom: "10px"
-          }}
-        >
-          Mavzu
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "18px" }}>
+      <div style={{ marginBottom: "auto" }}>
+        <div style={labelStyle}>MAVZU</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "22px" }}>
           {chip("Barchasi", selectedCategory === null, () => setSelectedCategory(null))}
           {sortedCategories.map((category) =>
-            chip(categoryLabel(category), selectedCategory === category, () =>
-              setSelectedCategory(category)
-            )
+            chip(category, selectedCategory === category, () => setSelectedCategory(category))
           )}
         </div>
 
-        <div
-          style={{
-            fontSize: "11px",
-            fontWeight: 700,
-            color: "var(--muted)",
-            letterSpacing: "1.5px",
-            textTransform: "uppercase",
-            marginBottom: "10px"
-          }}
-        >
-          Qiyinlik
-        </div>
+        <div style={labelStyle}>QIYINLIK</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
           {DIFFICULTY_OPTIONS.map((option) =>
             chip(option.label, selectedDifficulty === option.value, () =>
@@ -223,14 +147,11 @@ export default function HomeScreen({
       {error ? (
         <div
           style={{
-            marginBottom: "14px",
-            padding: "11px 14px",
-            borderRadius: "12px",
+            marginTop: "20px",
             fontSize: "13px",
             fontWeight: 600,
-            background: "rgba(239,68,68,0.12)",
             color: "var(--error)",
-            border: "1px solid rgba(239,68,68,0.3)"
+            textAlign: "center"
           }}
         >
           {error}
@@ -240,22 +161,24 @@ export default function HomeScreen({
       <button
         disabled={isLoading}
         style={{
+          marginTop: "24px",
           width: "100%",
-          padding: "16px",
+          padding: "17px",
           background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
           border: "none",
           borderRadius: "16px",
           fontSize: "17px",
-          fontWeight: 700,
+          fontWeight: 800,
           color: "white",
           cursor: isLoading ? "not-allowed" : "pointer",
-          boxShadow: "0 8px 24px rgba(77,166,255,0.3)",
-          opacity: isLoading ? 0.7 : 1
+          boxShadow: "0 10px 28px rgba(77,166,255,0.32)",
+          opacity: isLoading ? 0.7 : 1,
+          transition: "opacity 0.15s"
         }}
         type="button"
         onClick={() => onStart({ category: selectedCategory, difficulty: selectedDifficulty })}
       >
-        {isLoading ? "Yuklanmoqda..." : "Testni boshlash \u{1F680}"}
+        {isLoading ? "Yuklanmoqda..." : "O'yinni boshlash \u{1F680}"}
       </button>
     </div>
   );
