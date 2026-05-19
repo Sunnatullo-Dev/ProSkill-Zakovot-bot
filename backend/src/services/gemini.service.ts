@@ -3,7 +3,7 @@ import { env } from "../config/env";
 import type { AnswerStatus, CheckAnswerResult } from "../types";
 
 const GEMINI_TIMEOUT_MS = 10000;
-const FALLBACK_EXPLANATION = "Tekshirib bo'lmadi";
+const MIN_PARTIAL_LENGTH = 3;
 
 type GeminiJsonResponse = {
   status?: unknown;
@@ -23,22 +23,42 @@ export async function checkAnswer(
     const text = response.response.text();
     const parsed = parseGeminiResponse(text);
 
-    if (!parsed) {
-      return {
-        status: "incorrect",
-        explanation: FALLBACK_EXPLANATION
-      };
-    }
-
-    return parsed;
+    // Gemini javobini o'qib bo'lmasa — lokal solishtirishga o'tamiz.
+    return parsed ?? localCheck(correctAnswer, userAnswer);
   } catch (error) {
     console.error("Gemini answer check failed", error);
 
-    return {
-      status: "incorrect",
-      explanation: FALLBACK_EXPLANATION
-    };
+    // Gemini ishlamasa (kvota, timeout, model xatosi) — lokal solishtirish.
+    return localCheck(correctAnswer, userAnswer);
   }
+}
+
+// Gemini mavjud bo'lmaganda zaxira: normallashtirilgan matn solishtirish.
+function localCheck(correctAnswer: string, userAnswer: string): CheckAnswerResult {
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[().,!?-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const user = normalize(userAnswer);
+  const correct = normalize(correctAnswer);
+
+  if (!user) {
+    return { status: "incorrect", explanation: "" };
+  }
+
+  if (user === correct) {
+    return { status: "correct", explanation: "" };
+  }
+
+  if (correct.includes(user) && user.length >= MIN_PARTIAL_LENGTH) {
+    return { status: "partial", explanation: "" };
+  }
+
+  return { status: "incorrect", explanation: "" };
 }
 
 function buildPrompt(question: string, correctAnswer: string, userAnswer: string) {

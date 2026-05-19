@@ -30,7 +30,7 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your_supabase_service_role_key
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-2.0-flash
 ADMIN_TELEGRAM_IDS=123456789,987654321
 ```
 
