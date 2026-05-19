@@ -43,6 +43,8 @@ export function useTelegram(): TelegramState {
     try {
       webApp.ready();
       webApp.expand();
+      webApp.setHeaderColor?.("#080f1e");
+      webApp.setBackgroundColor?.("#080f1e");
 
       setState({
         initData: webApp.initData || "guest",

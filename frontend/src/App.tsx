@@ -19,6 +19,7 @@ import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
 import { useTelegram } from "./hooks/useTelegram";
 import { useTimer } from "./hooks/useTimer";
+import { hapticResult, hapticSelect, hapticTap } from "./utils/haptics";
 import type {
   AnswerResult,
   AppUser,
@@ -110,6 +111,8 @@ export default function App() {
         const submittedAnswer = userAnswer.trim();
         const result = await submitAnswer(question, submittedAnswer, timeTaken, streak, currentTicket);
 
+        hapticResult(result.status);
+
         if (result.status === "correct") {
           setCorrectAnswers((value) => value + 1);
         }
@@ -138,6 +141,7 @@ export default function App() {
   }, [handleSubmitAnswer]);
 
   const handleNextQuestion = useCallback(() => {
+    hapticTap();
     const nextIndex = questionIndex + 1;
 
     if (nextIndex >= roundQuestions.length) {
@@ -223,8 +227,33 @@ export default function App() {
     void bootstrap();
   }, [initData, isReady, loadTopUsers, telegramUser]);
 
+  useEffect(() => {
+    const backButton = window.Telegram?.WebApp?.BackButton;
+
+    if (!backButton) {
+      return;
+    }
+
+    const handleBack = () => {
+      setErrorMessage("");
+      setScreen("home");
+    };
+
+    if (screen === "add" || screen === "profile" || screen === "admin" || screen === "finish") {
+      backButton.onClick(handleBack);
+      backButton.show();
+    } else {
+      backButton.hide();
+    }
+
+    return () => {
+      backButton.offClick(handleBack);
+    };
+  }, [screen]);
+
   const startGame = useCallback(
     async (filter: RoundFilter) => {
+      hapticTap();
       setIsStarting(true);
       setErrorMessage("");
 
@@ -266,6 +295,7 @@ export default function App() {
   }
 
   function handleNavigate(tab: NavTab) {
+    hapticSelect();
     setErrorMessage("");
     setScreen(tab);
   }

@@ -5,6 +5,19 @@ export type TelegramUser = {
   username?: string;
 };
 
+export type TelegramHapticFeedback = {
+  impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+  notificationOccurred: (type: "error" | "success" | "warning") => void;
+  selectionChanged: () => void;
+};
+
+export type TelegramBackButton = {
+  show: () => void;
+  hide: () => void;
+  onClick: (callback: () => void) => void;
+  offClick: (callback: () => void) => void;
+};
+
 export type TelegramWebApp = {
   initData: string;
   initDataUnsafe: {
@@ -13,6 +26,10 @@ export type TelegramWebApp = {
   ready: () => void;
   expand: () => void;
   openTelegramLink?: (url: string) => void;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
+  HapticFeedback?: TelegramHapticFeedback;
+  BackButton?: TelegramBackButton;
 };
 
 declare global {
