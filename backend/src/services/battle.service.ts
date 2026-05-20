@@ -40,6 +40,20 @@ async function notifyChallengeCreated(challengerTeamName: string, opponentTeamId
   }
 }
 
+async function notifyChallengeCancelled(challengerTeamName: string, opponentTeamId: string): Promise<void> {
+  try {
+    const team = await teamRepository.getTeamWithMembers(opponentTeamId);
+    const text = `\u{2716}️ <b>${escapeHtml(challengerTeamName)}</b> yuborgan chaqiruvni bekor qildi.`;
+
+    await notifyMembers(
+      team.members.map((member) => member.telegramId),
+      text
+    );
+  } catch (error) {
+    console.error("notifyChallengeCancelled failed", error);
+  }
+}
+
 async function notifyChallengeDeclined(opponentTeamName: string, challengerTeamId: string): Promise<void> {
   try {
     const team = await teamRepository.getTeamWithMembers(challengerTeamId);
@@ -528,6 +542,28 @@ export const battleService = {
     }
 
     await battleService.startGameFlow(battleId);
+  },
+
+  async cancelChallenge(battleId: string, challengerOwnerTelegramId: number): Promise<void> {
+    const challenge = await battleRepository.getChallengeById(battleId);
+
+    if (!challenge) {
+      throw new AppError(404, "Bellashuv topilmadi");
+    }
+
+    if (challenge.status !== "pending") {
+      throw new AppError(409, "Faqat kutilayotgan taklifni bekor qilish mumkin");
+    }
+
+    const challengerTeam = await teamRepository.getTeamById(challenge.challengerTeamId);
+
+    if (!challengerTeam || challengerTeam.ownerId !== challengerOwnerTelegramId) {
+      throw new AppError(403, "Faqat jamoa egasi taklifni bekor qila oladi");
+    }
+
+    await battleRepository.updateStatus(battleId, "declined");
+
+    void notifyChallengeCancelled(challengerTeam.name, challenge.opponentTeamId);
   },
 
   async declineChallenge(battleId: string, opponentOwnerTelegramId: number): Promise<void> {

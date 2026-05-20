@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   acceptBattle,
+  cancelBattle,
   declineBattle,
   getMyTeam,
   getPendingBattles,
@@ -100,6 +101,19 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
     setActionId(battleId);
     setActionError("");
     const result = await declineBattle(battleId);
+    setActionId(null);
+
+    if (result.ok) {
+      await refresh();
+    } else {
+      setActionError(result.error);
+    }
+  }
+
+  async function handleCancel(battleId: string) {
+    setActionId(battleId);
+    setActionError("");
+    const result = await cancelBattle(battleId);
     setActionId(null);
 
     if (result.ok) {
@@ -264,13 +278,33 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
                 border: "1px dashed var(--border)",
                 borderRadius: "16px",
                 padding: "14px",
-                marginBottom: "14px",
-                fontSize: "13px",
-                color: "var(--muted)",
-                textAlign: "center"
+                marginBottom: "14px"
               }}
             >
-              ⏳ "{challenge.opponentTeam.name}" jamoasidan javob kutilmoqda...
+              <div style={{ fontSize: "13px", color: "var(--muted)", textAlign: "center", marginBottom: isOwner ? "10px" : 0 }}>
+                ⏳ "{challenge.opponentTeam.name}" jamoasidan javob kutilmoqda...
+              </div>
+              {isOwner ? (
+                <button
+                  disabled={actionId === challenge.battleId}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    background: "transparent",
+                    border: "1px solid var(--error)",
+                    borderRadius: "10px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "var(--error)",
+                    cursor: actionId === challenge.battleId ? "not-allowed" : "pointer",
+                    opacity: actionId === challenge.battleId ? 0.6 : 1
+                  }}
+                  type="button"
+                  onClick={() => void handleCancel(challenge.battleId)}
+                >
+                  Taklifni bekor qilish
+                </button>
+              ) : null}
             </div>
           ))}
 

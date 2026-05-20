@@ -41,6 +41,19 @@ export const battleController = {
     return res.json({ ok: true, battleId });
   },
 
+  async cancelChallenge(req: Request, res: Response) {
+    const currentUser = req.currentUser;
+
+    if (!currentUser) {
+      throw new AppError(401, "Unauthorized");
+    }
+
+    const battleId = battleIdSchema.parse(req.params.battleId);
+    await battleService.cancelChallenge(battleId, currentUser.telegramId);
+
+    return res.json({ ok: true });
+  },
+
   async declineChallenge(req: Request, res: Response) {
     const currentUser = req.currentUser;
 

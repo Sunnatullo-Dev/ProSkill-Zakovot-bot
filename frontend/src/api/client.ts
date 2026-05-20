@@ -480,6 +480,13 @@ export async function declineBattle(battleId: string): Promise<ApiResult<{ ok: b
   });
 }
 
+export async function cancelBattle(battleId: string): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>(`/battles/${battleId}/cancel`, {
+    method: "POST",
+    body: {}
+  });
+}
+
 export async function getBattleState(battleId: string): Promise<BattleState | null> {
   try {
     const response = await request<BattleState>(`/battles/${battleId}/state`);
