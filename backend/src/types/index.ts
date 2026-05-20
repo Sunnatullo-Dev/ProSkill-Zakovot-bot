@@ -28,6 +28,46 @@ export type ReferralEntry = {
   count: number;
 };
 
+export type TeamStatus = "open" | "in_battle" | "closed";
+
+export type DbTeam = {
+  id: string;
+  name: string;
+  code: string;
+  owner_id: number;
+  max_members: number;
+  status: TeamStatus;
+  created_at: string;
+};
+
+export type Team = {
+  id: string;
+  name: string;
+  code: string;
+  ownerId: number;
+  maxMembers: number;
+  status: TeamStatus;
+  createdAt: string;
+};
+
+export type DbTeamMember = {
+  id: string;
+  team_id: string;
+  telegram_id: number;
+  joined_at: string;
+};
+
+export type TeamMember = {
+  telegramId: number;
+  joinedAt: string;
+  firstName: string | null;
+  username: string | null;
+};
+
+export type TeamWithMembers = Team & {
+  members: TeamMember[];
+};
+
 export type DbQuestion = {
   id: string;
   text: string;

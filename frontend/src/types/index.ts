@@ -151,3 +151,28 @@ export type ReferralData = {
   referrers: ReferralEntry[];
   myCount: number;
 };
+
+export type TeamStatus = "open" | "in_battle" | "closed";
+
+export type Team = {
+  id: string;
+  name: string;
+  code: string;
+  ownerId: number;
+  maxMembers: number;
+  status: TeamStatus;
+  createdAt: string;
+};
+
+export type TeamMember = {
+  telegramId: number;
+  joinedAt: string;
+  firstName: string | null;
+  username: string | null;
+};
+
+export type TeamWithMembers = Team & {
+  members: TeamMember[];
+};
+
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };

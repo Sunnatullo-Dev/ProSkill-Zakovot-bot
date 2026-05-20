@@ -2,6 +2,7 @@ import { calculateAnswerScore } from "../utils/scoring";
 import type {
   AnswerResult,
   AnswerStatus,
+  ApiResult,
   AppUser,
   AuthResponse,
   Difficulty,
@@ -14,7 +15,9 @@ import type {
   ReportedQuestion,
   RevealInfo,
   RoundFilter,
-  Submission
+  Submission,
+  Team,
+  TeamWithMembers
 } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
@@ -401,6 +404,69 @@ export async function reviewSubmission(
   });
 
   return Boolean(response?.status);
+}
+
+export async function createTeam(name: string): Promise<ApiResult<{ team: Team; code: string }>> {
+  return requestResult<{ team: Team; code: string }>("/teams", {
+    method: "POST",
+    body: { name }
+  });
+}
+
+export async function joinTeamByCode(
+  code: string
+): Promise<ApiResult<{ team: TeamWithMembers; members: TeamWithMembers["members"] }>> {
+  return requestResult<{ team: TeamWithMembers; members: TeamWithMembers["members"] }>(
+    "/teams/join",
+    {
+      method: "POST",
+      body: { code }
+    }
+  );
+}
+
+export async function getMyTeam(): Promise<TeamWithMembers | null> {
+  try {
+    const response = await request<{ team: TeamWithMembers | null }>("/teams/my");
+
+    return response?.team ?? null;
+  } catch (error) {
+    console.error("getMyTeam failed", error);
+
+    return null;
+  }
+}
+
+export async function leaveTeam(): Promise<boolean> {
+  const response = await request<{ ok: boolean }>("/teams/leave", { method: "DELETE" });
+
+  return Boolean(response?.ok);
+}
+
+// Backend xato xabarini UI ga uzatish uchun result-tipidagi yordamchi.
+async function requestResult<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers: buildHeaders(options.initData),
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    const responseBody = await parseResponse(response);
+
+    if (!response.ok) {
+      const message =
+        (responseBody as { message?: string } | null)?.message ??
+        `So'rov muvaffaqiyatsiz (${response.status})`;
+
+      return { ok: false, error: message };
+    }
+
+    return { ok: true, data: responseBody as T };
+  } catch (error) {
+    console.error("API request error", error);
+
+    return { ok: false, error: "Internet aloqasi bilan muammo" };
+  }
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T | null> {

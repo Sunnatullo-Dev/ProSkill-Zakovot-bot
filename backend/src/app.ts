@@ -8,6 +8,7 @@ import { authRouter } from "./routes/auth.routes";
 import { gameResultRouter } from "./routes/gameResult.routes";
 import { questionRouter } from "./routes/question.routes";
 import { submissionRouter } from "./routes/submission.routes";
+import { teamRouter } from "./routes/team.routes";
 import { userRouter } from "./routes/user.routes";
 import { errorMiddleware } from "./middleware/error.middleware";
 
@@ -59,5 +60,6 @@ app.use("/api/answer", answerRouter);
 app.use("/api/users", userRouter);
 app.use("/api/submissions", writeLimiter, submissionRouter);
 app.use("/api/game-results", gameResultRouter);
+app.use("/api/teams", teamRouter);
 
 app.use(errorMiddleware);

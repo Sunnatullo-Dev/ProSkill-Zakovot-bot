@@ -462,7 +462,7 @@ export default function App() {
           />
         ) : null}
 
-        {screen === "team" ? <TeamScreen /> : null}
+        {screen === "team" ? <TeamScreen currentUserId={user?.telegramId ?? 0} /> : null}
 
         {screen === "profile" ? (
           <ProfileScreen
