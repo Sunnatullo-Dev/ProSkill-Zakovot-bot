@@ -90,6 +90,19 @@ export const submissionRepository = {
     }
   },
 
+  async countByStatus(status: SubmissionStatus): Promise<number> {
+    const { count, error } = await supabase
+      .from("question_submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", status);
+
+    if (error) {
+      throw new AppError(500, "Submission count failed");
+    }
+
+    return count ?? 0;
+  },
+
   async updateStatus(id: string, status: SubmissionStatus): Promise<void> {
     try {
       const { error } = await supabase

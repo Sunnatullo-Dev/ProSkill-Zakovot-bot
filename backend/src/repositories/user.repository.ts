@@ -176,6 +176,18 @@ export const userRepository = {
     }
   },
 
+  async countAll(): Promise<number> {
+    const { count, error } = await supabase
+      .from("users")
+      .select("id", { count: "exact", head: true });
+
+    if (error) {
+      throw new AppError(500, "Users count failed");
+    }
+
+    return count ?? 0;
+  },
+
   async getReferralLeaderboard(): Promise<ReferralEntry[]> {
     try {
       const { data, error } = await supabase

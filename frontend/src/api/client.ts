@@ -114,7 +114,7 @@ const FALLBACK_QUESTIONS: FallbackQuestion[] = [
 type RequestOptions = {
   body?: unknown;
   initData?: string;
-  method?: "GET" | "POST" | "DELETE";
+  method?: "GET" | "POST" | "DELETE" | "PATCH";
 };
 
 export type SubmissionEdits = {
@@ -497,6 +497,119 @@ export async function getBattleState(battleId: string): Promise<BattleState | nu
 
     return null;
   }
+}
+
+// ----- Admin -----
+
+export type AdminStats = {
+  users: number;
+  questions: number;
+  submissions: { pending: number; approved: number; rejected: number };
+  categories: Array<{ category: string; count: number }>;
+  games: number;
+  battles: number;
+  teams: number;
+};
+
+export type AdminQuestion = {
+  id: string;
+  text: string;
+  correctAnswer: string;
+  category: string | null;
+  difficulty: string | null;
+};
+
+export type AdminQuestionsResponse = {
+  items: AdminQuestion[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export type AdminQuestionsFilter = {
+  search?: string;
+  category?: string;
+  difficulty?: "easy" | "medium" | "hard";
+  page?: number;
+  limit?: number;
+};
+
+export type AdminCategoryStat = { category: string; count: number };
+
+export async function getAdminStats(): Promise<AdminStats | null> {
+  return (await request<AdminStats>("/admin/stats")) ?? null;
+}
+
+export async function getAdminQuestions(
+  filter: AdminQuestionsFilter = {}
+): Promise<AdminQuestionsResponse> {
+  const params = new URLSearchParams();
+
+  if (filter.search) params.set("search", filter.search);
+  if (filter.category) params.set("category", filter.category);
+  if (filter.difficulty) params.set("difficulty", filter.difficulty);
+  if (filter.page) params.set("page", String(filter.page));
+  if (filter.limit) params.set("limit", String(filter.limit));
+
+  const query = params.toString();
+  const path = query ? `/admin/questions?${query}` : "/admin/questions";
+  const response = await request<AdminQuestionsResponse>(path);
+
+  return (
+    response ?? {
+      items: [],
+      total: 0,
+      page: filter.page ?? 1,
+      limit: filter.limit ?? 20
+    }
+  );
+}
+
+export async function createAdminQuestion(input: {
+  text: string;
+  correctAnswer: string;
+  category?: string | null;
+  difficulty?: "easy" | "medium" | "hard" | null;
+}): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>("/admin/questions", {
+    method: "POST",
+    body: input
+  });
+}
+
+export async function updateAdminQuestion(
+  id: string,
+  input: {
+    text?: string;
+    correctAnswer?: string;
+    category?: string | null;
+    difficulty?: "easy" | "medium" | "hard" | null;
+  }
+): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>(`/admin/questions/${id}`, {
+    method: "PATCH",
+    body: input
+  });
+}
+
+export async function deleteAdminQuestion(id: string): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>(`/admin/questions/${id}`, { method: "DELETE" });
+}
+
+export async function getAdminCategories(): Promise<AdminCategoryStat[]> {
+  const response = await request<{ items: AdminCategoryStat[] }>("/admin/categories");
+
+  return response?.items ?? [];
+}
+
+export async function renameAdminCategory(
+  oldName: string,
+  newName: string
+): Promise<ApiResult<{ ok: boolean; updatedCount: number }>> {
+  return requestResult<{ ok: boolean; updatedCount: number }>("/admin/categories/rename", {
+    method: "POST",
+    body: { oldName, newName }
+  });
 }
 
 export async function submitBattleAnswer(

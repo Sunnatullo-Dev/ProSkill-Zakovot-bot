@@ -3,6 +3,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { env } from "./config/env";
+import { adminRouter } from "./routes/admin.routes";
 import { answerRouter } from "./routes/answer.routes";
 import { authRouter } from "./routes/auth.routes";
 import { battleRouter } from "./routes/battle.routes";
@@ -66,5 +67,6 @@ app.use("/api/submissions", writeLimiter, submissionRouter);
 app.use("/api/game-results", gameResultRouter);
 app.use("/api/teams", teamRouter);
 app.use("/api/battles", battleRouter);
+app.use("/api/admin", adminRouter);
 
 app.use(errorMiddleware);

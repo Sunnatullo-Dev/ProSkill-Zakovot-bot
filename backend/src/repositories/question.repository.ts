@@ -113,6 +113,154 @@ export const questionRepository = {
     }
   },
 
+  async updateQuestion(
+    id: string,
+    input: {
+      text?: string;
+      correctAnswer?: string;
+      category?: string | null;
+      difficulty?: string | null;
+    }
+  ): Promise<void> {
+    try {
+      const update: Record<string, unknown> = {};
+
+      if (input.text !== undefined) {
+        update.text = input.text;
+      }
+
+      if (input.correctAnswer !== undefined) {
+        update.correct_answer = input.correctAnswer;
+      }
+
+      if (input.category !== undefined) {
+        update.category = input.category;
+      }
+
+      if (input.difficulty !== undefined) {
+        update.difficulty = input.difficulty;
+      }
+
+      if (Object.keys(update).length === 0) {
+        return;
+      }
+
+      const { error } = await supabase.from("questions").update(update).eq("id", id);
+
+      if (error) {
+        throw new AppError(500, "Question update failed");
+      }
+    } catch (error) {
+      console.error("updateQuestion failed", error);
+      throw error;
+    }
+  },
+
+  async listAllQuestions(filter: {
+    search: string | null;
+    category: string | null;
+    difficulty: string | null;
+    limit: number;
+    offset: number;
+  }): Promise<{ items: QuestionWithAnswer[]; total: number }> {
+    try {
+      let query = supabase
+        .from("questions")
+        .select("id, text, correct_answer, category, difficulty", { count: "exact" });
+
+      if (filter.category) {
+        query = query.eq("category", filter.category);
+      }
+
+      if (filter.difficulty) {
+        query = query.eq("difficulty", filter.difficulty);
+      }
+
+      if (filter.search) {
+        const escaped = filter.search.replace(/[%_]/g, "\\$&");
+        query = query.ilike("text", `%${escaped}%`);
+      }
+
+      const from = filter.offset;
+      const to = filter.offset + filter.limit - 1;
+      const { data, error, count } = await query
+        .order("text", { ascending: true })
+        .range(from, to)
+        .returns<DbQuestion[]>();
+
+      if (error) {
+        throw new AppError(500, "Questions list failed");
+      }
+
+      return {
+        items: (data ?? []).map(mapQuestionWithAnswer),
+        total: count ?? 0
+      };
+    } catch (error) {
+      console.error("listAllQuestions failed", error);
+      throw error;
+    }
+  },
+
+  async getCategoryStats(): Promise<Array<{ category: string; count: number }>> {
+    try {
+      const { data, error } = await supabase
+        .from("questions")
+        .select("category")
+        .returns<Array<{ category: string | null }>>();
+
+      if (error) {
+        throw new AppError(500, "Category stats failed");
+      }
+
+      const counts = new Map<string, number>();
+
+      for (const row of data ?? []) {
+        if (row.category) {
+          counts.set(row.category, (counts.get(row.category) ?? 0) + 1);
+        }
+      }
+
+      return [...counts.entries()]
+        .map(([category, count]) => ({ category, count }))
+        .sort((left, right) => right.count - left.count);
+    } catch (error) {
+      console.error("getCategoryStats failed", error);
+      throw error;
+    }
+  },
+
+  async renameCategory(oldName: string, newName: string): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .from("questions")
+        .update({ category: newName })
+        .eq("category", oldName)
+        .select("id");
+
+      if (error) {
+        throw new AppError(500, "Category rename failed");
+      }
+
+      return (data ?? []).length;
+    } catch (error) {
+      console.error("renameCategory failed", error);
+      throw error;
+    }
+  },
+
+  async countAll(): Promise<number> {
+    const { count, error } = await supabase
+      .from("questions")
+      .select("id", { count: "exact", head: true });
+
+    if (error) {
+      throw new AppError(500, "Questions count failed");
+    }
+
+    return count ?? 0;
+  },
+
   async reportQuestion(questionId: string, reportedBy: number): Promise<void> {
     try {
       const { error } = await supabase

@@ -11,7 +11,7 @@ import {
   submitAnswer
 } from "./api/client";
 import TeamScreen from "./components/TeamScreen";
-import AdminScreen from "./components/AdminScreen";
+import AdminPanel from "./components/AdminPanel";
 import BattlePage from "./components/BattlePage";
 import BottomNav from "./components/BottomNav";
 import ConfirmDialog from "./components/ConfirmDialog";
@@ -36,7 +36,8 @@ import type {
   Screen
 } from "./types";
 
-const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "admin", "leaderboard"];
+// Admin alohida to'liq oyna sifatida ochiladi — foydalanuvchi navigatsiyasiga aralashmaydi.
+const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "leaderboard"];
 
 const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
@@ -499,7 +500,9 @@ export default function App() {
           />
         ) : null}
 
-        {screen === "admin" && isAdminRoute ? <AdminScreen /> : null}
+        {screen === "admin" && isAdminRoute ? (
+          <AdminPanel onExitToUser={() => setScreen("home")} />
+        ) : null}
 
         {showBottomNav ? (
           <BottomNav active={navActive} showAdmin={isAdminRoute} onNavigate={handleNavigate} />
