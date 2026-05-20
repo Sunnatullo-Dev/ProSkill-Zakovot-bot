@@ -228,6 +228,25 @@ export function SwordsIcon({ size = 20 }: IconProps) {
   );
 }
 
+export function UploadIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <path d="M12 4v12" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M4 16.5v2A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-2" />
+    </svg>
+  );
+}
+
+export function FileIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <path d="M14 3.5H6.5A1.5 1.5 0 0 0 5 5v14a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5Z" />
+      <path d="M14 3.5V8.5h5" />
+    </svg>
+  );
+}
+
 export function CheckCircleIcon({ size = 16 }: IconProps) {
   return (
     <svg {...strokeProps(size)}>

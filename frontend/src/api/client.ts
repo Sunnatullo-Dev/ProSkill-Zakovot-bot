@@ -577,6 +577,20 @@ export async function createAdminQuestion(input: {
   });
 }
 
+export async function bulkCreateAdminQuestions(
+  questions: Array<{
+    text: string;
+    correctAnswer: string;
+    category?: string | null;
+    difficulty?: "easy" | "medium" | "hard" | null;
+  }>
+): Promise<ApiResult<{ ok: boolean; inserted: number }>> {
+  return requestResult<{ ok: boolean; inserted: number }>("/admin/questions/bulk", {
+    method: "POST",
+    body: { questions }
+  });
+}
+
 export async function updateAdminQuestion(
   id: string,
   input: {

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CSSProperties, ComponentType, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties, ComponentType, ReactNode } from "react";
 import {
+  bulkCreateAdminQuestions,
   createAdminQuestion,
   deleteAdminQuestion,
   getAdminCategories,
@@ -10,6 +11,8 @@ import {
   renameAdminCategory,
   updateAdminQuestion
 } from "../api/client";
+import { parseQuestionsFile } from "../utils/questionFileParser";
+import type { ParsedQuestion, ParseResult } from "../utils/questionFileParser";
 import type {
   AdminCategoryStat,
   AdminQuestion,
@@ -26,6 +29,7 @@ import {
   ControllerIcon,
   DashboardIcon,
   EditIcon,
+  FileIcon,
   type IconProps,
   QuestionIcon,
   RefreshIcon,
@@ -35,7 +39,9 @@ import {
   TagIcon,
   TeamIcon,
   TrashIcon,
-  UserIcon
+  UploadIcon,
+  UserIcon,
+  XCircleIcon
 } from "./icons";
 
 type AdminPanelProps = {
@@ -751,6 +757,8 @@ function DifficultyBadge({ value }: { value: string | null }) {
   return <span style={chipBadge(meta.color)}>{meta.label}</span>;
 }
 
+type UploadStage = "idle" | "deciding" | "reviewing" | "uploading";
+
 function QuestionsSection() {
   const [data, setData] = useState<AdminQuestionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -768,6 +776,13 @@ function QuestionsSection() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [categories, setCategories] = useState<AdminCategoryStat[]>([]);
+  const [uploadStage, setUploadStage] = useState<UploadStage>("idle");
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [reviewItems, setReviewItems] = useState<ParsedQuestion[]>([]);
+  const [bulkMessage, setBulkMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -870,6 +885,83 @@ function QuestionsSection() {
     }
   }
 
+  function openFilePicker() {
+    setBulkMessage(null);
+    setParseError("");
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setParsing(true);
+    setParseError("");
+    setBulkMessage(null);
+
+    try {
+      const result = await parseQuestionsFile(file);
+
+      if (result.valid.length === 0) {
+        const reason = result.invalid[0]?.reason ?? "Faylda haqiqiy savol topilmadi";
+        setParseError(`Fayl o'qib bo'lmadi: ${reason}`);
+        return;
+      }
+
+      setParseResult(result);
+      setReviewItems(result.valid);
+      setUploadStage("deciding");
+    } catch (error) {
+      console.error("File parse failed", error);
+      setParseError("Faylni o'qishda xato yuz berdi");
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  async function uploadAll(items: ParsedQuestion[]) {
+    if (items.length === 0) {
+      setBulkMessage({ kind: "error", text: "Qo'shadigan savol yo'q" });
+      return;
+    }
+
+    setUploadStage("uploading");
+    const result = await bulkCreateAdminQuestions(items);
+
+    if (result.ok) {
+      setBulkMessage({
+        kind: "success",
+        text: `${result.data.inserted} ta savol bazaga qo'shildi`
+      });
+      setUploadStage("idle");
+      setParseResult(null);
+      setReviewItems([]);
+      setPage(1);
+      await refresh();
+    } else {
+      setBulkMessage({ kind: "error", text: result.error });
+      setUploadStage("reviewing");
+    }
+  }
+
+  function cancelUpload() {
+    setUploadStage("idle");
+    setParseResult(null);
+    setReviewItems([]);
+  }
+
+  function updateReviewItem(index: number, patch: Partial<ParsedQuestion>) {
+    setReviewItems((items) => items.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  }
+
+  function removeReviewItem(index: number) {
+    setReviewItems((items) => items.filter((_, i) => i !== index));
+  }
+
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
@@ -886,18 +978,128 @@ function QuestionsSection() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-      {/* Add question CTA */}
-      <button
-        style={primaryButton(false, "#22C55E")}
-        type="button"
-        onClick={() => {
-          setCreateFields(emptyFields());
-          setCreateError("");
-          setCreateOpen((value) => !value);
-        }}
-      >
-        {createOpen ? "Yopish" : "+ Yangi savol qo'shish"}
-      </button>
+      <input
+        ref={fileInputRef}
+        accept=".json,.csv,.tsv,.txt,.xls,.xlsx"
+        style={{ display: "none" }}
+        type="file"
+        onChange={(event) => void handleFileChange(event)}
+      />
+
+      {/* Yuklash usullarini tanlash — qo'lda yoki fayl orqali */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+        <button
+          style={{
+            padding: "14px 12px",
+            background: createOpen
+              ? "linear-gradient(135deg, #22C55E, #16A34A)"
+              : "var(--card)",
+            border: `1px solid ${createOpen ? "#22C55E" : "var(--border)"}`,
+            borderRadius: "14px",
+            color: createOpen ? "white" : "var(--text)",
+            fontSize: "13px",
+            fontWeight: 800,
+            cursor: "pointer",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "6px",
+            transition: "transform 0.1s",
+            boxShadow: createOpen ? "0 6px 14px rgba(34,197,94,0.25)" : "none"
+          }}
+          type="button"
+          onClick={() => {
+            setCreateFields(emptyFields());
+            setCreateError("");
+            setCreateOpen((value) => !value);
+          }}
+        >
+          <span style={{ color: createOpen ? "white" : "#22C55E" }}>
+            <EditIcon size={18} />
+          </span>
+          Qo'lda yuklash
+        </button>
+        <button
+          disabled={parsing}
+          style={{
+            padding: "14px 12px",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "14px",
+            color: "var(--text)",
+            fontSize: "13px",
+            fontWeight: 800,
+            cursor: parsing ? "wait" : "pointer",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "6px",
+            opacity: parsing ? 0.6 : 1
+          }}
+          type="button"
+          onClick={openFilePicker}
+        >
+          <span style={{ color: "#4DA6FF" }}>
+            <UploadIcon size={18} />
+          </span>
+          {parsing ? "O'qilmoqda..." : "Fayl orqali"}
+        </button>
+      </div>
+
+      {parseError ? (
+        <div
+          style={{
+            fontSize: "12px",
+            color: "var(--error)",
+            background: "rgba(239,68,68,0.08)",
+            border: "1px solid rgba(239,68,68,0.3)",
+            padding: "10px 12px",
+            borderRadius: "10px"
+          }}
+        >
+          {parseError}
+        </div>
+      ) : null}
+
+      {bulkMessage ? (
+        <div
+          style={{
+            fontSize: "12.5px",
+            color: bulkMessage.kind === "success" ? "var(--success)" : "var(--error)",
+            background:
+              bulkMessage.kind === "success"
+                ? "rgba(34,197,94,0.1)"
+                : "rgba(239,68,68,0.08)",
+            border: `1px solid ${
+              bulkMessage.kind === "success"
+                ? "rgba(34,197,94,0.35)"
+                : "rgba(239,68,68,0.3)"
+            }`,
+            padding: "10px 12px",
+            borderRadius: "10px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "10px"
+          }}
+        >
+          <span>{bulkMessage.text}</span>
+          <button
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "inherit",
+              cursor: "pointer",
+              padding: "2px",
+              display: "inline-flex"
+            }}
+            type="button"
+            onClick={() => setBulkMessage(null)}
+          >
+            <XCircleIcon size={16} />
+          </button>
+        </div>
+      ) : null}
 
       {createOpen ? (
         <Card accent="#22C55E">
@@ -1270,6 +1472,446 @@ function QuestionsSection() {
           onConfirm={() => void handleDelete(confirmDeleteId)}
         />
       ) : null}
+
+      {uploadStage === "deciding" && parseResult ? (
+        <ParseDecisionDialog
+          result={parseResult}
+          onCancel={cancelUpload}
+          onDirectAdd={() => void uploadAll(reviewItems)}
+          onReview={() => setUploadStage("reviewing")}
+        />
+      ) : null}
+
+      {uploadStage === "reviewing" ? (
+        <BulkReviewScreen
+          categories={categories}
+          items={reviewItems}
+          uploading={false}
+          onAddAll={() => void uploadAll(reviewItems)}
+          onCancel={cancelUpload}
+          onRemove={removeReviewItem}
+          onUpdate={updateReviewItem}
+        />
+      ) : null}
+
+      {uploadStage === "uploading" ? <BulkUploadingOverlay count={reviewItems.length} /> : null}
+    </div>
+  );
+}
+
+// ----- Bulk upload helper components -----
+
+function ParseDecisionDialog({
+  result,
+  onCancel,
+  onReview,
+  onDirectAdd
+}: {
+  result: ParseResult;
+  onCancel: () => void;
+  onReview: () => void;
+  onDirectAdd: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.65)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        zIndex: 1000,
+        backdropFilter: "blur(4px)"
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "380px",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "18px",
+          padding: "20px",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.5)"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <FileIcon size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--text)" }}>
+              Fayl o'qildi
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+              Format: {result.format}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(34,197,94,0.1)",
+            border: "1px solid rgba(34,197,94,0.3)",
+            borderRadius: "12px",
+            padding: "10px 12px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "8px"
+          }}
+        >
+          <span style={{ fontSize: "13px", color: "var(--text)" }}>To'g'ri savollar</span>
+          <span style={{ fontSize: "16px", fontWeight: 900, color: "#22C55E" }}>
+            {result.valid.length}
+          </span>
+        </div>
+
+        {result.invalid.length > 0 ? (
+          <div
+            style={{
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.25)",
+              borderRadius: "12px",
+              padding: "10px 12px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "14px"
+            }}
+          >
+            <span style={{ fontSize: "13px", color: "var(--text)" }}>Xato qatorlar</span>
+            <span style={{ fontSize: "16px", fontWeight: 900, color: "#EF4444" }}>
+              {result.invalid.length}
+            </span>
+          </div>
+        ) : (
+          <div style={{ marginBottom: "14px" }} />
+        )}
+
+        <div
+          style={{
+            fontSize: "13px",
+            color: "var(--text)",
+            marginBottom: "16px",
+            lineHeight: 1.5
+          }}
+        >
+          Savollarni ko'rib chiqishni hohlaysizmi? Yo'q desangiz, hammasi shu zahoti bazaga qo'shiladi.
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <button style={primaryButton(false, "#4DA6FF")} type="button" onClick={onReview}>
+            Ha, ko'rib chiqaman
+          </button>
+          <button style={primaryButton(false, "#22C55E")} type="button" onClick={onDirectAdd}>
+            Yo'q, to'g'ridan-to'g'ri qo'shing
+          </button>
+          <button style={{ ...ghostButton, justifyContent: "center" }} type="button" onClick={onCancel}>
+            Bekor qilish
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkUploadingOverlay({ count }: { count: number }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1100,
+        backdropFilter: "blur(6px)"
+      }}
+    >
+      <div
+        style={{
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "16px",
+          padding: "26px 28px",
+          textAlign: "center"
+        }}
+      >
+        <div
+          style={{
+            width: "44px",
+            height: "44px",
+            borderRadius: "50%",
+            border: "3px solid rgba(77,166,255,0.2)",
+            borderTopColor: "#4DA6FF",
+            margin: "0 auto",
+            animation: "spin 0.8s linear infinite"
+          }}
+        />
+        <div style={{ marginTop: "14px", fontSize: "14px", fontWeight: 700, color: "var(--text)" }}>
+          {count} ta savol qo'shilmoqda...
+        </div>
+        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+      </div>
+    </div>
+  );
+}
+
+function BulkReviewScreen({
+  items,
+  categories,
+  uploading,
+  onUpdate,
+  onRemove,
+  onAddAll,
+  onCancel
+}: {
+  items: ParsedQuestion[];
+  categories: AdminCategoryStat[];
+  uploading: boolean;
+  onUpdate: (index: number, patch: Partial<ParsedQuestion>) => void;
+  onRemove: (index: number) => void;
+  onAddAll: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "var(--bg)",
+        zIndex: 1050,
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column"
+      }}
+    >
+      <header
+        style={{
+          position: "sticky",
+          top: 0,
+          background: "var(--bg)",
+          borderBottom: "1px solid var(--border)",
+          padding: "16px 18px",
+          maxWidth: "430px",
+          margin: "0 auto",
+          width: "100%",
+          zIndex: 5,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "10px"
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <h2
+            style={{
+              fontSize: "16px",
+              fontWeight: 900,
+              color: "var(--text)",
+              margin: 0
+            }}
+          >
+            Ko'rib chiqish
+          </h2>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+            {items.length} ta savol tayyor
+          </div>
+        </div>
+        <button
+          style={{
+            padding: "9px 13px",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            fontSize: "12px",
+            fontWeight: 700,
+            color: "var(--text)",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px"
+          }}
+          type="button"
+          onClick={onCancel}
+        >
+          <ChevronLeftIcon size={14} />
+          Bekor qilish
+        </button>
+      </header>
+
+      <div
+        style={{
+          flex: 1,
+          maxWidth: "430px",
+          margin: "0 auto",
+          width: "100%",
+          padding: "16px 18px 120px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px"
+        }}
+      >
+        {items.length === 0 ? (
+          <EmptyState
+            icon={<FileIcon size={36} />}
+            text="Hech qanday savol qolmadi — hammasini o'chirib yubordingiz"
+          />
+        ) : (
+          items.map((item, index) => (
+            <ReviewItemCard
+              key={index}
+              categories={categories}
+              index={index}
+              item={item}
+              total={items.length}
+              onRemove={() => onRemove(index)}
+              onUpdate={(patch) => onUpdate(index, patch)}
+            />
+          ))
+        )}
+      </div>
+
+      <div
+        style={{
+          position: "sticky",
+          bottom: 0,
+          background: "linear-gradient(180deg, transparent, var(--bg) 30%)",
+          padding: "14px 18px 18px",
+          maxWidth: "430px",
+          margin: "0 auto",
+          width: "100%"
+        }}
+      >
+        <button
+          disabled={items.length === 0 || uploading}
+          style={primaryButton(items.length === 0 || uploading, "#22C55E")}
+          type="button"
+          onClick={onAddAll}
+        >
+          {uploading
+            ? "Qo'shilmoqda..."
+            : `${items.length} ta savolni bazaga qo'shish`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ReviewItemCard({
+  item,
+  index,
+  total,
+  categories,
+  onUpdate,
+  onRemove
+}: {
+  item: ParsedQuestion;
+  index: number;
+  total: number;
+  categories: AdminCategoryStat[];
+  onUpdate: (patch: Partial<ParsedQuestion>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      style={{
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+        borderRadius: "14px",
+        padding: "14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px"
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}
+      >
+        <span style={chipBadge("#4DA6FF")}>
+          #{index + 1} / {total}
+        </span>
+        <button
+          style={iconButton("#EF4444")}
+          title="O'chirish"
+          type="button"
+          onClick={onRemove}
+        >
+          <TrashIcon size={14} />
+        </button>
+      </div>
+      <div>
+        <div style={labelStyle}>Savol matni</div>
+        <textarea
+          rows={2}
+          style={{ ...inputStyle, resize: "vertical" }}
+          value={item.text}
+          onChange={(event) => onUpdate({ text: event.target.value })}
+        />
+      </div>
+      <div>
+        <div style={labelStyle}>To'g'ri javob</div>
+        <input
+          style={inputStyle}
+          type="text"
+          value={item.correctAnswer}
+          onChange={(event) => onUpdate({ correctAnswer: event.target.value })}
+        />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+        <div>
+          <div style={labelStyle}>Kategoriya</div>
+          <input
+            list="admin-category-options"
+            style={inputStyle}
+            type="text"
+            value={item.category ?? ""}
+            onChange={(event) =>
+              onUpdate({ category: event.target.value ? event.target.value : null })
+            }
+          />
+        </div>
+        <div>
+          <div style={labelStyle}>Qiyinligi</div>
+          <select
+            style={inputStyle}
+            value={item.difficulty ?? ""}
+            onChange={(event) =>
+              onUpdate({
+                difficulty: event.target.value ? (event.target.value as Difficulty) : null
+              })
+            }
+          >
+            <option value="">—</option>
+            {DIFFICULTIES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {/* Kategoriya datalist QuestionsSection ichida render qilingan, shu yerda ham foydalanamiz. */}
+      {categories.length === 0 ? null : null}
     </div>
   );
 }

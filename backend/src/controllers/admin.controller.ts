@@ -16,6 +16,14 @@ const createQuestionSchema = z.object({
   difficulty: z.enum(["easy", "medium", "hard"]).nullable().optional()
 });
 
+const BULK_LIMIT = 500;
+const bulkCreateSchema = z.object({
+  questions: z
+    .array(createQuestionSchema)
+    .min(1, "Hech bo'lmaganda bitta savol bo'lishi kerak")
+    .max(BULK_LIMIT, `Maksimum ${BULK_LIMIT} ta savol`)
+});
+
 const updateQuestionSchema = z.object({
   text: z.string().trim().min(3).optional(),
   correctAnswer: z.string().trim().min(1).optional(),
@@ -151,6 +159,20 @@ export const adminController = {
     });
 
     return res.status(201).json({ ok: true });
+  },
+
+  async bulkCreateQuestions(req: Request, res: Response) {
+    const payload = bulkCreateSchema.parse(req.body);
+    const inserted = await questionRepository.bulkCreateQuestions(
+      payload.questions.map((item) => ({
+        text: item.text,
+        correctAnswer: item.correctAnswer,
+        category: item.category ?? null,
+        difficulty: item.difficulty ?? null
+      }))
+    );
+
+    return res.status(201).json({ ok: true, inserted });
   },
 
   async updateQuestion(req: Request, res: Response) {

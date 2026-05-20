@@ -113,6 +113,32 @@ export const questionRepository = {
     }
   },
 
+  async bulkCreateQuestions(items: NewQuestion[]): Promise<number> {
+    try {
+      if (items.length === 0) {
+        return 0;
+      }
+
+      const rows = items.map((item) => ({
+        text: item.text,
+        correct_answer: item.correctAnswer,
+        category: item.category,
+        difficulty: item.difficulty
+      }));
+
+      const { data, error } = await supabase.from("questions").insert(rows).select("id");
+
+      if (error) {
+        throw new AppError(500, "Bulk question insert failed");
+      }
+
+      return (data ?? []).length;
+    } catch (error) {
+      console.error("bulkCreateQuestions failed", error);
+      throw error;
+    }
+  },
+
   async updateQuestion(
     id: string,
     input: {

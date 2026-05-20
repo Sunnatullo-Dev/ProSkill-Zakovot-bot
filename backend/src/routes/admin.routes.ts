@@ -19,6 +19,10 @@ adminRouter.post("/questions", (req, res, next) => {
   adminController.createQuestion(req, res).catch(next);
 });
 
+adminRouter.post("/questions/bulk", (req, res, next) => {
+  adminController.bulkCreateQuestions(req, res).catch(next);
+});
+
 adminRouter.patch("/questions/:id", (req, res, next) => {
   adminController.updateQuestion(req, res).catch(next);
 });
