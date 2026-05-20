@@ -6,10 +6,8 @@ import {
   getAdminCategories,
   getAdminQuestions,
   getAdminStats,
-  getPendingSubmissions,
   getReportedQuestions,
   renameAdminCategory,
-  reviewSubmission,
   updateAdminQuestion
 } from "../api/client";
 import type {
@@ -18,7 +16,7 @@ import type {
   AdminQuestionsResponse,
   AdminStats
 } from "../api/client";
-import type { Difficulty, ReportedQuestion, Submission } from "../types";
+import type { Difficulty, ReportedQuestion } from "../types";
 import ConfirmDialog from "./ConfirmDialog";
 import {
   AlertIcon,
@@ -29,7 +27,6 @@ import {
   DashboardIcon,
   EditIcon,
   type IconProps,
-  InboxIcon,
   QuestionIcon,
   RefreshIcon,
   SearchIcon,
@@ -38,15 +35,14 @@ import {
   TagIcon,
   TeamIcon,
   TrashIcon,
-  UserIcon,
-  XCircleIcon
+  UserIcon
 } from "./icons";
 
 type AdminPanelProps = {
   onExitToUser: () => void;
 };
 
-type Section = "dashboard" | "questions" | "submissions" | "reports" | "categories";
+type Section = "dashboard" | "questions" | "reports" | "categories";
 
 type SectionMeta = {
   id: Section;
@@ -70,13 +66,6 @@ const SECTIONS: SectionMeta[] = [
     Icon: QuestionIcon,
     accent: "#22C55E",
     subtitle: "Savollarni qo'shish, tahrirlash, o'chirish"
-  },
-  {
-    id: "submissions",
-    label: "Takliflar",
-    Icon: InboxIcon,
-    accent: "#F59E0B",
-    subtitle: "Foydalanuvchilar yuborgan savollarni ko'rib chiqish"
   },
   {
     id: "reports",
@@ -373,7 +362,6 @@ export default function AdminPanel({ onExitToUser }: AdminPanelProps) {
         <div className="animate-fadeInUp" key={section}>
           {section === "dashboard" ? <DashboardSection /> : null}
           {section === "questions" ? <QuestionsSection /> : null}
-          {section === "submissions" ? <SubmissionsSection /> : null}
           {section === "reports" ? <ReportsSection /> : null}
           {section === "categories" ? <CategoriesSection /> : null}
         </div>
@@ -556,9 +544,9 @@ function DashboardSection() {
     );
   }
 
-  const totalSubmissions = stats.submissions.pending + stats.submissions.approved + stats.submissions.rejected;
   const topCategories = stats.categories.slice(0, 6);
   const maxCount = topCategories[0]?.count ?? 1;
+  const categoriesCount = stats.categories.length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -662,76 +650,8 @@ function DashboardSection() {
           value={stats.battles}
         />
         <MetricCard Icon={TeamIcon} accent="#06B6D4" label="Jamoalar" value={stats.teams} />
-        <MetricCard
-          Icon={InboxIcon}
-          accent="#F59E0B"
-          label="Kutilayotgan"
-          value={stats.submissions.pending}
-          hint={stats.submissions.pending > 0 ? "Ko'rib chiqing" : undefined}
-        />
+        <MetricCard Icon={TagIcon} accent="#A78BFA" label="Kategoriyalar" value={categoriesCount} />
       </div>
-
-      {/* Submissions breakdown */}
-      <Card>
-        <div style={sectionHeaderStyle}>
-          <InboxIcon size={16} />
-          Takliflar holati
-        </div>
-
-        {totalSubmissions === 0 ? (
-          <p style={{ fontSize: "12px", color: "var(--muted)" }}>Hozircha taklif yo'q</p>
-        ) : (
-          <>
-            <div
-              style={{
-                display: "flex",
-                height: "10px",
-                borderRadius: "999px",
-                overflow: "hidden",
-                background: "var(--border)",
-                marginBottom: "14px"
-              }}
-            >
-              {stats.submissions.approved > 0 ? (
-                <div
-                  style={{
-                    width: `${(stats.submissions.approved / totalSubmissions) * 100}%`,
-                    background: "linear-gradient(90deg, #22C55E, #4ADE80)"
-                  }}
-                />
-              ) : null}
-              {stats.submissions.pending > 0 ? (
-                <div
-                  style={{
-                    width: `${(stats.submissions.pending / totalSubmissions) * 100}%`,
-                    background: "linear-gradient(90deg, #F59E0B, #FBBF24)"
-                  }}
-                />
-              ) : null}
-              {stats.submissions.rejected > 0 ? (
-                <div
-                  style={{
-                    width: `${(stats.submissions.rejected / totalSubmissions) * 100}%`,
-                    background: "linear-gradient(90deg, #EF4444, #F87171)"
-                  }}
-                />
-              ) : null}
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: "10px"
-              }}
-            >
-              <SubmissionStat color="#22C55E" label="Tasdiqlangan" value={stats.submissions.approved} />
-              <SubmissionStat color="#F59E0B" label="Kutilmoqda" value={stats.submissions.pending} />
-              <SubmissionStat color="#EF4444" label="Rad etilgan" value={stats.submissions.rejected} />
-            </div>
-          </>
-        )}
-      </Card>
 
       {/* Category bar chart */}
       <Card>
@@ -795,33 +715,6 @@ function DashboardSection() {
           </div>
         )}
       </Card>
-    </div>
-  );
-}
-
-function SubmissionStat({ color, label, value }: { color: string; label: string; value: number }) {
-  return (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "10px 8px",
-        background: `${color}10`,
-        border: `1px solid ${color}30`,
-        borderRadius: "12px"
-      }}
-    >
-      <div style={{ fontSize: "20px", fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
-      <div
-        style={{
-          fontSize: "10px",
-          color: "var(--muted)",
-          marginTop: "4px",
-          fontWeight: 700,
-          letterSpacing: "0.5px"
-        }}
-      >
-        {label}
-      </div>
     </div>
   );
 }
@@ -1377,220 +1270,6 @@ function QuestionsSection() {
           onConfirm={() => void handleDelete(confirmDeleteId)}
         />
       ) : null}
-    </div>
-  );
-}
-
-// ----- Submissions -----
-
-function SubmissionsSection() {
-  const [items, setItems] = useState<Submission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
-  const [editAnswer, setEditAnswer] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const next = await getPendingSubmissions();
-    setItems(next);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  function startEditing(submission: Submission) {
-    setEditingId(submission.id);
-    setEditText(submission.text);
-    setEditAnswer(submission.correctAnswer);
-  }
-
-  async function review(submission: Submission, decision: "approve" | "reject") {
-    setBusyId(submission.id);
-    const isEditing = editingId === submission.id;
-    const edits =
-      decision === "approve" && isEditing
-        ? { text: editText.trim(), correctAnswer: editAnswer.trim() }
-        : undefined;
-    const ok = await reviewSubmission(submission.id, decision, edits);
-    setBusyId(null);
-
-    if (ok) {
-      setItems((current) => current.filter((item) => item.id !== submission.id));
-      setEditingId(null);
-    }
-  }
-
-  return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "14px"
-        }}
-      >
-        <div style={{ ...sectionHeaderStyle, marginBottom: 0 }}>
-          <InboxIcon size={16} />
-          Kutilayotgan ({items.length})
-        </div>
-        <RefreshButton onClick={() => void load()} />
-      </div>
-
-      {loading ? (
-        <p style={{ fontSize: "12px", color: "var(--muted)" }}>Yuklanmoqda...</p>
-      ) : items.length === 0 ? (
-        <EmptyState
-          icon={<InboxIcon size={36} />}
-          text="Kutilayotgan taklif yo'q — hozircha foydalanuvchilardan yangi savol kelmagan"
-        />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {items.map((submission) => {
-            const busy = busyId === submission.id;
-            const isEditing = editingId === submission.id;
-            const categoryColor = submission.category
-              ? colorForCategory(submission.category)
-              : "#5A7A9F";
-
-            return (
-              <div
-                key={submission.id}
-                style={{
-                  background: "var(--card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "16px",
-                  padding: "14px"
-                }}
-              >
-                {isEditing ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div>
-                      <div style={labelStyle}>Savol matni</div>
-                      <textarea
-                        rows={3}
-                        style={{ ...inputStyle, resize: "vertical" }}
-                        value={editText}
-                        onChange={(event) => setEditText(event.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <div style={labelStyle}>To'g'ri javob</div>
-                      <input
-                        style={inputStyle}
-                        type="text"
-                        value={editAnswer}
-                        onChange={(event) => setEditAnswer(event.target.value)}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexWrap: "wrap" }}>
-                      {submission.category ? (
-                        <span style={chipBadge(categoryColor)}>{submission.category}</span>
-                      ) : null}
-                      <DifficultyBadge value={submission.difficulty} />
-                      <span style={chipBadge("#5A7A9F")}>
-                        ID {submission.submittedBy || "Mehmon"}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 700,
-                        color: "var(--text)",
-                        lineHeight: 1.5
-                      }}
-                    >
-                      {submission.text}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--success)",
-                        marginTop: "8px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px"
-                      }}
-                    >
-                      <CheckCircleIcon size={13} />
-                      <strong>{submission.correctAnswer}</strong>
-                    </div>
-                  </>
-                )}
-
-                <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
-                  <button
-                    disabled={busy}
-                    style={{
-                      flex: 1,
-                      padding: "11px",
-                      background: busy ? "var(--border)" : "linear-gradient(135deg, #22C55E, #16A34A)",
-                      border: "none",
-                      borderRadius: "10px",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      color: "white",
-                      cursor: busy ? "not-allowed" : "pointer",
-                      opacity: busy ? 0.6 : 1,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "6px",
-                      boxShadow: busy ? "none" : "0 4px 12px rgba(34,197,94,0.25)"
-                    }}
-                    type="button"
-                    onClick={() => void review(submission, "approve")}
-                  >
-                    <CheckCircleIcon size={14} />
-                    {isEditing ? "Saqlab tasdiqlash" : "Tasdiqlash"}
-                  </button>
-                  <button
-                    disabled={busy}
-                    style={{
-                      flex: 1,
-                      padding: "11px",
-                      background: busy ? "var(--border)" : "linear-gradient(135deg, #EF4444, #DC2626)",
-                      border: "none",
-                      borderRadius: "10px",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      color: "white",
-                      cursor: busy ? "not-allowed" : "pointer",
-                      opacity: busy ? 0.6 : 1,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "6px"
-                    }}
-                    type="button"
-                    onClick={() => void review(submission, "reject")}
-                  >
-                    <XCircleIcon size={14} />
-                    Rad etish
-                  </button>
-                </div>
-
-                <button
-                  disabled={busy}
-                  style={{ ...ghostButton, width: "100%", marginTop: "8px", justifyContent: "center" }}
-                  type="button"
-                  onClick={() => (isEditing ? setEditingId(null) : startEditing(submission))}
-                >
-                  <EditIcon size={14} />
-                  {isEditing ? "Tahrirlashni bekor qilish" : "Tahrirlash"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
