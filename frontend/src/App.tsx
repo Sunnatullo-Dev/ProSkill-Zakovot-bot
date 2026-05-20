@@ -13,6 +13,7 @@ import {
 import TeamScreen from "./components/TeamScreen";
 import AdminScreen from "./components/AdminScreen";
 import BottomNav from "./components/BottomNav";
+import ConfirmDialog from "./components/ConfirmDialog";
 import FinishScreen from "./components/FinishScreen";
 import HomeScreen from "./components/HomeScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
@@ -73,6 +74,7 @@ export default function App() {
   const [currentTicket, setCurrentTicket] = useState<string | null>(null);
   const [revealInfo, setRevealInfo] = useState<RevealInfo | null>(null);
   const [isRevealing, setIsRevealing] = useState(false);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -349,6 +351,28 @@ export default function App() {
     handleNextQuestion();
   }
 
+  function handleRequestExit() {
+    stop();
+    setExitConfirmOpen(true);
+  }
+
+  function handleConfirmExit() {
+    hapticTap();
+    setExitConfirmOpen(false);
+    setRevealInfo(null);
+    setCurrentTicket(null);
+    reset();
+    setScreen("home");
+  }
+
+  function handleCancelExit() {
+    setExitConfirmOpen(false);
+
+    if (screen === "question" && !revealInfo && !isRevealing) {
+      start();
+    }
+  }
+
   const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovatchi";
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
@@ -405,6 +429,7 @@ export default function App() {
             onSubmit={handleQuestionSubmit}
             onGiveUp={handleGiveUp}
             onContinue={handleContinue}
+            onExit={handleRequestExit}
           />
         ) : null}
 
@@ -453,6 +478,17 @@ export default function App() {
 
         {showBottomNav ? (
           <BottomNav active={navActive} showAdmin={isAdminRoute} onNavigate={handleNavigate} />
+        ) : null}
+
+        {exitConfirmOpen ? (
+          <ConfirmDialog
+            title="O'yindan chiqish"
+            message="Joriy raund saqlanmaydi. Rostdan chiqasizmi?"
+            confirmLabel="Ha, chiqish"
+            cancelLabel="Yo'q"
+            onConfirm={handleConfirmExit}
+            onCancel={handleCancelExit}
+          />
         ) : null}
       </section>
     </main>

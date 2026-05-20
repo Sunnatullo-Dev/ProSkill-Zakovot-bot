@@ -76,6 +76,14 @@ export function ShieldIcon({ size = 22 }: IconProps) {
   );
 }
 
+export function CloseIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
 export function StarIcon({ size = 18 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { RevealInfo } from "../types";
+import { CloseIcon } from "./icons";
 
 type QuestionCardProps = {
   question: {
@@ -15,6 +16,7 @@ type QuestionCardProps = {
   onSubmit: (answer: string) => void;
   onGiveUp: () => void;
   onContinue: () => void;
+  onExit: () => void;
 };
 
 export default function QuestionCard({
@@ -27,7 +29,8 @@ export default function QuestionCard({
   isRevealing,
   onSubmit,
   onGiveUp,
-  onContinue
+  onContinue,
+  onExit
 }: QuestionCardProps) {
   const [answer, setAnswer] = useState("");
   const timerColor = timeLeft > 10 ? "var(--accent)" : timeLeft > 5 ? "var(--warning)" : "var(--error)";
@@ -90,7 +93,27 @@ export default function QuestionCard({
           marginBottom: "16px"
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <button
+            aria-label="O'yindan chiqish"
+            style={{
+              width: "30px",
+              height: "30px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "9px",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              color: "var(--muted)",
+              cursor: "pointer",
+              flex: "0 0 auto"
+            }}
+            type="button"
+            onClick={onExit}
+          >
+            <CloseIcon size={16} />
+          </button>
           <span
             style={{
               fontSize: "14px",
