@@ -12,12 +12,111 @@ import type {
   TeamWithMembers
 } from "../types";
 import { checkAnswer } from "./gemini.service";
+import { notifyMembers } from "./telegramNotifier.service";
 
 const TOTAL_ROUNDS = 10;
 const ROUND_TIME_LIMIT_SECONDS = 15;
 const TIMEOUT_GRACE_MS = 2000;
 const MIN_QUESTIONS_FOR_BATTLE = 5;
 const WINNER_BONUS = 5;
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function notifyChallengeCreated(challengerTeamName: string, opponentTeamId: string): Promise<void> {
+  try {
+    const team = await teamRepository.getTeamWithMembers(opponentTeamId);
+    const text =
+      `⚔️ <b>${escapeHtml(challengerTeamName)}</b> sizning jamoangizga bellashuv taklif qildi!\n\n` +
+      `Mini Appni oching va qabul yoki rad qiling.`;
+
+    await notifyMembers(
+      team.members.map((member) => member.telegramId),
+      text
+    );
+  } catch (error) {
+    console.error("notifyChallengeCreated failed", error);
+  }
+}
+
+async function notifyChallengeDeclined(opponentTeamName: string, challengerTeamId: string): Promise<void> {
+  try {
+    const team = await teamRepository.getTeamWithMembers(challengerTeamId);
+    const text = `❌ <b>${escapeHtml(opponentTeamName)}</b> taklifingizni rad etdi.`;
+
+    await notifyMembers(
+      team.members.map((member) => member.telegramId),
+      text
+    );
+  } catch (error) {
+    console.error("notifyChallengeDeclined failed", error);
+  }
+}
+
+async function notifyBattleStarted(challengerTeamId: string, opponentTeamId: string): Promise<void> {
+  try {
+    const [challengerTeam, opponentTeam] = await Promise.all([
+      teamRepository.getTeamWithMembers(challengerTeamId),
+      teamRepository.getTeamWithMembers(opponentTeamId)
+    ]);
+    const text =
+      `\u{1F3AF} <b>Bellashuv boshlandi!</b>\n\n` +
+      `${escapeHtml(challengerTeam.name)} \u{1F19A} ${escapeHtml(opponentTeam.name)}\n\n` +
+      `10 ta savol, har biri 15 soniya. Hoziroq kirib o'yinga uling!`;
+    const memberIds = [
+      ...challengerTeam.members.map((member) => member.telegramId),
+      ...opponentTeam.members.map((member) => member.telegramId)
+    ];
+
+    await notifyMembers(memberIds, text);
+  } catch (error) {
+    console.error("notifyBattleStarted failed", error);
+  }
+}
+
+async function notifyBattleFinished(
+  challengerTeamId: string,
+  opponentTeamId: string,
+  challengerScore: number,
+  opponentScore: number,
+  winnerTeamId: string | null
+): Promise<void> {
+  try {
+    const [challengerTeam, opponentTeam] = await Promise.all([
+      teamRepository.getTeamWithMembers(challengerTeamId),
+      teamRepository.getTeamWithMembers(opponentTeamId)
+    ]);
+
+    let text: string;
+
+    if (winnerTeamId === null) {
+      text =
+        `\u{1F91D} <b>Bellashuv tugadi — durang!</b>\n\n` +
+        `${escapeHtml(challengerTeam.name)}: ${challengerScore} · ` +
+        `${escapeHtml(opponentTeam.name)}: ${opponentScore}`;
+    } else {
+      const winner = winnerTeamId === challengerTeam.id ? challengerTeam : opponentTeam;
+      const loser = winnerTeamId === challengerTeam.id ? opponentTeam : challengerTeam;
+      const winnerScore = winnerTeamId === challengerTeam.id ? challengerScore : opponentScore;
+      const loserScore = winnerTeamId === challengerTeam.id ? opponentScore : challengerScore;
+      text =
+        `\u{1F3C6} <b>Bellashuv tugadi!</b>\n\n` +
+        `G'olib: <b>${escapeHtml(winner.name)}</b> (${winnerScore})\n` +
+        `Mag'lub: ${escapeHtml(loser.name)} (${loserScore})\n\n` +
+        `G'olib jamoa har a'zosiga +${WINNER_BONUS} ball!`;
+    }
+
+    const memberIds = [
+      ...challengerTeam.members.map((member) => member.telegramId),
+      ...opponentTeam.members.map((member) => member.telegramId)
+    ];
+
+    await notifyMembers(memberIds, text);
+  } catch (error) {
+    console.error("notifyBattleFinished failed", error);
+  }
+}
 
 function teamScore(answers: DbBattleAnswer[], teamId: string): number {
   return answers.filter((answer) => answer.team_id === teamId && answer.is_correct === true).length;
@@ -66,6 +165,8 @@ export const battleService = {
     if (firstRound) {
       await battleRepository.markRoundStarted(firstRound.id);
     }
+
+    void notifyBattleStarted(challenge.challengerTeamId, challenge.opponentTeamId);
   },
 
   async processAnswer(
@@ -251,6 +352,14 @@ export const battleService = {
     } catch (e) {
       console.error("reset opponent team status failed", e);
     }
+
+    void notifyBattleFinished(
+      challenge.challengerTeamId,
+      challenge.opponentTeamId,
+      challengerScore,
+      opponentScore,
+      winnerTeamId
+    );
   },
 
   async getBattleState(battleId: string, telegramId: number): Promise<BattleState> {
@@ -394,7 +503,11 @@ export const battleService = {
       throw new AppError(409, "Jamoalardan birida allaqachon faol taklif bor");
     }
 
-    return battleRepository.createChallenge(challengerTeam.id, opponentTeam.id);
+    const battle = await battleRepository.createChallenge(challengerTeam.id, opponentTeam.id);
+
+    void notifyChallengeCreated(challengerTeam.name, opponentTeam.id);
+
+    return battle;
   },
 
   async acceptChallenge(battleId: string, opponentOwnerTelegramId: number): Promise<void> {
@@ -435,6 +548,8 @@ export const battleService = {
     }
 
     await battleRepository.updateStatus(battleId, "declined");
+
+    void notifyChallengeDeclined(opponentTeam.name, challenge.challengerTeamId);
   },
 
   async getPendingForUser(telegramId: number) {

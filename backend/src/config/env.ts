@@ -12,6 +12,11 @@ const envSchema = z.object({
   SUPABASE_SERVICE_KEY: z.string().min(1, "SUPABASE_SERVICE_KEY kerak"),
   GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY kerak"),
   GEMINI_MODEL: z.string().min(1).default("gemini-1.5-flash"),
+  MINI_APP_URL: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   ADMIN_TELEGRAM_IDS: z
     .string()
     .default("")

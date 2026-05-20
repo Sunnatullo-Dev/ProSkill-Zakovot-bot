@@ -32,7 +32,10 @@ SUPABASE_SERVICE_KEY=your_supabase_service_role_key
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.0-flash
 ADMIN_TELEGRAM_IDS=123456789,987654321
+MINI_APP_URL=
 ```
+
+`MINI_APP_URL` (ixtiyoriy) - Mini App joylashtirilgan HTTPS manzili. Backend bot xabarlariga "Mini Appni ochish" tugmasini shu manzil orqali qo'shadi. Bo'sh bo'lsa, xabarlar tugmasiz yuboriladi.
 
 `ADMIN_TELEGRAM_IDS` - vergul bilan ajratilgan admin Telegram ID lari. Shu hisoblar ilovada "Admin" bo'limini ko'radi va yuborilgan savollarni tasdiqlaydi.
 
