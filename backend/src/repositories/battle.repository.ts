@@ -98,6 +98,7 @@ export const battleRepository = {
         .returns<DbBattleChallenge[]>();
 
       if (error) {
+        console.error("getActiveChallengesForTeam supabase error", error);
         throw new AppError(500, "Bellashuvlarni olib bo'lmadi");
       }
 
