@@ -10,6 +10,7 @@ type BattlePageProps = {
 };
 
 const POLL_INTERVAL_MS = 2000;
+const POLL_BACKOFF_MS = 6000;
 const TICK_INTERVAL_MS = 1000;
 
 function memberLabel(member: BattleTeamView["members"][number], currentUserId: number): string {
@@ -126,8 +127,20 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
 
   useEffect(() => {
     let active = true;
+    let timeoutId: number | null = null;
 
     async function poll() {
+      if (!active) {
+        return;
+      }
+
+      // Brauzer tab orqada turganda polling'ni to'xtatib turamiz —
+      // server resurslarini va batareyani tejaymiz, qaytib kelganda darhol yangilanadi.
+      if (typeof document !== "undefined" && document.hidden) {
+        scheduleNext(POLL_INTERVAL_MS);
+        return;
+      }
+
       const next = await getBattleState(battleId);
 
       if (!active) {
@@ -149,15 +162,46 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
           setFeedback(null);
           setErrorMessage("");
         }
+
+        // Bellashuv tugagan bo'lsa endi qayta-qayta tekshirib o'tirishimiz shart emas.
+        if (next.finished) {
+          return;
+        }
+
+        scheduleNext(POLL_INTERVAL_MS);
+      } else {
+        // Server xato qaytarsa yoki tarmoq uzilsa — backoff bilan urinishni sekinlatamiz.
+        scheduleNext(POLL_BACKOFF_MS);
       }
     }
 
+    function scheduleNext(delay: number) {
+      if (!active) {
+        return;
+      }
+      timeoutId = window.setTimeout(() => void poll(), delay);
+    }
+
+    function handleVisibilityChange() {
+      if (!document.hidden) {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        void poll();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     void poll();
-    const id = window.setInterval(() => void poll(), POLL_INTERVAL_MS);
 
     return () => {
       active = false;
-      window.clearInterval(id);
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [battleId]);
 

@@ -17,9 +17,12 @@ export const app = express();
 
 const TOO_MANY_REQUESTS = { message: "Juda ko'p so'rov yuborildi, biroz kuting" };
 
+// Asosiy API limiti — polling endpointlar (battles /state, battles /pending)
+// ham shu yerga kirgani uchun hisob kengroq. Bir IP da bir nechta foydalanuvchi
+// (Telegram in-app brauzer) bo'lishi mumkinligini ham hisobga oldik.
 const apiLimiter = rateLimit({
   windowMs: 60_000,
-  limit: 200,
+  limit: 600,
   standardHeaders: true,
   legacyHeaders: false,
   message: TOO_MANY_REQUESTS

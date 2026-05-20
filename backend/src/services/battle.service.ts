@@ -145,7 +145,7 @@ export const battleService = {
       throw new AppError(404, "Bellashuv topilmadi");
     }
 
-    if (challenge.status !== "pending" && challenge.status !== "accepted") {
+    if (challenge.status !== "pending") {
       throw new AppError(409, "Bellashuv allaqachon boshlangan");
     }
 
@@ -159,6 +159,14 @@ export const battleService = {
       throw new AppError(500, "Yetarli savol topilmadi");
     }
 
+    // Atomik gate: faqat bitta chaqiruv pending -> in_progress qila oladi.
+    // Ikkilangan "Qabul qilish" bosishida ikkinchisi shu yerda to'xtaydi.
+    const claimed = await battleRepository.tryStartGame(battleId);
+
+    if (!claimed) {
+      throw new AppError(409, "Bellashuv allaqachon boshlangan");
+    }
+
     const items = questions.map((question, index) => ({
       questionId: question.id,
       roundNumber: index + 1,
@@ -166,10 +174,6 @@ export const battleService = {
     }));
 
     await battleRepository.createRounds(battleId, items);
-    await battleRepository.setCurrentRound(battleId, 1);
-    await battleRepository.updateStatus(battleId, "in_progress", {
-      startedAt: new Date().toISOString()
-    });
 
     await teamRepository.updateStatus(challenge.challengerTeamId, "in_battle");
     await teamRepository.updateStatus(challenge.opponentTeamId, "in_battle");
@@ -299,17 +303,33 @@ export const battleService = {
       return;
     }
 
-    const current = await battleRepository.getRoundByNumber(battleId, challenge.currentRoundNumber);
+    const currentNumber = challenge.currentRoundNumber;
+    const current = await battleRepository.getRoundByNumber(battleId, currentNumber);
 
-    if (current && !current.endedAt) {
-      await battleRepository.markRoundEnded(current.id);
+    // Atomik gate: faqat bitta chaqiruv joriy roundni "yakunlangan" deb belgilay oladi.
+    // Bir vaqtda bir nechta /state polling tushganda boshqalari shu yerda to'xtaydi.
+    if (current) {
+      const ended = await battleRepository.tryEndRound(current.id);
+
+      if (!ended) {
+        return;
+      }
     }
 
-    const nextNumber = challenge.currentRoundNumber + 1;
+    const nextNumber = currentNumber + 1;
     const nextRound = await battleRepository.getRoundByNumber(battleId, nextNumber);
 
     if (nextRound) {
-      await battleRepository.setCurrentRound(battleId, nextNumber);
+      const advanced = await battleRepository.tryAdvanceCurrentRound(
+        battleId,
+        currentNumber,
+        nextNumber
+      );
+
+      if (!advanced) {
+        return;
+      }
+
       await battleRepository.markRoundStarted(nextRound.id);
     } else {
       await battleService.finalizeBattle(battleId);
@@ -319,7 +339,15 @@ export const battleService = {
   async finalizeBattle(battleId: string): Promise<void> {
     const challenge = await battleRepository.getChallengeById(battleId);
 
-    if (!challenge || challenge.status === "finished") {
+    if (!challenge || challenge.status !== "in_progress") {
+      return;
+    }
+
+    // Atomik gate: faqat bitta chaqiruv in_progress -> finished qila oladi.
+    // Concurrent polling vaqtida bonus ikki marta berilmasligini ta'minlaydi.
+    const finalized = await battleRepository.tryFinalize(battleId);
+
+    if (!finalized) {
       return;
     }
 
@@ -350,10 +378,6 @@ export const battleService = {
         console.error("finalizeBattle winner award failed", winError);
       }
     }
-
-    await battleRepository.updateStatus(battleId, "finished", {
-      finishedAt: new Date().toISOString()
-    });
 
     try {
       await teamRepository.updateStatus(challenge.challengerTeamId, "open");
@@ -561,7 +585,13 @@ export const battleService = {
       throw new AppError(403, "Faqat jamoa egasi taklifni bekor qila oladi");
     }
 
-    await battleRepository.updateStatus(battleId, "declined");
+    // Atomik: faqat hali ham pending bo'lsa yopamiz. Bir vaqtda raqib accept/decline
+    // qilgan bo'lsa, biz "tashlab ketamiz" — chaqiruv allaqachon harakatga kelgan.
+    const cancelled = await battleRepository.tryCancelOrDecline(battleId);
+
+    if (!cancelled) {
+      throw new AppError(409, "Bu taklif allaqachon yopilgan");
+    }
 
     void notifyChallengeCancelled(challengerTeam.name, challenge.opponentTeamId);
   },
@@ -583,7 +613,11 @@ export const battleService = {
       throw new AppError(403, "Faqat raqib jamoa egasi rad eta oladi");
     }
 
-    await battleRepository.updateStatus(battleId, "declined");
+    const declined = await battleRepository.tryCancelOrDecline(battleId);
+
+    if (!declined) {
+      throw new AppError(409, "Bu taklif allaqachon yopilgan");
+    }
 
     void notifyChallengeDeclined(opponentTeam.name, challenge.challengerTeamId);
   },

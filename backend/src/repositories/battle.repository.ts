@@ -234,6 +234,97 @@ export const battleRepository = {
     }
   },
 
+  // Atomik helperlar — concurrent polling vaqtidagi race condition'lardan saqlaydi.
+  // Har biri "faqat WHERE shartiga mos qatorga" UPDATE qiladi va qaytarilgan
+  // qatorlar soni bilan bizning chaqiruv "g'olib" bo'lganini bildiradi.
+
+  async tryStartGame(battleId: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from("battle_challenges")
+      .update({
+        status: "in_progress",
+        started_at: new Date().toISOString(),
+        current_round_number: 1
+      })
+      .eq("id", battleId)
+      .eq("status", "pending")
+      .select("id");
+
+    if (error) {
+      throw new AppError(500, "Bellashuvni boshlab bo'lmadi");
+    }
+
+    return (data ?? []).length > 0;
+  },
+
+  async tryAdvanceCurrentRound(
+    battleId: string,
+    fromRoundNumber: number,
+    toRoundNumber: number
+  ): Promise<boolean> {
+    const { data, error } = await supabase
+      .from("battle_challenges")
+      .update({ current_round_number: toRoundNumber })
+      .eq("id", battleId)
+      .eq("status", "in_progress")
+      .eq("current_round_number", fromRoundNumber)
+      .select("id");
+
+    if (error) {
+      throw new AppError(500, "Roundni o'tkazib bo'lmadi");
+    }
+
+    return (data ?? []).length > 0;
+  },
+
+  async tryFinalize(battleId: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from("battle_challenges")
+      .update({
+        status: "finished",
+        finished_at: new Date().toISOString()
+      })
+      .eq("id", battleId)
+      .eq("status", "in_progress")
+      .select("id");
+
+    if (error) {
+      throw new AppError(500, "Bellashuvni yakunlab bo'lmadi");
+    }
+
+    return (data ?? []).length > 0;
+  },
+
+  async tryEndRound(roundId: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from("battle_rounds")
+      .update({ ended_at: new Date().toISOString() })
+      .eq("id", roundId)
+      .is("ended_at", null)
+      .select("id");
+
+    if (error) {
+      throw new AppError(500, "Round'ni yakunlab bo'lmadi");
+    }
+
+    return (data ?? []).length > 0;
+  },
+
+  async tryCancelOrDecline(battleId: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from("battle_challenges")
+      .update({ status: "declined" })
+      .eq("id", battleId)
+      .eq("status", "pending")
+      .select("id");
+
+    if (error) {
+      throw new AppError(500, "Bellashuvni bekor qilib bo'lmadi");
+    }
+
+    return (data ?? []).length > 0;
+  },
+
   async recordAnswer(input: NewBattleAnswer): Promise<{ duplicate: boolean }> {
     try {
       const { error } = await supabase.from("battle_answers").insert({

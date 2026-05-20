@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   acceptBattle,
   cancelBattle,
@@ -29,6 +29,8 @@ function memberInitial(member: TeamMember): string {
   return name[0]?.toUpperCase() ?? "?";
 }
 
+const PENDING_POLL_INTERVAL_MS = 5000;
+
 export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenProps) {
   const [team, setTeam] = useState<TeamWithMembers | null>(null);
   const [pending, setPending] = useState<PendingChallenge[]>([]);
@@ -40,17 +42,55 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
   const [codeCopied, setCodeCopied] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const initialLoadRef = useRef(true);
 
   async function refresh() {
-    setLoading(true);
+    if (initialLoadRef.current) {
+      setLoading(true);
+    }
     const [t, p] = await Promise.all([getMyTeam(), getPendingBattles()]);
     setTeam(t);
     setPending(p);
     setLoading(false);
+    initialLoadRef.current = false;
   }
 
   useEffect(() => {
     void refresh();
+  }, []);
+
+  // Raqibdan kelgan chaqiruv real vaqtda ko'rinishi uchun TeamScreen ochiq turganda
+  // har 5 sekundda yengil polling qilamiz. Tab orqada turganda to'xtatib turiladi.
+  useEffect(() => {
+    let active = true;
+
+    async function tick() {
+      if (!active || document.hidden) {
+        return;
+      }
+
+      const p = await getPendingBattles();
+
+      if (active) {
+        setPending(p);
+      }
+    }
+
+    const id = window.setInterval(() => void tick(), PENDING_POLL_INTERVAL_MS);
+
+    function handleVisibility() {
+      if (!document.hidden) {
+        void tick();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      active = false;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   // Agar foydalanuvchining jamoasida aktiv bellashuv bo'lsa — battle ekraniga avtomatik o'tamiz.
