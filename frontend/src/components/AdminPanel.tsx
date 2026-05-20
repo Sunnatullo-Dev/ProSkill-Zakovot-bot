@@ -1446,7 +1446,7 @@ function SubmissionsSection() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<InboxIcon size={36} />}
-          text="Kutilayotgan taklif yo'q. Hammasi ko'rib chiqilgan ✨"
+          text="Kutilayotgan taklif yo'q — hozircha foydalanuvchilardan yangi savol kelmagan"
         />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1645,7 +1645,7 @@ function ReportsSection() {
       {loading ? (
         <p style={{ fontSize: "12px", color: "var(--muted)" }}>Yuklanmoqda...</p>
       ) : items.length === 0 ? (
-        <EmptyState icon={<AlertIcon size={36} />} text="Shikoyat yo'q — hammasi joyida 🛡" />
+        <EmptyState icon={<AlertIcon size={36} />} text="Shikoyat yo'q — barcha savollar tartibda" />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {items.map((question) => {
