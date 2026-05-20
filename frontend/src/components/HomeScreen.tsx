@@ -4,7 +4,6 @@ import type { Difficulty, RoundFilter } from "../types";
 import { PlayIcon, StarIcon, TrophyIcon } from "./icons";
 
 type HomeScreenProps = {
-  categories: string[];
   error: string;
   isLoading: boolean;
   playerName: string;
@@ -72,7 +71,6 @@ function statCell(icon: ReactNode, value: number, label: string, color: string) 
 }
 
 export default function HomeScreen({
-  categories,
   error,
   isLoading,
   playerName,
@@ -80,9 +78,7 @@ export default function HomeScreen({
   score,
   onStart
 }: HomeScreenProps) {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
-  const sortedCategories = [...categories].sort((left, right) => left.localeCompare(right));
   const userInitial = playerName.trim()[0]?.toUpperCase() ?? "Z";
 
   return (
@@ -178,14 +174,6 @@ export default function HomeScreen({
       </div>
 
       <div style={cardStyle}>
-        <div style={labelStyle}>MAVZU</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "18px" }}>
-          {chip("Barchasi", selectedCategory === null, () => setSelectedCategory(null))}
-          {sortedCategories.map((category) =>
-            chip(category, selectedCategory === category, () => setSelectedCategory(category))
-          )}
-        </div>
-
         <div style={labelStyle}>QIYINLIK</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
           {DIFFICULTY_OPTIONS.map((option) =>
@@ -231,7 +219,7 @@ export default function HomeScreen({
           transition: "opacity 0.15s"
         }}
         type="button"
-        onClick={() => onStart({ category: selectedCategory, difficulty: selectedDifficulty })}
+        onClick={() => onStart({ category: null, difficulty: selectedDifficulty })}
       >
         {isLoading ? (
           "Yuklanmoqda..."

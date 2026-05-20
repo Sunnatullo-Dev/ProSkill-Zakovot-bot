@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getAnswerTicket,
-  getCategories,
   getRound,
   getTopUsers,
   login,
@@ -64,7 +63,6 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<AppUser | null>(null);
   const [score, setScore] = useState(0);
-  const [categories, setCategories] = useState<string[]>([]);
   const [roundQuestions, setRoundQuestions] = useState<Question[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [lastResult, setLastResult] = useState<AnswerResult | null>(null);
@@ -226,7 +224,6 @@ export default function App() {
         setUser(response.user);
         setScore(response.user.score);
         await loadTopUsers();
-        setCategories(await getCategories());
         setScreen(isAdminRoute ? "admin" : "home");
       } catch (error) {
         console.error("Login failed", error);
@@ -417,7 +414,6 @@ export default function App() {
 
         {screen === "home" ? (
           <HomeScreen
-            categories={categories}
             error={errorMessage}
             isLoading={isStarting}
             playerName={playerName}
