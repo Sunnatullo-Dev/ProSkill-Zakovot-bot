@@ -68,6 +68,116 @@ export type TeamWithMembers = Team & {
   members: TeamMember[];
 };
 
+export type BattleStatus = "pending" | "accepted" | "in_progress" | "finished" | "declined";
+
+export type DbBattleChallenge = {
+  id: string;
+  challenger_team_id: string;
+  opponent_team_id: string;
+  status: BattleStatus;
+  current_round_number: number;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type BattleChallenge = {
+  id: string;
+  challengerTeamId: string;
+  opponentTeamId: string;
+  status: BattleStatus;
+  currentRoundNumber: number;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+
+export type DbBattleRound = {
+  id: string;
+  battle_id: string;
+  question_id: string;
+  round_number: number;
+  time_limit_seconds: number;
+  started_at: string | null;
+  ended_at: string | null;
+};
+
+export type BattleRound = {
+  id: string;
+  battleId: string;
+  questionId: string;
+  roundNumber: number;
+  timeLimitSeconds: number;
+  startedAt: string | null;
+  endedAt: string | null;
+};
+
+export type DbBattleAnswer = {
+  id: string;
+  battle_id: string;
+  round_id: string;
+  telegram_id: number;
+  team_id: string;
+  answer: string | null;
+  is_correct: boolean | null;
+  answered_at: string;
+  response_time_ms: number | null;
+};
+
+export type NewBattleAnswer = {
+  battleId: string;
+  roundId: string;
+  telegramId: number;
+  teamId: string;
+  answer: string;
+  isCorrect: boolean;
+  responseTimeMs: number;
+};
+
+export type BattleTeamMemberView = {
+  telegramId: number;
+  firstName: string | null;
+  username: string | null;
+  answeredCurrentRound: boolean;
+};
+
+export type BattleTeamView = {
+  id: string;
+  name: string;
+  score: number;
+  members: BattleTeamMemberView[];
+};
+
+export type BattleRoundView = {
+  roundId: string;
+  roundNumber: number;
+  totalRounds: number;
+  questionText: string;
+  timeLimitSeconds: number;
+  timeRemainingMs: number;
+  myAnswered: boolean;
+};
+
+export type BattleState = {
+  battleId: string;
+  status: BattleStatus;
+  challengerTeam: BattleTeamView;
+  opponentTeam: BattleTeamView;
+  myTeamId: string | null;
+  currentRound: BattleRoundView | null;
+  finished: boolean;
+  winnerTeamId: string | null;
+};
+
+export type PendingChallenge = {
+  battleId: string;
+  status: BattleStatus;
+  challengerTeam: Team;
+  opponentTeam: Team;
+  iAmOpponent: boolean;
+  createdAt: string;
+};
+
 export type DbQuestion = {
   id: string;
   text: string;

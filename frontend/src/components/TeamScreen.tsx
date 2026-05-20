@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
-import { getMyTeam, leaveTeam } from "../api/client";
-import type { TeamMember, TeamWithMembers } from "../types";
+import {
+  acceptBattle,
+  declineBattle,
+  getMyTeam,
+  getPendingBattles,
+  leaveTeam
+} from "../api/client";
+import type { PendingChallenge, TeamMember, TeamWithMembers } from "../types";
+import ChallengeModal from "./ChallengeModal";
 import ConfirmDialog from "./ConfirmDialog";
 import CreateTeamModal from "./CreateTeamModal";
 import { TeamIcon } from "./icons";
@@ -8,6 +15,7 @@ import JoinTeamModal from "./JoinTeamModal";
 
 type TeamScreenProps = {
   currentUserId: number;
+  onEnterBattle: (battleId: string) => void;
 };
 
 function memberLabel(member: TeamMember): string {
@@ -20,24 +28,38 @@ function memberInitial(member: TeamMember): string {
   return name[0]?.toUpperCase() ?? "?";
 }
 
-export default function TeamScreen({ currentUserId }: TeamScreenProps) {
+export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenProps) {
   const [team, setTeam] = useState<TeamWithMembers | null>(null);
+  const [pending, setPending] = useState<PendingChallenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [challengeOpen, setChallengeOpen] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
 
   async function refresh() {
     setLoading(true);
-    const t = await getMyTeam();
+    const [t, p] = await Promise.all([getMyTeam(), getPendingBattles()]);
     setTeam(t);
+    setPending(p);
     setLoading(false);
   }
 
   useEffect(() => {
     void refresh();
   }, []);
+
+  // Agar foydalanuvchining jamoasida aktiv bellashuv bo'lsa — battle ekraniga avtomatik o'tamiz.
+  useEffect(() => {
+    const active = pending.find((c) => c.status === "in_progress");
+
+    if (active) {
+      onEnterBattle(active.battleId);
+    }
+  }, [pending, onEnterBattle]);
 
   async function handleLeave() {
     setLeaveOpen(false);
@@ -60,7 +82,36 @@ export default function TeamScreen({ currentUserId }: TeamScreenProps) {
     }
   }
 
+  async function handleAccept(battleId: string) {
+    setActionId(battleId);
+    setActionError("");
+    const result = await acceptBattle(battleId);
+    setActionId(null);
+
+    if (result.ok) {
+      onEnterBattle(result.data.battleId);
+    } else {
+      setActionError(result.error);
+      await refresh();
+    }
+  }
+
+  async function handleDecline(battleId: string) {
+    setActionId(battleId);
+    setActionError("");
+    const result = await declineBattle(battleId);
+    setActionId(null);
+
+    if (result.ok) {
+      await refresh();
+    } else {
+      setActionError(result.error);
+    }
+  }
+
   const isOwner = team !== null && team.ownerId === currentUserId;
+  const incoming = pending.filter((c) => c.iAmOpponent && c.status === "pending");
+  const outgoing = pending.filter((c) => !c.iAmOpponent && c.status === "pending");
 
   return (
     <div
@@ -140,6 +191,89 @@ export default function TeamScreen({ currentUserId }: TeamScreenProps) {
         </>
       ) : (
         <>
+          {incoming.map((challenge) => (
+            <div
+              key={challenge.battleId}
+              style={{
+                background: "linear-gradient(135deg, rgba(245,200,66,0.18), rgba(124,58,237,0.18))",
+                border: "1px solid var(--gold)",
+                borderRadius: "18px",
+                padding: "16px",
+                marginBottom: "14px"
+              }}
+            >
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--gold)", marginBottom: "6px" }}>
+                ⚔️ BELLASHUV TAKLIFI
+              </div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text)", marginBottom: "12px" }}>
+                "{challenge.challengerTeam.name}" sizning jamoangizga taklif yubordi
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  disabled={actionId === challenge.battleId}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    background: "var(--success)",
+                    border: "none",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    color: "white",
+                    cursor: "pointer",
+                    opacity: actionId === challenge.battleId ? 0.6 : 1
+                  }}
+                  type="button"
+                  onClick={() => void handleAccept(challenge.battleId)}
+                >
+                  Qabul qilish
+                </button>
+                <button
+                  disabled={actionId === challenge.battleId}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    background: "transparent",
+                    border: "1px solid var(--error)",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: "var(--error)",
+                    cursor: "pointer",
+                    opacity: actionId === challenge.battleId ? 0.6 : 1
+                  }}
+                  type="button"
+                  onClick={() => void handleDecline(challenge.battleId)}
+                >
+                  Rad etish
+                </button>
+              </div>
+              {actionError ? (
+                <div style={{ fontSize: "12px", color: "var(--error)", marginTop: "8px" }}>
+                  {actionError}
+                </div>
+              ) : null}
+            </div>
+          ))}
+
+          {outgoing.map((challenge) => (
+            <div
+              key={challenge.battleId}
+              style={{
+                background: "var(--card)",
+                border: "1px dashed var(--border)",
+                borderRadius: "16px",
+                padding: "14px",
+                marginBottom: "14px",
+                fontSize: "13px",
+                color: "var(--muted)",
+                textAlign: "center"
+              }}
+            >
+              ⏳ "{challenge.opponentTeam.name}" jamoasidan javob kutilmoqda...
+            </div>
+          ))}
+
           <div
             style={{
               background: "var(--card)",
@@ -294,22 +428,26 @@ export default function TeamScreen({ currentUserId }: TeamScreenProps) {
 
           {isOwner ? (
             <button
-              disabled
+              disabled={outgoing.length > 0 || team.status !== "open"}
               style={{
                 width: "100%",
                 padding: "15px",
-                background: "var(--card)",
-                border: "1px dashed var(--border)",
+                background:
+                  outgoing.length > 0 || team.status !== "open"
+                    ? "var(--card)"
+                    : "linear-gradient(135deg, #F5C842, #7C3AED)",
+                border: outgoing.length > 0 || team.status !== "open" ? "1px dashed var(--border)" : "none",
                 borderRadius: "14px",
-                fontSize: "14px",
-                fontWeight: 700,
-                color: "var(--muted)",
-                cursor: "not-allowed",
+                fontSize: "15px",
+                fontWeight: 800,
+                color: outgoing.length > 0 || team.status !== "open" ? "var(--muted)" : "white",
+                cursor: outgoing.length > 0 || team.status !== "open" ? "not-allowed" : "pointer",
                 marginBottom: "10px"
               }}
               type="button"
+              onClick={() => setChallengeOpen(true)}
             >
-              ⚔️ Bellashuvga taklif qilish (tez orada)
+              ⚔️ Bellashuvga taklif qilish
             </button>
           ) : null}
 
@@ -338,6 +476,12 @@ export default function TeamScreen({ currentUserId }: TeamScreenProps) {
       ) : null}
       {joinOpen ? (
         <JoinTeamModal onClose={() => setJoinOpen(false)} onJoined={() => void refresh()} />
+      ) : null}
+      {challengeOpen ? (
+        <ChallengeModal
+          onClose={() => setChallengeOpen(false)}
+          onChallenged={() => void refresh()}
+        />
       ) : null}
       {leaveOpen ? (
         <ConfirmDialog

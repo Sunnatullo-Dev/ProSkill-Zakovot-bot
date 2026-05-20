@@ -1,0 +1,479 @@
+import { useEffect, useRef, useState } from "react";
+import { getBattleState, submitBattleAnswer } from "../api/client";
+import type { BattleState, BattleTeamView } from "../types";
+import { hapticResult } from "../utils/haptics";
+
+type BattlePageProps = {
+  battleId: string;
+  currentUserId: number;
+  onExit: () => void;
+};
+
+const POLL_INTERVAL_MS = 2000;
+const TICK_INTERVAL_MS = 1000;
+
+function memberLabel(member: BattleTeamView["members"][number], currentUserId: number): string {
+  const name = member.firstName || (member.username ? `@${member.username}` : `#${member.telegramId}`);
+
+  return member.telegramId === currentUserId && currentUserId !== 0 ? `${name} (siz)` : name;
+}
+
+function ScoreCard({
+  team,
+  highlight,
+  align
+}: {
+  team: BattleTeamView;
+  highlight: boolean;
+  align: "left" | "right";
+}) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        background: highlight
+          ? "linear-gradient(135deg, rgba(77,166,255,0.18), rgba(124,58,237,0.18))"
+          : "var(--card)",
+        border: `1px solid ${highlight ? "var(--accent)" : "var(--border)"}`,
+        borderRadius: "16px",
+        padding: "14px 12px",
+        textAlign: align === "left" ? "left" : "right"
+      }}
+    >
+      <div
+        style={{
+          fontSize: "11px",
+          color: "var(--muted)",
+          letterSpacing: "1px",
+          marginBottom: "4px",
+          textTransform: "uppercase"
+        }}
+      >
+        {highlight ? "SIZNING JAMOA" : "RAQIB"}
+      </div>
+      <div
+        style={{
+          fontSize: "15px",
+          fontWeight: 800,
+          color: "var(--text)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          marginBottom: "6px"
+        }}
+      >
+        {team.name}
+      </div>
+      <div
+        style={{
+          fontSize: "34px",
+          fontWeight: 900,
+          color: "var(--gold)",
+          lineHeight: 1
+        }}
+      >
+        {team.score}
+      </div>
+    </div>
+  );
+}
+
+function MembersStatus({ team, currentUserId }: { team: BattleTeamView; currentUserId: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <div
+        style={{
+          fontSize: "11px",
+          color: "var(--muted)",
+          letterSpacing: "1.5px",
+          textTransform: "uppercase"
+        }}
+      >
+        {team.name}
+      </div>
+      {team.members.map((member) => (
+        <div
+          key={member.telegramId}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            padding: "8px 12px",
+            fontSize: "13px"
+          }}
+        >
+          <span style={{ color: "var(--text)" }}>{memberLabel(member, currentUserId)}</span>
+          <span style={{ color: member.answeredCurrentRound ? "var(--success)" : "var(--muted)", fontWeight: 700 }}>
+            {member.answeredCurrentRound ? "✓" : "..."}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function BattlePage({ battleId, currentUserId, onExit }: BattlePageProps) {
+  const [state, setState] = useState<BattleState | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [answer, setAnswer] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ isCorrect: boolean; correctAnswer: string } | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const lastRoundIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function poll() {
+      const next = await getBattleState(battleId);
+
+      if (!active) {
+        return;
+      }
+
+      if (next) {
+        setState(next);
+
+        if (next.currentRound) {
+          setSecondsLeft(Math.ceil(next.currentRound.timeRemainingMs / 1000));
+        }
+
+        const newRoundId = next.currentRound?.roundId ?? null;
+
+        if (newRoundId !== lastRoundIdRef.current) {
+          lastRoundIdRef.current = newRoundId;
+          setAnswer("");
+          setFeedback(null);
+          setErrorMessage("");
+        }
+      }
+    }
+
+    void poll();
+    const id = window.setInterval(() => void poll(), POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(id);
+    };
+  }, [battleId]);
+
+  useEffect(() => {
+    if (!state?.currentRound || state.finished) {
+      return;
+    }
+
+    const id = window.setInterval(() => {
+      setSecondsLeft((prev) => Math.max(0, prev - 1));
+    }, TICK_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [state?.currentRound?.roundId, state?.finished]);
+
+  async function handleSubmit() {
+    if (!state?.currentRound || submitting || state.currentRound.myAnswered) {
+      return;
+    }
+
+    const trimmed = answer.trim();
+
+    if (!trimmed) {
+      setErrorMessage("Javob yozing");
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMessage("");
+    const result = await submitBattleAnswer(battleId, state.currentRound.roundId, trimmed);
+    setSubmitting(false);
+
+    if (result.ok) {
+      hapticResult(result.data.isCorrect ? "correct" : "incorrect");
+      setFeedback({ isCorrect: result.data.isCorrect, correctAnswer: result.data.correctAnswer });
+      const fresh = await getBattleState(battleId);
+
+      if (fresh) {
+        setState(fresh);
+      }
+    } else {
+      setErrorMessage(result.error);
+    }
+  }
+
+  if (!state) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--bg)"
+        }}
+      >
+        <p style={{ color: "var(--muted)", fontSize: "14px" }}>Yuklanmoqda...</p>
+      </div>
+    );
+  }
+
+  const myIsChallenger = state.myTeamId === state.challengerTeam.id;
+  const myTeam = myIsChallenger ? state.challengerTeam : state.opponentTeam;
+  const otherTeam = myIsChallenger ? state.opponentTeam : state.challengerTeam;
+
+  if (state.finished) {
+    const iWon = state.winnerTeamId === state.myTeamId && state.myTeamId !== null;
+    const isDraw = !state.winnerTeamId;
+    const winningTeam =
+      state.winnerTeamId === state.challengerTeam.id
+        ? state.challengerTeam
+        : state.winnerTeamId === state.opponentTeam.id
+          ? state.opponentTeam
+          : null;
+
+    return (
+      <div
+        className="animate-scaleIn"
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--bg)",
+          padding: "24px",
+          textAlign: "center"
+        }}
+      >
+        <div style={{ fontSize: "72px", marginBottom: "8px" }}>
+          {isDraw ? "🤝" : iWon ? "🏆" : "😅"}
+        </div>
+        <div
+          style={{
+            fontSize: "13px",
+            color: "var(--muted)",
+            letterSpacing: "2px",
+            marginBottom: "6px",
+            textTransform: "uppercase"
+          }}
+        >
+          {isDraw ? "Durang" : iWon ? "G'alaba" : "Mag'lubiyat"}
+        </div>
+        <div
+          style={{
+            fontSize: "26px",
+            fontWeight: 900,
+            background: "linear-gradient(135deg, #4DA6FF, #A78BFA)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            marginBottom: "20px"
+          }}
+        >
+          {winningTeam ? winningTeam.name : "Hech kim"}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            width: "100%",
+            maxWidth: "360px",
+            marginBottom: "24px"
+          }}
+        >
+          <ScoreCard team={myTeam} highlight align="left" />
+          <ScoreCard team={otherTeam} highlight={false} align="right" />
+        </div>
+
+        {iWon ? (
+          <div style={{ fontSize: "13px", color: "var(--gold)", marginBottom: "20px" }}>
+            Har a'zoga +5 bonus ball
+          </div>
+        ) : null}
+
+        <button
+          style={{
+            width: "100%",
+            maxWidth: "360px",
+            padding: "16px",
+            background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+            border: "none",
+            borderRadius: "14px",
+            fontSize: "16px",
+            fontWeight: 800,
+            color: "white",
+            cursor: "pointer"
+          }}
+          type="button"
+          onClick={onExit}
+        >
+          Tugatdim
+        </button>
+      </div>
+    );
+  }
+
+  const round = state.currentRound;
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "var(--bg)",
+        padding: "20px",
+        maxWidth: "430px",
+        margin: "0 auto"
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "14px"
+        }}
+      >
+        <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)" }}>
+          Bellashuv {round ? `· Round ${round.roundNumber}/${round.totalRounds}` : ""}
+        </span>
+        <span
+          style={{
+            fontSize: "16px",
+            fontWeight: 800,
+            color: secondsLeft <= 5 ? "var(--error)" : secondsLeft <= 10 ? "var(--warning)" : "var(--accent)"
+          }}
+        >
+          ⏱ {secondsLeft}s
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", marginBottom: "18px" }}>
+        <ScoreCard team={myTeam} highlight align="left" />
+        <ScoreCard team={otherTeam} highlight={false} align="right" />
+      </div>
+
+      {round ? (
+        <div
+          style={{
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "20px",
+            padding: "24px 18px",
+            fontSize: "17px",
+            fontWeight: 700,
+            color: "var(--text)",
+            textAlign: "center",
+            lineHeight: 1.5,
+            marginBottom: "16px",
+            userSelect: "none"
+          }}
+        >
+          {round.questionText || "Savol yuklanmoqda..."}
+        </div>
+      ) : null}
+
+      {round && !round.myAnswered ? (
+        <div style={{ marginBottom: "16px" }}>
+          <input
+            placeholder="Javobingiz..."
+            style={{
+              width: "100%",
+              padding: "15px 16px",
+              background: "var(--card)",
+              border: "1.5px solid var(--border)",
+              borderRadius: "12px",
+              fontSize: "15px",
+              color: "var(--text)",
+              outline: "none",
+              marginBottom: "10px"
+            }}
+            type="text"
+            value={answer}
+            onChange={(event) => {
+              setAnswer(event.target.value);
+              setErrorMessage("");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                void handleSubmit();
+              }
+            }}
+          />
+          {errorMessage ? (
+            <div style={{ fontSize: "12px", color: "var(--error)", marginBottom: "8px" }}>
+              {errorMessage}
+            </div>
+          ) : null}
+          <button
+            disabled={!answer.trim() || submitting}
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: !answer.trim() || submitting ? "var(--border)" : "var(--accent)",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "15px",
+              fontWeight: 800,
+              color: "white",
+              cursor: !answer.trim() || submitting ? "not-allowed" : "pointer",
+              opacity: !answer.trim() || submitting ? 0.6 : 1
+            }}
+            type="button"
+            onClick={() => void handleSubmit()}
+          >
+            {submitting ? "Yuborilmoqda..." : "Javob berish"}
+          </button>
+        </div>
+      ) : round && round.myAnswered ? (
+        <div
+          style={{
+            background: feedback?.isCorrect
+              ? "rgba(34,197,94,0.12)"
+              : feedback?.isCorrect === false
+                ? "rgba(239,68,68,0.10)"
+                : "var(--card)",
+            border: `1px solid ${
+              feedback?.isCorrect
+                ? "rgba(34,197,94,0.3)"
+                : feedback?.isCorrect === false
+                  ? "rgba(239,68,68,0.3)"
+                  : "var(--border)"
+            }`,
+            borderRadius: "14px",
+            padding: "14px",
+            marginBottom: "16px",
+            textAlign: "center"
+          }}
+        >
+          <div
+            style={{
+              fontSize: "14px",
+              fontWeight: 700,
+              color: feedback?.isCorrect
+                ? "var(--success)"
+                : feedback?.isCorrect === false
+                  ? "var(--error)"
+                  : "var(--text)"
+            }}
+          >
+            {feedback?.isCorrect ? "✓ To'g'ri!" : feedback?.isCorrect === false ? "✗ Noto'g'ri" : "Javobingiz qabul qilindi"}
+          </div>
+          <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
+            Boshqalarni kuting yoki vaqt tugashini kuting
+          </div>
+        </div>
+      ) : null}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <MembersStatus team={myTeam} currentUserId={currentUserId} />
+        <MembersStatus team={otherTeam} currentUserId={currentUserId} />
+      </div>
+    </div>
+  );
+}

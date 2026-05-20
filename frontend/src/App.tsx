@@ -12,6 +12,7 @@ import {
 } from "./api/client";
 import TeamScreen from "./components/TeamScreen";
 import AdminScreen from "./components/AdminScreen";
+import BattlePage from "./components/BattlePage";
 import BottomNav from "./components/BottomNav";
 import ConfirmDialog from "./components/ConfirmDialog";
 import FinishScreen from "./components/FinishScreen";
@@ -75,6 +76,7 @@ export default function App() {
   const [revealInfo, setRevealInfo] = useState<RevealInfo | null>(null);
   const [isRevealing, setIsRevealing] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -373,6 +375,16 @@ export default function App() {
     }
   }
 
+  function handleEnterBattle(battleId: string) {
+    setActiveBattleId(battleId);
+    setScreen("battle");
+  }
+
+  function handleExitBattle() {
+    setActiveBattleId(null);
+    setScreen("team");
+  }
+
   const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovatchi";
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
@@ -462,7 +474,20 @@ export default function App() {
           />
         ) : null}
 
-        {screen === "team" ? <TeamScreen currentUserId={user?.telegramId ?? 0} /> : null}
+        {screen === "team" ? (
+          <TeamScreen
+            currentUserId={user?.telegramId ?? 0}
+            onEnterBattle={handleEnterBattle}
+          />
+        ) : null}
+
+        {screen === "battle" && activeBattleId ? (
+          <BattlePage
+            battleId={activeBattleId}
+            currentUserId={user?.telegramId ?? 0}
+            onExit={handleExitBattle}
+          />
+        ) : null}
 
         {screen === "profile" ? (
           <ProfileScreen

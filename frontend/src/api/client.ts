@@ -5,11 +5,13 @@ import type {
   ApiResult,
   AppUser,
   AuthResponse,
+  BattleState,
   Difficulty,
   GameStats,
   LeaderboardData,
   LeaderboardUser,
   NewQuestionInput,
+  PendingChallenge,
   Question,
   ReferralData,
   ReportedQuestion,
@@ -441,6 +443,64 @@ export async function leaveTeam(): Promise<boolean> {
   const response = await request<{ ok: boolean }>("/teams/leave", { method: "DELETE" });
 
   return Boolean(response?.ok);
+}
+
+export async function getPendingBattles(): Promise<PendingChallenge[]> {
+  try {
+    const response = await request<{ challenges: PendingChallenge[] }>("/battles/pending");
+
+    return response?.challenges ?? [];
+  } catch (error) {
+    console.error("getPendingBattles failed", error);
+
+    return [];
+  }
+}
+
+export async function challengeTeamByCode(
+  opponentCode: string
+): Promise<ApiResult<{ battleId: string }>> {
+  return requestResult<{ battleId: string }>("/battles/challenge", {
+    method: "POST",
+    body: { opponent_code: opponentCode }
+  });
+}
+
+export async function acceptBattle(battleId: string): Promise<ApiResult<{ battleId: string }>> {
+  return requestResult<{ battleId: string }>(`/battles/${battleId}/accept`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export async function declineBattle(battleId: string): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>(`/battles/${battleId}/decline`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export async function getBattleState(battleId: string): Promise<BattleState | null> {
+  try {
+    const response = await request<BattleState>(`/battles/${battleId}/state`);
+
+    return response ?? null;
+  } catch (error) {
+    console.error("getBattleState failed", error);
+
+    return null;
+  }
+}
+
+export async function submitBattleAnswer(
+  battleId: string,
+  roundId: string,
+  answer: string
+): Promise<ApiResult<{ isCorrect: boolean; correctAnswer: string }>> {
+  return requestResult<{ isCorrect: boolean; correctAnswer: string }>(`/battles/${battleId}/answer`, {
+    method: "POST",
+    body: { roundId, answer }
+  });
 }
 
 // Backend xato xabarini UI ga uzatish uchun result-tipidagi yordamchi.

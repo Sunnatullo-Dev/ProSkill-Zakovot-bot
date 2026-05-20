@@ -131,7 +131,8 @@ export type Screen =
   | "team"
   | "profile"
   | "admin"
-  | "leaderboard";
+  | "leaderboard"
+  | "battle";
 
 export type NavTab = "home" | "leaderboard" | "team" | "profile" | "admin";
 
@@ -176,3 +177,49 @@ export type TeamWithMembers = Team & {
 };
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+export type BattleStatus = "pending" | "accepted" | "in_progress" | "finished" | "declined";
+
+export type BattleTeamMemberView = {
+  telegramId: number;
+  firstName: string | null;
+  username: string | null;
+  answeredCurrentRound: boolean;
+};
+
+export type BattleTeamView = {
+  id: string;
+  name: string;
+  score: number;
+  members: BattleTeamMemberView[];
+};
+
+export type BattleRoundView = {
+  roundId: string;
+  roundNumber: number;
+  totalRounds: number;
+  questionText: string;
+  timeLimitSeconds: number;
+  timeRemainingMs: number;
+  myAnswered: boolean;
+};
+
+export type BattleState = {
+  battleId: string;
+  status: BattleStatus;
+  challengerTeam: BattleTeamView;
+  opponentTeam: BattleTeamView;
+  myTeamId: string | null;
+  currentRound: BattleRoundView | null;
+  finished: boolean;
+  winnerTeamId: string | null;
+};
+
+export type PendingChallenge = {
+  battleId: string;
+  status: BattleStatus;
+  challengerTeam: Team;
+  opponentTeam: Team;
+  iAmOpponent: boolean;
+  createdAt: string;
+};

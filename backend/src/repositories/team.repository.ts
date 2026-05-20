@@ -233,6 +233,43 @@ export const teamRepository = {
     }
   },
 
+  async getTeamById(teamId: string): Promise<Team | null> {
+    const { data, error } = await supabase
+      .from("teams")
+      .select(TEAM_COLUMNS)
+      .eq("id", teamId)
+      .maybeSingle<DbTeam>();
+
+    if (error) {
+      throw new AppError(500, "Jamoani olib bo'lmadi");
+    }
+
+    return data ? mapTeam(data) : null;
+  },
+
+  async findTeamByCode(code: string): Promise<Team | null> {
+    const normalized = code.trim().toUpperCase();
+    const { data, error } = await supabase
+      .from("teams")
+      .select(TEAM_COLUMNS)
+      .eq("code", normalized)
+      .maybeSingle<DbTeam>();
+
+    if (error) {
+      throw new AppError(500, "Jamoani qidirib bo'lmadi");
+    }
+
+    return data ? mapTeam(data) : null;
+  },
+
+  async updateStatus(teamId: string, status: "open" | "in_battle" | "closed"): Promise<void> {
+    const { error } = await supabase.from("teams").update({ status }).eq("id", teamId);
+
+    if (error) {
+      throw new AppError(500, "Jamoa holatini yangilab bo'lmadi");
+    }
+  },
+
   async leaveTeam(telegramId: number): Promise<void> {
     try {
       const membership = await teamRepository.findMembership(telegramId);

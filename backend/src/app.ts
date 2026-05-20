@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { env } from "./config/env";
 import { answerRouter } from "./routes/answer.routes";
 import { authRouter } from "./routes/auth.routes";
+import { battleRouter } from "./routes/battle.routes";
 import { gameResultRouter } from "./routes/gameResult.routes";
 import { questionRouter } from "./routes/question.routes";
 import { submissionRouter } from "./routes/submission.routes";
@@ -61,5 +62,6 @@ app.use("/api/users", userRouter);
 app.use("/api/submissions", writeLimiter, submissionRouter);
 app.use("/api/game-results", gameResultRouter);
 app.use("/api/teams", teamRouter);
+app.use("/api/battles", battleRouter);
 
 app.use(errorMiddleware);
