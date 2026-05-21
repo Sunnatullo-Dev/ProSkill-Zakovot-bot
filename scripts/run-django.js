@@ -28,7 +28,9 @@ let usingVenv = true;
 
 if (!fs.existsSync(venvPython)) {
   // Venv yo'q — system Python'ga tushamiz.
-  const candidates = isWindows ? ["py", "python", "python3"] : ["python3", "python"];
+  // Windows'da `py` launcher spawn orqali argv'ni buzadi, shuning uchun
+  // python.exe / python3.exe ni to'g'ridan-to'g'ri ishlatamiz.
+  const candidates = isWindows ? ["python", "python3"] : ["python3", "python"];
   python = null;
   for (const candidate of candidates) {
     const result = spawnSync(candidate, ["--version"], { stdio: "ignore" });
