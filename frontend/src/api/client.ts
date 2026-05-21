@@ -1,4 +1,3 @@
-import { calculateAnswerScore } from "../utils/scoring";
 import type {
   AnswerResult,
   AnswerStatus,
@@ -6,25 +5,21 @@ import type {
   AppUser,
   AuthResponse,
   BattleState,
-  Difficulty,
   GameStats,
   LeaderboardData,
   LeaderboardUser,
-  NewQuestionInput,
   PendingChallenge,
   Question,
   ReferralData,
   ReportedQuestion,
   RevealInfo,
   RoundFilter,
-  Submission,
   Team,
   TeamWithMembers
 } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
-const ANSWER_TIMEOUT_MS = 15000;
 const DEFAULT_ROUND_COUNT = 10;
 const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
 const DEFAULT_USER: AppUser = {
@@ -37,105 +32,14 @@ const DEFAULT_USER: AppUser = {
   score: 0
 };
 
-type FallbackQuestion = Question & { correctAnswer: string };
-
-const FALLBACK_QUESTIONS: FallbackQuestion[] = [
-  {
-    id: "1",
-    text: "O'zbekistonning poytaxti qaysi shahar?",
-    category: "Geografiya",
-    difficulty: "easy",
-    correctAnswer: "Toshkent"
-  },
-  {
-    id: "2",
-    text: "Alisher Navoiy qaysi asrda yashagan?",
-    category: "Tarix",
-    difficulty: "easy",
-    correctAnswer: "XV asr"
-  },
-  {
-    id: "3",
-    text: "Suv necha darajada qaynaydi?",
-    category: "Fan",
-    difficulty: "easy",
-    correctAnswer: "100 daraja"
-  },
-  {
-    id: "4",
-    text: "O'zbekiston mustaqilligini qaysi yili oldi?",
-    category: "Tarix",
-    difficulty: "easy",
-    correctAnswer: "1991"
-  },
-  {
-    id: "5",
-    text: "Matematik: 15 × 8 = ?",
-    category: "Matematika",
-    difficulty: "easy",
-    correctAnswer: "120"
-  },
-  {
-    id: "6",
-    text: "Dunyo bo'yicha eng baland tog' qaysi?",
-    category: "Geografiya",
-    difficulty: "medium",
-    correctAnswer: "Everest"
-  },
-  {
-    id: "7",
-    text: "Insonning normal tana harorati necha daraja?",
-    category: "Fan",
-    difficulty: "easy",
-    correctAnswer: "36.6"
-  },
-  {
-    id: "8",
-    text: "O'zbekistonning milliy valyutasi nima?",
-    category: "Umumiy",
-    difficulty: "easy",
-    correctAnswer: "So'm"
-  },
-  {
-    id: "9",
-    text: "Bir yilda necha kun bor?",
-    category: "Umumiy",
-    difficulty: "easy",
-    correctAnswer: "365"
-  },
-  {
-    id: "10",
-    text: "Amir Temur qaysi shaharda tug'ilgan?",
-    category: "Tarix",
-    difficulty: "medium",
-    correctAnswer: "Kesh (Shahrisabz)"
-  }
-];
-
 type RequestOptions = {
   body?: unknown;
   initData?: string;
   method?: "GET" | "POST" | "DELETE" | "PATCH";
 };
 
-export type SubmissionEdits = {
-  text?: string;
-  correctAnswer?: string;
-  category?: string;
-  difficulty?: Difficulty;
-};
-
 type TopUsersResponse = {
   users: LeaderboardUser[];
-};
-
-type SubmissionsResponse = {
-  submissions: Submission[];
-};
-
-export type SubmitQuestionResult = {
-  ok: boolean;
-  message: string;
 };
 
 export type SaveGameResultInput = {
@@ -220,14 +124,7 @@ export async function getReferrals(): Promise<ReferralData> {
 
 export async function getCategories(): Promise<string[]> {
   const response = await request<{ categories: string[] }>("/questions/categories");
-
-  if (response?.categories?.length) {
-    return [...response.categories].sort((left, right) => left.localeCompare(right));
-  }
-
-  return [...new Set(FALLBACK_QUESTIONS.map((question) => question.category).filter(isText))].sort(
-    (left, right) => left.localeCompare(right)
-  );
+  return [...(response?.categories ?? [])].sort((left, right) => left.localeCompare(right));
 }
 
 export async function getRound(
@@ -245,12 +142,7 @@ export async function getRound(
   }
 
   const response = await request<{ questions: RemoteQuestion[] }>(`/questions/round?${params}`);
-
-  if (response?.questions?.length) {
-    return response.questions.map(normalizeQuestion);
-  }
-
-  return getFallbackRound(filter, count);
+  return (response?.questions ?? []).map(normalizeQuestion);
 }
 
 export async function getAnswerTicket(questionId: string): Promise<string | null> {
@@ -263,86 +155,60 @@ export async function getAnswerTicket(questionId: string): Promise<string | null
 }
 
 export async function submitAnswer(
-  question: Question,
+  _question: Question,
   userAnswer: string,
-  timeTaken: number,
+  _timeTaken: number,
   streakBefore: number,
   ticket: string | null
 ): Promise<AnswerResult> {
-  const offlineAnswer = findFallbackAnswer(question.id);
-
-  if (offlineAnswer !== undefined) {
-    if (timeTaken >= ANSWER_TIMEOUT_MS) {
-      return {
-        isCorrect: false,
-        status: "incorrect",
-        explanation: "Vaqt tugadi",
-        correctAnswer: offlineAnswer,
-        pointsEarned: 0,
-        streak: 0
-      };
-    }
-
-    const status = checkAnswerLocally(offlineAnswer, userAnswer);
-    const score = calculateAnswerScore({ status, timeTakenMs: timeTaken, streakBefore });
-
+  if (!ticket) {
     return {
-      isCorrect: status === "correct",
-      status,
-      explanation: "",
-      correctAnswer: offlineAnswer,
-      pointsEarned: score.pointsEarned,
-      streak: score.streakAfter
+      isCorrect: false,
+      status: "incorrect",
+      explanation: "Javobni tekshirib bo'lmadi",
+      correctAnswer: "",
+      pointsEarned: 0,
+      streak: 0
     };
   }
 
-  if (ticket) {
-    const response = await request<SubmitAnswerApiResponse>("/answer", {
-      method: "POST",
-      body: { ticket, userAnswer, streak: streakBefore }
-    });
+  const response = await request<SubmitAnswerApiResponse>("/answer", {
+    method: "POST",
+    body: { ticket, userAnswer, streak: streakBefore }
+  });
 
-    if (response) {
-      return {
-        isCorrect: response.isCorrect,
-        status: response.status,
-        explanation: response.explanation,
-        correctAnswer: response.correctAnswer,
-        pointsEarned: response.pointsEarned,
-        streak: response.streak
-      };
-    }
+  if (!response) {
+    return {
+      isCorrect: false,
+      status: "incorrect",
+      explanation: "Javobni tekshirib bo'lmadi",
+      correctAnswer: "",
+      pointsEarned: 0,
+      streak: 0
+    };
   }
 
   return {
-    isCorrect: false,
-    status: "incorrect",
-    explanation: "Javobni tekshirib bo'lmadi",
-    correctAnswer: "",
-    pointsEarned: 0,
-    streak: 0
+    isCorrect: response.isCorrect,
+    status: response.status,
+    explanation: response.explanation,
+    correctAnswer: response.correctAnswer,
+    pointsEarned: response.pointsEarned,
+    streak: response.streak
   };
 }
 
-export async function revealAnswer(question: Question, ticket: string | null): Promise<RevealInfo> {
-  const offlineAnswer = findFallbackAnswer(question.id);
-
-  if (offlineAnswer !== undefined) {
-    return { correctAnswer: offlineAnswer, explanation: "" };
+export async function revealAnswer(_question: Question, ticket: string | null): Promise<RevealInfo> {
+  if (!ticket) {
+    return { correctAnswer: "", explanation: "" };
   }
 
-  if (ticket) {
-    const response = await request<RevealInfo>("/answer/reveal", {
-      method: "POST",
-      body: { ticket }
-    });
+  const response = await request<RevealInfo>("/answer/reveal", {
+    method: "POST",
+    body: { ticket }
+  });
 
-    if (response) {
-      return response;
-    }
-  }
-
-  return { correctAnswer: "", explanation: "" };
+  return response ?? { correctAnswer: "", explanation: "" };
 }
 
 export async function reportQuestion(questionId: string): Promise<boolean> {
@@ -396,47 +262,6 @@ export async function getGameStats(): Promise<GameStats> {
   const response = await request<{ stats: GameStats }>("/game-results/stats");
 
   return response?.stats ?? EMPTY_STATS;
-}
-
-export async function submitQuestion(input: NewQuestionInput): Promise<SubmitQuestionResult> {
-  const response = await request<{ submission: Submission }>("/submissions", {
-    method: "POST",
-    body: input
-  });
-
-  if (response?.submission) {
-    return { ok: true, message: "Savol adminga yuborildi. Tasdiqlangach bazaga qo'shiladi." };
-  }
-
-  return {
-    ok: false,
-    message: "Savol yuborilmadi. Internet aloqasini yoki maydonlarni tekshiring."
-  };
-}
-
-export async function getMySubmissions(): Promise<Submission[]> {
-  const response = await request<SubmissionsResponse>("/submissions/mine");
-
-  return response?.submissions ?? [];
-}
-
-export async function getPendingSubmissions(): Promise<Submission[]> {
-  const response = await request<SubmissionsResponse>("/submissions/pending");
-
-  return response?.submissions ?? [];
-}
-
-export async function reviewSubmission(
-  submissionId: string,
-  decision: "approve" | "reject",
-  edits?: SubmissionEdits
-): Promise<boolean> {
-  const response = await request<{ status: string }>(`/submissions/${submissionId}/review`, {
-    method: "POST",
-    body: { decision, ...edits }
-  });
-
-  return Boolean(response?.status);
 }
 
 export async function createTeam(name: string): Promise<ApiResult<{ team: Team; code: string }>> {
@@ -744,20 +569,6 @@ function getTelegramInitData() {
   return window.Telegram?.WebApp?.initData || "guest";
 }
 
-function getFallbackRound(filter: RoundFilter, count: number): Question[] {
-  const matching = FALLBACK_QUESTIONS.filter((question) => {
-    const categoryOk = !filter.category || question.category === filter.category;
-    const difficultyOk = !filter.difficulty || question.difficulty === filter.difficulty;
-
-    return categoryOk && difficultyOk;
-  });
-  const pool = matching.length > 0 ? matching : FALLBACK_QUESTIONS;
-
-  return shuffle(pool)
-    .slice(0, count)
-    .map(normalizeQuestion);
-}
-
 function normalizeQuestion(question: RemoteQuestion): Question {
   return {
     id: String(question.id),
@@ -765,50 +576,4 @@ function normalizeQuestion(question: RemoteQuestion): Question {
     category: question.category ?? null,
     difficulty: question.difficulty ?? null
   };
-}
-
-function findFallbackAnswer(id: string): string | undefined {
-  return FALLBACK_QUESTIONS.find((question) => question.id === id)?.correctAnswer;
-}
-
-function checkAnswerLocally(correctAnswer: string, userAnswer: string): AnswerStatus {
-  const clean = (value: string) =>
-    value
-      .toLowerCase()
-      .trim()
-      .replace(/[().,!?-]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const user = clean(userAnswer);
-  const correct = clean(correctAnswer);
-
-  if (!user) {
-    return "incorrect";
-  }
-
-  if (user === correct) {
-    return "correct";
-  }
-
-  if (correct.includes(user) && user.length >= 3) {
-    return "partial";
-  }
-
-  return "incorrect";
-}
-
-function shuffle<T>(items: T[]): T[] {
-  const result = [...items];
-
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
-  }
-
-  return result;
-}
-
-function isText(value: string | null): value is string {
-  return Boolean(value);
 }
