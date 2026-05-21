@@ -6,8 +6,10 @@
     "bot"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace frontend\" \"npm run dev:backend\"",
-    "dev:backend": "cd backend-django && python manage.py runserver 3000",
+    "dev": "concurrently -k -n \"backend,frontend,bot\" -c \"green,blue,magenta\" \"npm:dev:backend\" \"npm:dev:frontend\" \"npm:dev:bot\"",
+    "dev:backend": "node scripts/run-django.js",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:bot": "npm run dev --workspace bot",
     "dev:legacy-node": "cd backend && npm run dev",
     "build": "npm run build --workspace frontend",
     "bot": "npm run dev --workspace bot"
