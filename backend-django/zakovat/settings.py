@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "apps.auth_api",
     "apps.users",
     "apps.questions",
+    "apps.answers",
     "apps.game_results",
 ]
 

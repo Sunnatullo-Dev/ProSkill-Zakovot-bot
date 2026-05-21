@@ -34,7 +34,7 @@ python manage.py runserver 3001
 | Faza | Holat | Qaysi endpointlar |
 |-----:|------:|---|
 | 1 | ✅ tayyor | `/api/auth/login`, `/api/users/{top,leaderboard,referrals}`, `/api/questions/*`, `/api/game-results/*` |
-| 2 | kutilmoqda | `/api/answer/*` (ticket signing, Gemini grading) |
+| 2 | ✅ tayyor | `/api/answer/{ticket,,reveal}` (HMAC ticket, Gemini grading + lokal fallback) |
 | 3 | kutilmoqda | `/api/teams/*`, `/api/battles/*` (race-condition'lardan himoyalangan) |
 | 4 | kutilmoqda | `/api/admin/*`, frontend port switch, eski Node backend o'chirilishi |
 
@@ -46,6 +46,7 @@ apps/
   auth_api/     # /api/auth/login
   users/        # /api/users/*
   questions/    # /api/questions/*
+  answers/      # /api/answer/* (ticket, submit, reveal) + scoring + gemini
   game_results/ # /api/game-results/*
 zakovat/        # Django project (settings, urls, wsgi)
 ```
