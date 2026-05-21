@@ -35,19 +35,21 @@ python manage.py runserver 3001
 |-----:|------:|---|
 | 1 | ✅ tayyor | `/api/auth/login`, `/api/users/{top,leaderboard,referrals}`, `/api/questions/*`, `/api/game-results/*` |
 | 2 | ✅ tayyor | `/api/answer/{ticket,,reveal}` (HMAC ticket, Gemini grading + lokal fallback) |
-| 3 | kutilmoqda | `/api/teams/*`, `/api/battles/*` (race-condition'lardan himoyalangan) |
+| 3 | ✅ tayyor | `/api/teams/*`, `/api/battles/*` (atomik tranzitsiyalar + Telegram bot DM) |
 | 4 | kutilmoqda | `/api/admin/*`, frontend port switch, eski Node backend o'chirilishi |
 
 ## Arxitektura
 
 ```
 apps/
-  core/         # Supabase client, Telegram auth, middleware, exception handler
+  core/         # Supabase client, Telegram auth + bot notifier, middleware, exception handler
   auth_api/     # /api/auth/login
   users/        # /api/users/*
   questions/    # /api/questions/*
   answers/      # /api/answer/* (ticket, submit, reveal) + scoring + gemini
   game_results/ # /api/game-results/*
+  teams/        # /api/teams/* (create/join/my/leave)
+  battles/      # /api/battles/* + game engine with atomic transitions
 zakovat/        # Django project (settings, urls, wsgi)
 ```
 

@@ -18,6 +18,18 @@ def app_exception_handler(exc, context):
     if isinstance(exc, AppError):
         return Response({"message": exc.message}, status=exc.status_code)
 
+    # django-ratelimit `block=True` rejimda Ratelimited istisno qaytaradi.
+    try:
+        from django_ratelimit.exceptions import Ratelimited
+
+        if isinstance(exc, Ratelimited):
+            return Response(
+                {"message": "Juda ko'p chaqiruv yuborildi, biroz kuting"},
+                status=429,
+            )
+    except ImportError:
+        pass
+
     response = drf_default_handler(exc, context)
     if response is not None and isinstance(response.data, dict) and "detail" in response.data:
         response.data = {"message": response.data["detail"]}

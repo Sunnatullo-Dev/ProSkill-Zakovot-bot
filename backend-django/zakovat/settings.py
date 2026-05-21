@@ -60,6 +60,8 @@ INSTALLED_APPS = [
     "apps.questions",
     "apps.answers",
     "apps.game_results",
+    "apps.teams",
+    "apps.battles",
 ]
 
 MIDDLEWARE = [
@@ -116,3 +118,15 @@ TIME_ZONE = "UTC"
 
 # Servisi 3001 portda ishlasin (eski Node 3000 da ishlayapti).
 PORT = int(os.environ.get("PORT", "3001"))
+
+# Mini App URL — Telegram bot xabarlaridagi tugma uchun (ixtiyoriy).
+MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
+
+# Ratelimit cache — `django-ratelimit` shuni ishlatadi.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "zakovat-ratelimit",
+    }
+}
+
