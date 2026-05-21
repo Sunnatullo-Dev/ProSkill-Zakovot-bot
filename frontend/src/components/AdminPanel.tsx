@@ -1484,7 +1484,6 @@ function QuestionsSection() {
 
       {uploadStage === "reviewing" ? (
         <BulkReviewScreen
-          categories={categories}
           items={reviewItems}
           uploading={false}
           onAddAll={() => void uploadAll(reviewItems)}
@@ -1674,7 +1673,6 @@ function BulkUploadingOverlay({ count }: { count: number }) {
 
 function BulkReviewScreen({
   items,
-  categories,
   uploading,
   onUpdate,
   onRemove,
@@ -1682,7 +1680,6 @@ function BulkReviewScreen({
   onCancel
 }: {
   items: ParsedQuestion[];
-  categories: AdminCategoryStat[];
   uploading: boolean;
   onUpdate: (index: number, patch: Partial<ParsedQuestion>) => void;
   onRemove: (index: number) => void;
@@ -1705,20 +1702,41 @@ function BulkReviewScreen({
         style={{
           position: "sticky",
           top: 0,
-          background: "var(--bg)",
+          background: "linear-gradient(180deg, var(--bg) 92%, transparent)",
           borderBottom: "1px solid var(--border)",
-          padding: "16px 18px",
+          padding: "16px 18px 14px",
           maxWidth: "430px",
           margin: "0 auto",
           width: "100%",
           zIndex: 5,
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          gap: "10px"
+          gap: "10px",
+          backdropFilter: "blur(8px)"
         }}
       >
-        <div style={{ minWidth: 0 }}>
+        <button
+          aria-label="Bekor qilish"
+          style={{
+            width: "36px",
+            height: "36px",
+            padding: 0,
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            color: "var(--text)",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: "0 0 auto"
+          }}
+          type="button"
+          onClick={onCancel}
+        >
+          <ChevronLeftIcon size={16} />
+        </button>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <h2
             style={{
               fontSize: "16px",
@@ -1727,32 +1745,29 @@ function BulkReviewScreen({
               margin: 0
             }}
           >
-            Ko'rib chiqish
+            Savollarni ko'rib chiqish
           </h2>
-          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
-            {items.length} ta savol tayyor
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              marginTop: "3px"
+            }}
+          >
+            <span
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                background: "#22C55E"
+              }}
+            />
+            <span style={{ fontSize: "11.5px", color: "var(--muted)", fontWeight: 600 }}>
+              {items.length} ta savol tayyor
+            </span>
           </div>
         </div>
-        <button
-          style={{
-            padding: "9px 13px",
-            background: "var(--card)",
-            border: "1px solid var(--border)",
-            borderRadius: "10px",
-            fontSize: "12px",
-            fontWeight: 700,
-            color: "var(--text)",
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px"
-          }}
-          type="button"
-          onClick={onCancel}
-        >
-          <ChevronLeftIcon size={14} />
-          Bekor qilish
-        </button>
       </header>
 
       <div
@@ -1764,7 +1779,7 @@ function BulkReviewScreen({
           padding: "16px 18px 120px",
           display: "flex",
           flexDirection: "column",
-          gap: "12px"
+          gap: "10px"
         }}
       >
         {items.length === 0 ? (
@@ -1776,10 +1791,8 @@ function BulkReviewScreen({
           items.map((item, index) => (
             <ReviewItemCard
               key={index}
-              categories={categories}
               index={index}
               item={item}
-              total={items.length}
               onRemove={() => onRemove(index)}
               onUpdate={(patch) => onUpdate(index, patch)}
             />
@@ -1791,8 +1804,8 @@ function BulkReviewScreen({
         style={{
           position: "sticky",
           bottom: 0,
-          background: "linear-gradient(180deg, transparent, var(--bg) 30%)",
-          padding: "14px 18px 18px",
+          background: "linear-gradient(180deg, transparent, var(--bg) 35%)",
+          padding: "16px 18px 20px",
           maxWidth: "430px",
           margin: "0 auto",
           width: "100%"
@@ -1816,84 +1829,82 @@ function BulkReviewScreen({
 function ReviewItemCard({
   item,
   index,
-  total,
-  categories,
   onUpdate,
   onRemove
 }: {
   item: ParsedQuestion;
   index: number;
-  total: number;
-  categories: AdminCategoryStat[];
   onUpdate: (patch: Partial<ParsedQuestion>) => void;
   onRemove: () => void;
 }) {
+  const difficultyMeta = DIFFICULTIES.find((opt) => opt.value === item.difficulty);
+  const difficultyColor = difficultyMeta?.color ?? "#5A7A9F";
+
   return (
     <div
       style={{
         background: "var(--card)",
         border: "1px solid var(--border)",
         borderRadius: "14px",
-        padding: "14px",
+        padding: "12px 14px 14px",
         display: "flex",
         flexDirection: "column",
-        gap: "10px"
+        gap: "10px",
+        position: "relative",
+        overflow: "hidden"
       }}
     >
+      {/* Chap chetdagi rangli aksent — qiyinlik rangiga moslashadi */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: "3px",
+          background: `linear-gradient(180deg, ${difficultyColor}, ${difficultyColor}55)`,
+          borderRadius: "3px 0 0 3px"
+        }}
+      />
+
+      {/* Header: raqam + qiyinlik selektori + o'chirish */}
       <div
         style={{
           display: "flex",
+          alignItems: "center",
           justifyContent: "space-between",
-          alignItems: "center"
+          gap: "10px"
         }}
       >
-        <span style={chipBadge("#4DA6FF")}>
-          #{index + 1} / {total}
-        </span>
-        <button
-          style={iconButton("#EF4444")}
-          title="O'chirish"
-          type="button"
-          onClick={onRemove}
+        <span
+          style={{
+            fontSize: "12px",
+            fontWeight: 800,
+            color: "var(--muted)",
+            letterSpacing: "1px"
+          }}
         >
-          <TrashIcon size={14} />
-        </button>
-      </div>
-      <div>
-        <div style={labelStyle}>Savol matni</div>
-        <textarea
-          rows={2}
-          style={{ ...inputStyle, resize: "vertical" }}
-          value={item.text}
-          onChange={(event) => onUpdate({ text: event.target.value })}
-        />
-      </div>
-      <div>
-        <div style={labelStyle}>To'g'ri javob</div>
-        <input
-          style={inputStyle}
-          type="text"
-          value={item.correctAnswer}
-          onChange={(event) => onUpdate({ correctAnswer: event.target.value })}
-        />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-        <div>
-          <div style={labelStyle}>Kategoriya</div>
-          <input
-            list="admin-category-options"
-            style={inputStyle}
-            type="text"
-            value={item.category ?? ""}
-            onChange={(event) =>
-              onUpdate({ category: event.target.value ? event.target.value : null })
-            }
-          />
-        </div>
-        <div>
-          <div style={labelStyle}>Qiyinligi</div>
+          #{index + 1}
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <select
-            style={inputStyle}
+            style={{
+              padding: "6px 28px 6px 10px",
+              background: `${difficultyColor}15`,
+              border: `1px solid ${difficultyColor}40`,
+              borderRadius: "999px",
+              fontSize: "11px",
+              fontWeight: 700,
+              color: difficultyColor,
+              outline: "none",
+              cursor: "pointer",
+              appearance: "none",
+              backgroundImage: `linear-gradient(45deg, transparent 50%, ${difficultyColor} 50%), linear-gradient(135deg, ${difficultyColor} 50%, transparent 50%)`,
+              backgroundPosition: "calc(100% - 14px) center, calc(100% - 10px) center",
+              backgroundSize: "4px 4px, 4px 4px",
+              backgroundRepeat: "no-repeat",
+              fontFamily: "inherit"
+            }}
             value={item.difficulty ?? ""}
             onChange={(event) =>
               onUpdate({
@@ -1901,17 +1912,72 @@ function ReviewItemCard({
               })
             }
           >
-            <option value="">—</option>
+            <option value="">Qiyinligi —</option>
             {DIFFICULTIES.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </select>
+          <button
+            style={iconButton("#EF4444")}
+            title="O'chirish"
+            type="button"
+            onClick={onRemove}
+          >
+            <TrashIcon size={14} />
+          </button>
         </div>
       </div>
-      {/* Kategoriya datalist QuestionsSection ichida render qilingan, shu yerda ham foydalanamiz. */}
-      {categories.length === 0 ? null : null}
+
+      {/* Savol matni — asosiy ko'rinish */}
+      <textarea
+        placeholder="Savol matni..."
+        rows={3}
+        style={{
+          ...inputStyle,
+          resize: "vertical",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          minHeight: "60px"
+        }}
+        value={item.text}
+        onChange={(event) => onUpdate({ text: event.target.value })}
+      />
+
+      {/* Javob — yashil aksent bilan */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          background: "rgba(34,197,94,0.06)",
+          border: "1.5px solid rgba(34,197,94,0.25)",
+          borderRadius: "12px",
+          padding: "2px 12px"
+        }}
+      >
+        <span style={{ color: "var(--success)", flex: "0 0 auto" }}>
+          <CheckCircleIcon size={14} />
+        </span>
+        <input
+          placeholder="To'g'ri javob..."
+          style={{
+            flex: 1,
+            padding: "10px 0",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: "var(--text)",
+            fontSize: "14px",
+            fontWeight: 600,
+            fontFamily: "inherit"
+          }}
+          type="text"
+          value={item.correctAnswer}
+          onChange={(event) => onUpdate({ correctAnswer: event.target.value })}
+        />
+      </div>
     </div>
   );
 }

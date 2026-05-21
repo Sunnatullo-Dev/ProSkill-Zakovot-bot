@@ -51,22 +51,22 @@ export async function parseQuestionsFile(file: File): Promise<ParseResult> {
   const ext = extractExtension(file.name);
 
   if (ext === "json") {
-    const text = await file.text();
+    const text = await readFileAsText(file);
     return parseJson(text);
   }
 
   if (ext === "csv") {
-    const text = await file.text();
+    const text = await readFileAsText(file);
     return parseDelimited(text, ",", "CSV");
   }
 
   if (ext === "tsv") {
-    const text = await file.text();
+    const text = await readFileAsText(file);
     return parseDelimited(text, "\t", "TSV");
   }
 
   if (ext === "txt") {
-    const text = await file.text();
+    const text = await readFileAsText(file);
     return parseText(text);
   }
 
@@ -75,8 +75,70 @@ export async function parseQuestionsFile(file: File): Promise<ParseResult> {
   }
 
   // Tanilmagan kengaytma — matn deb urinib ko'ramiz.
-  const text = await file.text();
+  const text = await readFileAsText(file);
   return parseText(text);
+}
+
+// Faylni avval UTF-8 dek o'qiymiz; agar U+FFFD belgilar paydo bo'lsa
+// (fayl boshqa encoding'da, masalan Windows-1251), Windows-1251 va
+// koeyin ISO-8859-1 bilan urinamiz. Bu Cyrillic matnli .csv/.txt
+// fayllar uchun muhim.
+async function readFileAsText(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const candidates = ["utf-8", "windows-1251", "iso-8859-1"];
+
+  let bestText = "";
+  let bestScore = -Infinity;
+
+  for (const encoding of candidates) {
+    try {
+      const text = new TextDecoder(encoding).decode(buffer);
+      const score = scoreEncoding(text);
+
+      if (score > bestScore) {
+        bestText = text;
+        bestScore = score;
+      }
+    } catch {
+      // TextDecoder shu encoding'ni qo'llab-quvvatlamasa — keyingisi.
+    }
+  }
+
+  return bestText || new TextDecoder("utf-8").decode(buffer);
+}
+
+// Encoding'ni baholash: U+FFFD belgilar va boshqa diakritik chiqindilar
+// kam bo'lgan variant g'olib. Agar matn lotin alifbosi yoki kirill harflari
+// ko'p bo'lsa — yaxshi belgisi.
+function scoreEncoding(text: string): number {
+  if (!text) {
+    return -Infinity;
+  }
+
+  let replacements = 0;
+  let printable = 0;
+
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code === 0xfffd) {
+      replacements += 1;
+      continue;
+    }
+    // Lotin, kirill, raqam, tinish, bo'sh joy, yangi qator — "yaxshi".
+    if (
+      (code >= 0x20 && code <= 0x7e) || // ASCII printable
+      (code >= 0x400 && code <= 0x4ff) || // Cyrillic
+      (code >= 0xc0 && code <= 0x17f) || // Latin extended
+      code === 0x0a ||
+      code === 0x0d ||
+      code === 0x09
+    ) {
+      printable += 1;
+    }
+  }
+
+  // Replacement belgilari katta jarima.
+  return printable - replacements * 50;
 }
 
 function extractExtension(name: string): string {
