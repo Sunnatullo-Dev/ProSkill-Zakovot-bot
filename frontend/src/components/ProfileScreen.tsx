@@ -114,16 +114,25 @@ function StatTile({
   );
 }
 
+// Hero card ichidagi qalam tugmasi — yengil shisha effekt va aksent hover.
 const editButtonStyle: CSSProperties = {
-  background: "rgba(255,255,255,0.12)",
-  border: "1px solid rgba(255,255,255,0.18)",
+  width: "30px",
+  height: "30px",
+  padding: 0,
+  background:
+    "linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06))",
+  border: "1px solid rgba(255,255,255,0.28)",
   color: "white",
-  borderRadius: "8px",
-  padding: "4px 6px",
+  borderRadius: "10px",
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
-  flex: "0 0 auto"
+  justifyContent: "center",
+  flex: "0 0 auto",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 10px rgba(0,0,0,0.18)",
+  backdropFilter: "blur(6px)",
+  transition: "transform 0.12s ease, box-shadow 0.15s ease"
 };
 
 export default function ProfileScreen({
@@ -381,6 +390,7 @@ export default function ProfileScreen({
                   </span>
                   {canEdit ? (
                     <button
+                      aria-label="Ismni o'zgartirish"
                       style={editButtonStyle}
                       title="Ismni o'zgartirish"
                       type="button"
@@ -390,7 +400,7 @@ export default function ProfileScreen({
                         setNameError("");
                       }}
                     >
-                      <EditIcon size={13} />
+                      <EditIcon size={15} />
                     </button>
                   ) : null}
                 </div>

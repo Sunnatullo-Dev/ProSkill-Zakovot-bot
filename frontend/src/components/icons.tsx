@@ -162,8 +162,12 @@ export function SearchIcon({ size = 18 }: IconProps) {
 export function EditIcon({ size = 16 }: IconProps) {
   return (
     <svg {...strokeProps(size)}>
-      <path d="M14.4 4.5 4 14.9V20h5.1l10.4-10.4Z" />
-      <path d="m13.2 5.6 5.2 5.2" />
+      {/* Qalam tanasi — burchakda chizilgan to'g'ri to'rtburchak */}
+      <path d="m4 20 1.2-4.4L16.6 4.2a1.7 1.7 0 0 1 2.4 0l1 1a1.7 1.7 0 0 1 0 2.4L8.4 19l-4.4 1Z" />
+      {/* Eraser/metal ferrule — qalamning yuqori ulanish chizig'i */}
+      <path d="m14.4 6.4 3.5 3.5" />
+      {/* Tip alomati — qalamning uchki burchagi */}
+      <path d="m4.6 18 1.8 1.8" />
     </svg>
   );
 }
