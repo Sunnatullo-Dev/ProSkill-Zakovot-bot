@@ -11,6 +11,7 @@ export type DbUser = {
   first_name: string | null;
   last_name: string | null;
   username: string | null;
+  display_name: string | null;
   score: number;
 };
 
@@ -20,6 +21,7 @@ export type AppUser = {
   firstName: string | null;
   lastName: string | null;
   username: string | null;
+  displayName: string | null;
   score: number;
 };
 

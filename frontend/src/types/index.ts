@@ -48,6 +48,7 @@ export type AppUser = {
   firstName: string | null;
   lastName: string | null;
   username: string | null;
+  displayName: string | null;
   score: number;
 };
 

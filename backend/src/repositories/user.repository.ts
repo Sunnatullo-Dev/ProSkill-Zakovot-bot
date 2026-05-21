@@ -24,7 +24,7 @@ export const userRepository = {
           },
           { onConflict: "telegram_id" }
         )
-        .select("id, telegram_id, first_name, last_name, username, score")
+        .select("id, telegram_id, first_name, last_name, username, display_name, score")
         .single<DbUser>();
 
       if (error || !data) {
@@ -42,7 +42,7 @@ export const userRepository = {
     try {
       const { data, error } = await supabase
         .from("users")
-        .select("id, telegram_id, first_name, last_name, username, score")
+        .select("id, telegram_id, first_name, last_name, username, display_name, score")
         .eq("telegram_id", telegramId)
         .maybeSingle<DbUser>();
 
@@ -72,7 +72,7 @@ export const userRepository = {
           updated_at: new Date().toISOString()
         })
         .eq("telegram_id", telegramId)
-        .select("id, telegram_id, first_name, last_name, username, score")
+        .select("id, telegram_id, first_name, last_name, username, display_name, score")
         .single<DbUser>();
 
       if (error || !data) {
@@ -90,7 +90,7 @@ export const userRepository = {
     try {
       const { data, error } = await supabase
         .from("users")
-        .select("id, telegram_id, first_name, last_name, username, score")
+        .select("id, telegram_id, first_name, last_name, username, display_name, score")
         .order("score", { ascending: false })
         .order("created_at", { ascending: true })
         .limit(limit)
@@ -176,6 +176,61 @@ export const userRepository = {
     }
   },
 
+  async updateDisplayName(telegramId: number, displayName: string | null): Promise<AppUser> {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .update({ display_name: displayName })
+        .eq("telegram_id", telegramId)
+        .select("id, telegram_id, first_name, last_name, username, display_name, score")
+        .single<DbUser>();
+
+      if (error || !data) {
+        throw new AppError(500, "Ismni yangilab bo'lmadi");
+      }
+
+      return mapUser(data);
+    } catch (error) {
+      console.error("updateDisplayName failed", error);
+      throw error;
+    }
+  },
+
+  async getUnlockedAchievements(telegramId: number): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("unlocked_achievements")
+        .eq("telegram_id", telegramId)
+        .maybeSingle<{ unlocked_achievements: string[] | null }>();
+
+      if (error) {
+        throw new AppError(500, "Yutuqlarni olib bo'lmadi");
+      }
+
+      return data?.unlocked_achievements ?? [];
+    } catch (error) {
+      console.error("getUnlockedAchievements failed", error);
+      throw error;
+    }
+  },
+
+  async setUnlockedAchievements(telegramId: number, ids: string[]): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({ unlocked_achievements: ids })
+        .eq("telegram_id", telegramId);
+
+      if (error) {
+        throw new AppError(500, "Yutuqlarni saqlab bo'lmadi");
+      }
+    } catch (error) {
+      console.error("setUnlockedAchievements failed", error);
+      throw error;
+    }
+  },
+
   async countAll(): Promise<number> {
     const { count, error } = await supabase
       .from("users")
@@ -216,7 +271,7 @@ export const userRepository = {
 
       const { data: users, error: usersError } = await supabase
         .from("users")
-        .select("id, telegram_id, first_name, last_name, username, score")
+        .select("id, telegram_id, first_name, last_name, username, display_name, score")
         .in(
           "telegram_id",
           top.map(([id]) => id)
@@ -246,6 +301,7 @@ function mapUser(user: DbUser): AppUser {
     firstName: user.first_name,
     lastName: user.last_name,
     username: user.username,
+    displayName: user.display_name,
     score: user.score
   };
 }

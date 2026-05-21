@@ -8,7 +8,10 @@ from apps.core.exceptions import AppError
 from apps.core.supabase_client import table
 
 
-USER_COLUMNS = "id, telegram_id, first_name, last_name, username, score"
+USER_COLUMNS = (
+    "id, telegram_id, first_name, last_name, username, display_name, score, "
+    "unlocked_achievements"
+)
 REFERRAL_LEADERBOARD_LIMIT = 20
 
 
@@ -19,6 +22,7 @@ def _map_user(row: dict[str, Any]) -> dict[str, Any]:
         "firstName": row.get("first_name"),
         "lastName": row.get("last_name"),
         "username": row.get("username"),
+        "displayName": row.get("display_name"),
         "score": row.get("score", 0),
     }
 
@@ -60,6 +64,49 @@ def find_by_telegram_id(telegram_id: int) -> dict[str, Any] | None:
         raise AppError(500, "User lookup failed")
 
     return _map_user(result["data"]) if result["data"] else None
+
+
+def update_display_name(telegram_id: int, display_name: str | None) -> dict[str, Any]:
+    """Foydalanuvchining ko'rinish ismini yangilaydi. None = nullga tushiradi."""
+    result = (
+        table("users")
+        .update({"display_name": display_name})
+        .eq("telegram_id", telegram_id)
+        .select(USER_COLUMNS)
+        .single()
+        .execute()
+    )
+    if result["error"] or not result["data"]:
+        raise AppError(500, "Ismni yangilab bo'lmadi")
+    return _map_user(result["data"])
+
+
+def get_unlocked_achievements(telegram_id: int) -> list[str]:
+    result = (
+        table("users")
+        .select("unlocked_achievements")
+        .eq("telegram_id", telegram_id)
+        .maybe_single()
+        .execute()
+    )
+    if result["error"]:
+        raise AppError(500, "Yutuqlarni olib bo'lmadi")
+    data = result["data"] or {}
+    raw = data.get("unlocked_achievements")
+    if isinstance(raw, list):
+        return [str(item) for item in raw]
+    return []
+
+
+def set_unlocked_achievements(telegram_id: int, ids: list[str]) -> None:
+    result = (
+        table("users")
+        .update({"unlocked_achievements": ids})
+        .eq("telegram_id", telegram_id)
+        .execute()
+    )
+    if result["error"]:
+        raise AppError(500, "Yutuqlarni saqlab bo'lmadi")
 
 
 def add_score(telegram_id: int, amount: int) -> dict[str, Any]:

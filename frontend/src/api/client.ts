@@ -33,6 +33,7 @@ const DEFAULT_USER: AppUser = {
   firstName: "Zakovatchi",
   lastName: null,
   username: "guest",
+  displayName: null,
   score: 0
 };
 
@@ -173,6 +174,36 @@ export async function login(initData: string, referrerId?: number): Promise<Auth
   } catch (error) {
     console.error("Login fallback enabled", error);
     return FALLBACK_AUTH;
+  }
+}
+
+export type AchievementUnlock = { id: string; label: string; bonus: number };
+export type CheckAchievementsResponse = {
+  newlyUnlocked: AchievementUnlock[];
+  totalBonus: number;
+  user: AppUser;
+};
+
+export async function updateMyDisplayName(
+  displayName: string | null
+): Promise<ApiResult<{ user: AppUser }>> {
+  return requestResult<{ user: AppUser }>("/users/me", {
+    method: "PATCH",
+    body: { displayName }
+  });
+}
+
+export async function checkAchievements(): Promise<CheckAchievementsResponse | null> {
+  try {
+    const response = await request<CheckAchievementsResponse>("/users/me/check-achievements", {
+      method: "POST",
+      body: {}
+    });
+
+    return response ?? null;
+  } catch (error) {
+    console.error("checkAchievements failed", error);
+    return null;
   }
 }
 

@@ -50,6 +50,7 @@ const DEFAULT_APP_USER: AppUser = {
   firstName: "Zakovatchi",
   lastName: null,
   username: "guest",
+  displayName: null,
   score: 0
 };
 
@@ -383,7 +384,13 @@ export default function App() {
     setScreen("team");
   }
 
-  const playerName = telegramUser?.first_name || user?.firstName || user?.username || "Zakovatchi";
+  // displayName foydalanuvchi tomonidan profilda o'rnatilgan — eng yuqori ustuvorlik.
+  const playerName =
+    user?.displayName ||
+    telegramUser?.first_name ||
+    user?.firstName ||
+    user?.username ||
+    "Zakovatchi";
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
   const navActive: NavTab =
@@ -493,6 +500,13 @@ export default function App() {
             record={recordScore}
             score={score}
             user={user}
+            onScoreBonus={(amount) => {
+              setScore((value) => value + amount);
+            }}
+            onUserUpdate={(updated) => {
+              setUser(updated);
+              setScore(updated.score);
+            }}
           />
         ) : null}
 
