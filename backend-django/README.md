@@ -25,8 +25,20 @@ pip install -r requirements.txt
 copy .env.example .env       # Windows
 # cp .env.example .env       # macOS/Linux
 
-# 4. Server (port 3001 — eski Node 3000 da turaveradi)
-python manage.py runserver 3001
+# 4. Server (port 3000 — Node backendning o'rnida)
+python manage.py runserver 3000
+```
+
+## Root'dan ishga tushirish
+
+`npm run dev` endi avtomatik Django + Vite ni birga ishga tushiradi.
+Avval Python venv tayyor bo'lishi va `pip install -r requirements.txt` bajarilgan bo'lishi shart.
+
+```bash
+# Root'da:
+npm run dev                  # Django (:3000) + Vite (:5173) parallel ishga tushadi
+npm run dev:backend          # faqat Django
+npm run dev:legacy-node      # agar kerak bo'lsa eski Node backend (backend/) qayta ishga tushadi
 ```
 
 ## Migratsiya rejasi
@@ -36,7 +48,7 @@ python manage.py runserver 3001
 | 1 | ✅ tayyor | `/api/auth/login`, `/api/users/{top,leaderboard,referrals}`, `/api/questions/*`, `/api/game-results/*` |
 | 2 | ✅ tayyor | `/api/answer/{ticket,,reveal}` (HMAC ticket, Gemini grading + lokal fallback) |
 | 3 | ✅ tayyor | `/api/teams/*`, `/api/battles/*` (atomik tranzitsiyalar + Telegram bot DM) |
-| 4 | kutilmoqda | `/api/admin/*`, frontend port switch, eski Node backend o'chirilishi |
+| 4 | ✅ tayyor | `/api/admin/*`, port `3000` ga ko'chirildi, `npm run dev` Django'ni ishga tushiradi |
 
 ## Arxitektura
 
@@ -50,6 +62,7 @@ apps/
   game_results/ # /api/game-results/*
   teams/        # /api/teams/* (create/join/my/leave)
   battles/      # /api/battles/* + game engine with atomic transitions
+  admin_api/    # /api/admin/* (stats, questions CRUD, bulk, categories rename)
 zakovat/        # Django project (settings, urls, wsgi)
 ```
 

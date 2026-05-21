@@ -143,3 +143,139 @@ def count_all() -> int:
     if result["error"]:
         raise AppError(500, "Questions count failed")
     return result["count"] or 0
+
+
+# ---------------- Admin uchun kengaytma ----------------
+
+
+def create_question(text: str, correct_answer: str, category: str | None, difficulty: str | None) -> None:
+    result = (
+        table("questions")
+        .insert(
+            {
+                "text": text,
+                "correct_answer": correct_answer,
+                "category": category,
+                "difficulty": difficulty,
+            }
+        )
+        .execute()
+    )
+    if result["error"]:
+        raise AppError(500, "Question create failed")
+
+
+def bulk_create_questions(items: list[dict[str, Any]]) -> int:
+    if not items:
+        return 0
+
+    rows = [
+        {
+            "text": item["text"],
+            "correct_answer": item["correctAnswer"],
+            "category": item.get("category"),
+            "difficulty": item.get("difficulty"),
+        }
+        for item in items
+    ]
+
+    result = table("questions").insert(rows).select("id").execute()
+    if result["error"]:
+        raise AppError(500, "Bulk question insert failed")
+    return len(result["data"] or [])
+
+
+def update_question(
+    question_id: str,
+    *,
+    text: str | None = None,
+    correct_answer: str | None = None,
+    category: str | None = None,
+    difficulty: str | None = None,
+    unset_category: bool = False,
+    unset_difficulty: bool = False,
+) -> None:
+    update: dict[str, Any] = {}
+    if text is not None:
+        update["text"] = text
+    if correct_answer is not None:
+        update["correct_answer"] = correct_answer
+    if unset_category:
+        update["category"] = None
+    elif category is not None:
+        update["category"] = category
+    if unset_difficulty:
+        update["difficulty"] = None
+    elif difficulty is not None:
+        update["difficulty"] = difficulty
+
+    if not update:
+        return
+
+    result = table("questions").update(update).eq("id", question_id).execute()
+    if result["error"]:
+        raise AppError(500, "Question update failed")
+
+
+def list_all_questions(
+    *,
+    search: str | None,
+    category: str | None,
+    difficulty: str | None,
+    limit: int,
+    offset: int,
+) -> dict[str, Any]:
+    query = table("questions").select(QUESTION_COLUMNS_FULL).with_count("exact")
+
+    if category:
+        query = query.eq("category", category)
+    if difficulty:
+        query = query.eq("difficulty", difficulty)
+    if search:
+        escaped = search.replace("%", r"\%").replace("_", r"\_")
+        query = query.ilike("text", f"%{escaped}%")
+
+    result = (
+        query.order("text", ascending=True)
+        .range(offset, offset + limit - 1)
+        .execute()
+    )
+
+    if result["error"]:
+        raise AppError(500, "Questions list failed")
+
+    return {
+        "items": [_map_question_full(row) for row in result["data"] or []],
+        "total": result["count"] or 0,
+    }
+
+
+def get_category_stats() -> list[dict[str, Any]]:
+    result = table("questions").select("category").execute()
+    if result["error"]:
+        raise AppError(500, "Category stats failed")
+
+    counts: dict[str, int] = {}
+    for row in result["data"] or []:
+        cat = row.get("category")
+        if cat:
+            counts[cat] = counts.get(cat, 0) + 1
+
+    return sorted(
+        ({"category": name, "count": count} for name, count in counts.items()),
+        key=lambda item: item["count"],
+        reverse=True,
+    )
+
+
+def rename_category(old_name: str, new_name: str) -> int:
+    result = (
+        table("questions")
+        .update({"category": new_name})
+        .eq("category", old_name)
+        .select("id")
+        .execute()
+    )
+    if result["error"]:
+        raise AppError(500, "Category rename failed")
+    return len(result["data"] or [])

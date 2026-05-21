@@ -3,12 +3,13 @@
   "private": true,
   "workspaces": [
     "frontend",
-    "backend",
     "bot"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace frontend\" \"npm run dev --workspace backend\"",
-    "build": "npm run build --workspace frontend && npm run build --workspace backend",
+    "dev": "concurrently \"npm run dev --workspace frontend\" \"npm run dev:backend\"",
+    "dev:backend": "cd backend-django && python manage.py runserver 3000",
+    "dev:legacy-node": "cd backend && npm run dev",
+    "build": "npm run build --workspace frontend",
     "bot": "npm run dev --workspace bot"
   },
   "devDependencies": {

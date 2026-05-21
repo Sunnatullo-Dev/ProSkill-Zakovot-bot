@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "apps.game_results",
     "apps.teams",
     "apps.battles",
+    "apps.admin_api",
 ]
 
 MIDDLEWARE = [
@@ -116,8 +117,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 TIME_ZONE = "UTC"
 
-# Servisi 3001 portda ishlasin (eski Node 3000 da ishlayapti).
-PORT = int(os.environ.get("PORT", "3001"))
+# Default port 3000 — eski Node backend egallagan port'ni almashtiramiz.
+# Frontend `VITE_API_URL` o'zgartirilishi shart emas.
+PORT = int(os.environ.get("PORT", "3000"))
 
 # Mini App URL — Telegram bot xabarlaridagi tugma uchun (ixtiyoriy).
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
