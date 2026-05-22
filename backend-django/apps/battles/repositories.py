@@ -1,161 +1,101 @@
-"""Battle jadval repositoriy qatlami — eski `battle.repository.ts` ning Python varianti.
-
-Eng muhimi: `try_*` atomik helperlari WHERE shartiga mos qatorni yangilaydi va
-yangilangan qatorlar soni > 0 bo'lsa "g'olib" hisoblanadi. Bu polling vaqtidagi
-race condition'lardan saqlaydi (advance, finalize, accept double-tap, va h.k.).
-"""
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
+from django.db import IntegrityError
+from django.utils import timezone
+
 from apps.core.exceptions import AppError
-from apps.core.supabase_client import table
+
+from .models import BattleAnswer, BattleChallenge, BattleRound
 
 
-CHALLENGE_COLUMNS = (
-    "id, challenger_team_id, opponent_team_id, status, current_round_number, "
-    "created_at, started_at, finished_at"
-)
-ROUND_COLUMNS = "id, battle_id, question_id, round_number, time_limit_seconds, started_at, ended_at"
-ANSWER_COLUMNS = (
-    "id, battle_id, round_id, telegram_id, team_id, answer, is_correct, "
-    "answered_at, response_time_ms"
-)
-
-
-def _now_iso() -> str:
-    return datetime.now(tz=timezone.utc).isoformat()
-
-
-def _map_challenge(row: dict[str, Any]) -> dict[str, Any]:
+def _map_challenge(bc: BattleChallenge) -> dict[str, Any]:
     return {
-        "id": row.get("id"),
-        "challengerTeamId": row.get("challenger_team_id"),
-        "opponentTeamId": row.get("opponent_team_id"),
-        "status": row.get("status"),
-        "currentRoundNumber": row.get("current_round_number"),
-        "createdAt": row.get("created_at"),
-        "startedAt": row.get("started_at"),
-        "finishedAt": row.get("finished_at"),
+        "id": str(bc.id),
+        "challengerTeamId": str(bc.challenger_team_id),
+        "opponentTeamId": str(bc.opponent_team_id),
+        "status": bc.status,
+        "currentRoundNumber": bc.current_round_number,
+        "createdAt": bc.created_at.isoformat() if bc.created_at else None,
+        "startedAt": bc.started_at.isoformat() if bc.started_at else None,
+        "finishedAt": bc.finished_at.isoformat() if bc.finished_at else None,
     }
 
 
-def _map_round(row: dict[str, Any]) -> dict[str, Any]:
+def _map_round(br: BattleRound) -> dict[str, Any]:
     return {
-        "id": row.get("id"),
-        "battleId": row.get("battle_id"),
-        "questionId": row.get("question_id"),
-        "roundNumber": row.get("round_number"),
-        "timeLimitSeconds": row.get("time_limit_seconds"),
-        "startedAt": row.get("started_at"),
-        "endedAt": row.get("ended_at"),
+        "id": str(br.id),
+        "battleId": str(br.battle_id),
+        "questionId": str(br.question_id),
+        "roundNumber": br.round_number,
+        "timeLimitSeconds": br.time_limit_seconds,
+        "startedAt": br.started_at.isoformat() if br.started_at else None,
+        "endedAt": br.ended_at.isoformat() if br.ended_at else None,
     }
 
 
 # ---------------- Challenges ----------------
 
 
-def create_challenge(challenger_team_id: str, opponent_team_id: str) -> dict[str, Any]:
-    result = (
-        table("battle_challenges")
-        .insert(
-            {
-                "challenger_team_id": challenger_team_id,
-                "opponent_team_id": opponent_team_id,
-                "status": "pending",
-            }
-        )
-        .select(CHALLENGE_COLUMNS)
-        .single()
-        .execute()
+def create_challenge(
+    challenger_team_id: str, opponent_team_id: str
+) -> dict[str, Any]:
+    bc = BattleChallenge.objects.create(
+        challenger_team_id=challenger_team_id,
+        opponent_team_id=opponent_team_id,
+        status="pending",
     )
-    if result["error"] or not result["data"]:
-        raise AppError(500, "Bellashuv yaratib bo'lmadi")
-    return _map_challenge(result["data"])
+    return _map_challenge(bc)
 
 
 def get_challenge_by_id(battle_id: str) -> dict[str, Any] | None:
-    result = (
-        table("battle_challenges")
-        .select(CHALLENGE_COLUMNS)
-        .eq("id", battle_id)
-        .maybe_single()
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Bellashuvni olib bo'lmadi")
-    return _map_challenge(result["data"]) if result["data"] else None
+    bc = BattleChallenge.objects.filter(id=battle_id).first()
+    return _map_challenge(bc) if bc else None
 
 
 def get_active_challenges_for_team(team_id: str) -> list[dict[str, Any]]:
-    result = (
-        table("battle_challenges")
-        .select(CHALLENGE_COLUMNS)
-        .or_(f"challenger_team_id.eq.{team_id},opponent_team_id.eq.{team_id}")
-        .in_("status", ["pending", "accepted", "in_progress"])
-        .order("created_at", ascending=False)
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Bellashuvlarni olib bo'lmadi")
-    return [_map_challenge(row) for row in result["data"] or []]
+    from django.db.models import Q
+
+    bcs = BattleChallenge.objects.filter(
+        Q(challenger_team_id=team_id) | Q(opponent_team_id=team_id),
+        status__in=["pending", "accepted", "in_progress"],
+    ).order_by("-created_at")
+    return [_map_challenge(bc) for bc in bcs]
 
 
 # ---------------- Rounds ----------------
 
 
 def create_rounds(battle_id: str, items: list[dict[str, Any]]) -> None:
-    rows = [
-        {
-            "battle_id": battle_id,
-            "question_id": item["questionId"],
-            "round_number": item["roundNumber"],
-            "time_limit_seconds": item["timeLimitSeconds"],
-        }
-        for item in items
-    ]
-    result = table("battle_rounds").insert(rows).execute()
-    if result["error"]:
-        raise AppError(500, "Round'larni yaratib bo'lmadi")
+    bc = BattleChallenge.objects.get(id=battle_id)
+    BattleRound.objects.bulk_create(
+        [
+            BattleRound(
+                battle=bc,
+                question_id=item["questionId"],
+                round_number=item["roundNumber"],
+                time_limit_seconds=item["timeLimitSeconds"],
+            )
+            for item in items
+        ]
+    )
 
 
 def get_rounds(battle_id: str) -> list[dict[str, Any]]:
-    result = (
-        table("battle_rounds")
-        .select(ROUND_COLUMNS)
-        .eq("battle_id", battle_id)
-        .order("round_number", ascending=True)
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Round'larni olib bo'lmadi")
-    return [_map_round(row) for row in result["data"] or []]
+    rounds = BattleRound.objects.filter(battle_id=battle_id).order_by("round_number")
+    return [_map_round(r) for r in rounds]
 
 
 def get_round_by_number(battle_id: str, round_number: int) -> dict[str, Any] | None:
-    result = (
-        table("battle_rounds")
-        .select(ROUND_COLUMNS)
-        .eq("battle_id", battle_id)
-        .eq("round_number", round_number)
-        .maybe_single()
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Round'ni olib bo'lmadi")
-    return _map_round(result["data"]) if result["data"] else None
+    r = BattleRound.objects.filter(
+        battle_id=battle_id, round_number=round_number
+    ).first()
+    return _map_round(r) if r else None
 
 
 def mark_round_started(round_id: str) -> None:
-    result = (
-        table("battle_rounds")
-        .update({"started_at": _now_iso()})
-        .eq("id", round_id)
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Round'ni boshlab bo'lmadi")
+    BattleRound.objects.filter(id=round_id).update(started_at=timezone.now())
 
 
 # ---------------- Answers ----------------
@@ -171,133 +111,98 @@ def record_answer(
     is_correct: bool,
     response_time_ms: int,
 ) -> dict[str, Any]:
-    """Javobni yozadi. UNIQUE (round_id, telegram_id) buzilsa duplicate qaytaradi."""
-    result = (
-        table("battle_answers")
-        .insert(
-            {
-                "battle_id": battle_id,
-                "round_id": round_id,
-                "telegram_id": telegram_id,
-                "team_id": team_id,
-                "answer": answer,
-                "is_correct": is_correct,
-                "response_time_ms": response_time_ms,
-            }
+    try:
+        BattleAnswer.objects.create(
+            battle_id=battle_id,
+            round_id=round_id,
+            telegram_id=telegram_id,
+            team_id=team_id,
+            answer=answer,
+            is_correct=is_correct,
+            response_time_ms=response_time_ms,
         )
-        .execute()
-    )
-    if result["error"]:
-        error_payload = result["error"]
-        code = None
-        if isinstance(error_payload, dict):
-            code = str(error_payload.get("code"))
-        if code == "23505":
-            return {"duplicate": True}
-        raise AppError(500, "Javobni yozib bo'lmadi")
-    return {"duplicate": False}
+        return {"duplicate": False}
+    except IntegrityError:
+        return {"duplicate": True}
 
 
 def get_answers_for_round(round_id: str) -> list[dict[str, Any]]:
-    result = (
-        table("battle_answers")
-        .select(ANSWER_COLUMNS)
-        .eq("round_id", round_id)
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Javoblarni olib bo'lmadi")
-    return result["data"] or []
+    answers = BattleAnswer.objects.filter(round_id=round_id)
+    return [
+        {
+            "id": str(a.id),
+            "battle_id": str(a.battle_id),
+            "round_id": str(a.round_id),
+            "telegram_id": a.telegram_id,
+            "team_id": str(a.team_id),
+            "answer": a.answer,
+            "is_correct": a.is_correct,
+            "answered_at": a.answered_at.isoformat() if a.answered_at else None,
+            "response_time_ms": a.response_time_ms,
+        }
+        for a in answers
+    ]
 
 
 def get_answers_for_battle(battle_id: str) -> list[dict[str, Any]]:
-    result = (
-        table("battle_answers")
-        .select(ANSWER_COLUMNS)
-        .eq("battle_id", battle_id)
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Bellashuv javoblarini olib bo'lmadi")
-    return result["data"] or []
+    answers = BattleAnswer.objects.filter(battle_id=battle_id)
+    return [
+        {
+            "id": str(a.id),
+            "battle_id": str(a.battle_id),
+            "round_id": str(a.round_id),
+            "telegram_id": a.telegram_id,
+            "team_id": str(a.team_id),
+            "answer": a.answer,
+            "is_correct": a.is_correct,
+            "answered_at": a.answered_at.isoformat() if a.answered_at else None,
+            "response_time_ms": a.response_time_ms,
+        }
+        for a in answers
+    ]
 
 
 # ---------------- Atomik gate'lar ----------------
 
 
 def try_start_game(battle_id: str) -> bool:
-    """status='pending' bo'lsa 'in_progress' ga olamiz. False bo'lsa raqib oldinroq qabul qilgan."""
-    result = (
-        table("battle_challenges")
-        .update(
-            {
-                "status": "in_progress",
-                "started_at": _now_iso(),
-                "current_round_number": 1,
-            }
-        )
-        .eq("id", battle_id)
-        .eq("status", "pending")
-        .select("id")
-        .execute()
+    updated = BattleChallenge.objects.filter(
+        id=battle_id, status="pending"
+    ).update(
+        status="in_progress",
+        started_at=timezone.now(),
+        current_round_number=1,
     )
-    if result["error"]:
-        raise AppError(500, "Bellashuvni boshlab bo'lmadi")
-    return len(result["data"] or []) > 0
+    return updated > 0
 
 
-def try_advance_current_round(battle_id: str, from_number: int, to_number: int) -> bool:
-    result = (
-        table("battle_challenges")
-        .update({"current_round_number": to_number})
-        .eq("id", battle_id)
-        .eq("status", "in_progress")
-        .eq("current_round_number", from_number)
-        .select("id")
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Roundni o'tkazib bo'lmadi")
-    return len(result["data"] or []) > 0
+def try_advance_current_round(
+    battle_id: str, from_number: int, to_number: int
+) -> bool:
+    updated = BattleChallenge.objects.filter(
+        id=battle_id,
+        status="in_progress",
+        current_round_number=from_number,
+    ).update(current_round_number=to_number)
+    return updated > 0
 
 
 def try_finalize(battle_id: str) -> bool:
-    result = (
-        table("battle_challenges")
-        .update({"status": "finished", "finished_at": _now_iso()})
-        .eq("id", battle_id)
-        .eq("status", "in_progress")
-        .select("id")
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Bellashuvni yakunlab bo'lmadi")
-    return len(result["data"] or []) > 0
+    updated = BattleChallenge.objects.filter(
+        id=battle_id, status="in_progress"
+    ).update(status="finished", finished_at=timezone.now())
+    return updated > 0
 
 
 def try_end_round(round_id: str) -> bool:
-    result = (
-        table("battle_rounds")
-        .update({"ended_at": _now_iso()})
-        .eq("id", round_id)
-        .is_("ended_at", "null")
-        .select("id")
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Round'ni yakunlab bo'lmadi")
-    return len(result["data"] or []) > 0
+    updated = BattleRound.objects.filter(
+        id=round_id, ended_at__isnull=True
+    ).update(ended_at=timezone.now())
+    return updated > 0
 
 
 def try_cancel_or_decline(battle_id: str) -> bool:
-    result = (
-        table("battle_challenges")
-        .update({"status": "declined"})
-        .eq("id", battle_id)
-        .eq("status", "pending")
-        .select("id")
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Bellashuvni bekor qilib bo'lmadi")
-    return len(result["data"] or []) > 0
+    updated = BattleChallenge.objects.filter(
+        id=battle_id, status="pending"
+    ).update(status="declined")
+    return updated > 0

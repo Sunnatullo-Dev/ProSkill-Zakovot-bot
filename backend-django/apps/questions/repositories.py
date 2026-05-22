@@ -1,188 +1,123 @@
-"""Questions jadval repositoriy qatlami."""
 from __future__ import annotations
 
 import random
 from typing import Any
 
 from apps.core.exceptions import AppError
-from apps.core.supabase_client import table
+
+from .models import Question, QuestionReport
 
 
-QUESTION_COLUMNS_PUBLIC = "id, text, category, difficulty"
-QUESTION_COLUMNS_FULL = "id, text, correct_answer, category, difficulty"
-
-
-def _map_question_public(row: dict[str, Any]) -> dict[str, Any]:
+def _map_question_public(q: Question) -> dict[str, Any]:
     return {
-        "id": row.get("id"),
-        "text": row.get("text"),
-        "category": row.get("category"),
-        "difficulty": row.get("difficulty"),
+        "id": str(q.id),
+        "text": q.text,
+        "category": q.category,
+        "difficulty": q.difficulty,
     }
 
 
-def _map_question_full(row: dict[str, Any]) -> dict[str, Any]:
-    base = _map_question_public(row)
-    base["correctAnswer"] = row.get("correct_answer")
+def _map_question_full(q: Question) -> dict[str, Any]:
+    base = _map_question_public(q)
+    base["correctAnswer"] = q.correct_answer
     return base
 
 
-def get_round_questions(*, count: int, category: str | None, difficulty: str | None) -> list[dict[str, Any]]:
-    query = table("questions").select("id")
+def get_round_questions(
+    *, count: int, category: str | None, difficulty: str | None
+) -> list[dict[str, Any]]:
+    qs = Question.objects.all()
     if category:
-        query = query.eq("category", category)
+        qs = qs.filter(category=category)
     if difficulty:
-        query = query.eq("difficulty", difficulty)
+        qs = qs.filter(difficulty=difficulty)
 
-    id_result = query.execute()
-    if id_result["error"]:
-        raise AppError(500, "Question ids lookup failed")
-
-    ids = [row["id"] for row in id_result["data"] or []]
+    ids = list(qs.values_list("id", flat=True))
     random.shuffle(ids)
     ids = ids[:count]
-
     if not ids:
         return []
 
-    fetch_result = (
-        table("questions")
-        .select(QUESTION_COLUMNS_PUBLIC)
-        .in_("id", ids)
-        .execute()
-    )
-
-    if fetch_result["error"]:
-        raise AppError(500, "Round questions lookup failed")
-
-    rows = [_map_question_public(row) for row in fetch_result["data"] or []]
-    random.shuffle(rows)
-    return rows
+    questions = list(Question.objects.filter(id__in=ids))
+    random.shuffle(questions)
+    return [_map_question_public(q) for q in questions]
 
 
 def get_categories() -> list[str]:
-    result = table("questions").select("category").execute()
-    if result["error"]:
-        raise AppError(500, "Categories lookup failed")
-
-    categories: set[str] = set()
-    for row in result["data"] or []:
-        cat = row.get("category")
-        if cat:
-            categories.add(cat)
-    return sorted(categories, key=lambda value: value.lower())
+    cats = (
+        Question.objects.exclude(category__isnull=True)
+        .exclude(category="")
+        .values_list("category", flat=True)
+        .distinct()
+    )
+    return sorted(set(cats), key=lambda v: v.lower())
 
 
 def get_question_by_id(question_id: str) -> dict[str, Any] | None:
-    result = (
-        table("questions")
-        .select(QUESTION_COLUMNS_FULL)
-        .eq("id", question_id)
-        .maybe_single()
-        .execute()
-    )
-
-    if result["error"]:
-        raise AppError(500, "Question lookup failed")
-
-    return _map_question_full(result["data"]) if result["data"] else None
+    q = Question.objects.filter(id=question_id).first()
+    return _map_question_full(q) if q else None
 
 
 def report_question(question_id: str, reported_by: int) -> None:
-    result = (
-        table("question_reports")
-        .insert({"question_id": question_id, "reported_by": reported_by})
-        .execute()
-    )
-
-    if result["error"]:
-        raise AppError(500, "Question report failed")
+    q = Question.objects.filter(id=question_id).first()
+    if not q:
+        raise AppError(404, "Savol topilmadi")
+    QuestionReport.objects.create(question=q, reported_by=reported_by)
 
 
 def get_reported_questions() -> list[dict[str, Any]]:
-    reports_result = table("question_reports").select("question_id").execute()
-    if reports_result["error"]:
-        raise AppError(500, "Reports lookup failed")
+    from django.db.models import Count
 
-    counts: dict[str, int] = {}
-    for row in reports_result["data"] or []:
-        qid = row.get("question_id")
-        if qid:
-            counts[qid] = counts.get(qid, 0) + 1
-
-    if not counts:
-        return []
-
-    questions_result = (
-        table("questions")
-        .select(QUESTION_COLUMNS_FULL)
-        .in_("id", list(counts.keys()))
-        .execute()
+    reports = (
+        QuestionReport.objects.values("question_id")
+        .annotate(report_count=Count("id"))
     )
-
-    if questions_result["error"]:
-        raise AppError(500, "Reported questions lookup failed")
-
+    if not reports:
+        return []
+    counts = {str(r["question_id"]): r["report_count"] for r in reports}
+    questions = Question.objects.filter(id__in=counts.keys())
     output = []
-    for row in questions_result["data"] or []:
-        mapped = _map_question_full(row)
-        mapped["reportCount"] = counts.get(row.get("id"), 0)
+    for q in questions:
+        mapped = _map_question_full(q)
+        mapped["reportCount"] = counts.get(str(q.id), 0)
         output.append(mapped)
     return output
 
 
 def delete_question(question_id: str) -> None:
-    table("question_reports").delete().eq("question_id", question_id).execute()
-    result = table("questions").delete().eq("id", question_id).execute()
-    if result["error"]:
-        raise AppError(500, "Question delete failed")
+    Question.objects.filter(id=question_id).delete()
 
 
 def count_all() -> int:
-    result = table("questions").select("id").with_count("exact").execute()
-    if result["error"]:
-        raise AppError(500, "Questions count failed")
-    return result["count"] or 0
+    return Question.objects.count()
 
 
-# ---------------- Admin uchun kengaytma ----------------
-
-
-def create_question(text: str, correct_answer: str, category: str | None, difficulty: str | None) -> None:
-    result = (
-        table("questions")
-        .insert(
-            {
-                "text": text,
-                "correct_answer": correct_answer,
-                "category": category,
-                "difficulty": difficulty,
-            }
-        )
-        .execute()
+def create_question(
+    text: str,
+    correct_answer: str,
+    category: str | None,
+    difficulty: str | None,
+) -> None:
+    Question.objects.create(
+        text=text,
+        correct_answer=correct_answer,
+        category=category,
+        difficulty=difficulty,
     )
-    if result["error"]:
-        raise AppError(500, "Question create failed")
 
 
 def bulk_create_questions(items: list[dict[str, Any]]) -> int:
-    if not items:
-        return 0
-
-    rows = [
-        {
-            "text": item["text"],
-            "correct_answer": item["correctAnswer"],
-            "category": item.get("category"),
-            "difficulty": item.get("difficulty"),
-        }
+    objs = [
+        Question(
+            text=item["text"],
+            correct_answer=item["correctAnswer"],
+            category=item.get("category"),
+            difficulty=item.get("difficulty"),
+        )
         for item in items
     ]
-
-    result = table("questions").insert(rows).select("id").execute()
-    if result["error"]:
-        raise AppError(500, "Bulk question insert failed")
-    return len(result["data"] or [])
+    created = Question.objects.bulk_create(objs)
+    return len(created)
 
 
 def update_question(
@@ -211,10 +146,7 @@ def update_question(
 
     if not update:
         return
-
-    result = table("questions").update(update).eq("id", question_id).execute()
-    if result["error"]:
-        raise AppError(500, "Question update failed")
+    Question.objects.filter(id=question_id).update(**update)
 
 
 def list_all_questions(
@@ -225,57 +157,35 @@ def list_all_questions(
     limit: int,
     offset: int,
 ) -> dict[str, Any]:
-    query = table("questions").select(QUESTION_COLUMNS_FULL).with_count("exact")
-
+    qs = Question.objects.all()
     if category:
-        query = query.eq("category", category)
+        qs = qs.filter(category=category)
     if difficulty:
-        query = query.eq("difficulty", difficulty)
+        qs = qs.filter(difficulty=difficulty)
     if search:
-        escaped = search.replace("%", r"\%").replace("_", r"\_")
-        query = query.ilike("text", f"%{escaped}%")
+        qs = qs.filter(text__icontains=search)
 
-    result = (
-        query.order("text", ascending=True)
-        .range(offset, offset + limit - 1)
-        .execute()
-    )
-
-    if result["error"]:
-        raise AppError(500, "Questions list failed")
-
+    total = qs.count()
+    items = list(qs.order_by("text")[offset : offset + limit])
     return {
-        "items": [_map_question_full(row) for row in result["data"] or []],
-        "total": result["count"] or 0,
+        "items": [_map_question_full(q) for q in items],
+        "total": total,
     }
 
 
 def get_category_stats() -> list[dict[str, Any]]:
-    result = table("questions").select("category").execute()
-    if result["error"]:
-        raise AppError(500, "Category stats failed")
+    from django.db.models import Count
 
-    counts: dict[str, int] = {}
-    for row in result["data"] or []:
-        cat = row.get("category")
-        if cat:
-            counts[cat] = counts.get(cat, 0) + 1
-
-    return sorted(
-        ({"category": name, "count": count} for name, count in counts.items()),
-        key=lambda item: item["count"],
-        reverse=True,
+    stats = (
+        Question.objects.exclude(category__isnull=True)
+        .exclude(category="")
+        .values("category")
+        .annotate(count=Count("id"))
+        .order_by("-count")
     )
+    return [{"category": s["category"], "count": s["count"]} for s in stats]
 
 
 def rename_category(old_name: str, new_name: str) -> int:
-    result = (
-        table("questions")
-        .update({"category": new_name})
-        .eq("category", old_name)
-        .select("id")
-        .execute()
-    )
-    if result["error"]:
-        raise AppError(500, "Category rename failed")
-    return len(result["data"] or [])
+    updated = Question.objects.filter(category=old_name).update(category=new_name)
+    return updated

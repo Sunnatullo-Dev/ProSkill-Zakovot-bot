@@ -1,6 +1,6 @@
-"""Root URL routes — eski backend/src/app.ts dagi route'larni takrorlaydi."""
 from __future__ import annotations
 
+from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
 
@@ -16,6 +16,7 @@ def root(_request):
 urlpatterns = [
     path("", root),
     path("health", health),
+    path("admin/", admin.site.urls),
     path("api/auth/", include("apps.auth_api.urls")),
     path("api/users/", include("apps.users.urls")),
     path("api/questions/", include("apps.questions.urls")),
