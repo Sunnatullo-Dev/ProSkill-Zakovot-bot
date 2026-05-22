@@ -20,9 +20,23 @@ class TelegramAuthMiddleware:
 
     @staticmethod
     def _extract_user(request) -> TelegramUser | None:
-        header = request.headers.get("Authorization") or request.headers.get("authorization")
+        header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
         if not header:
             return None
+
+        # Bot token auth: "bot <TELEGRAM_BOT_TOKEN>" — bot admin API uchun
+        if header.lower().startswith("bot "):
+            bot_token = header[4:].strip()
+            configured = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
+            if configured and bot_token == configured and settings.ADMIN_TELEGRAM_IDS:
+                return TelegramUser(
+                    telegram_id=settings.ADMIN_TELEGRAM_IDS[0],
+                    first_name="Bot",
+                    last_name=None,
+                    username=None,
+                )
+            return None
+
         prefix = "tma "
         if not header.lower().startswith(prefix):
             return None
