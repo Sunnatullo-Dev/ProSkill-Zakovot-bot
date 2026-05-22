@@ -1,6 +1,8 @@
 """POST /api/auth/login — Telegram initData ni tekshiradi va user'ni upsert qiladi."""
 from __future__ import annotations
 
+from django.conf import settings
+from django_ratelimit.decorators import ratelimit
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -10,6 +12,7 @@ from apps.users.repositories import set_referrer, upsert_user
 
 
 @api_view(["POST"])
+@ratelimit(key="ip", rate="20/m", block=True)
 def login(request):
     init_data = request.data.get("initData") if isinstance(request.data, dict) else None
     referrer_raw = request.data.get("referrerId") if isinstance(request.data, dict) else None
@@ -17,7 +20,10 @@ def login(request):
     telegram_user = verify_init_data(init_data or "")
 
     if not telegram_user:
-        # Express loyihasi guest fallbackni qabul qilardi — saqlaymiz.
+        # Production'da soxta yoki bo'sh initData rad etiladi.
+        # Dev/test rejimda — eski Express qoidasiga ko'ra mehmon foydalanuvchi qaytariladi.
+        if getattr(settings, "IS_PRODUCTION", False):
+            raise AppError(401, "Telegram autentifikatsiya talab qilinadi")
         return Response(
             {
                 "user": {

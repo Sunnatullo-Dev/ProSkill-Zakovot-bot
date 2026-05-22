@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 
+from django_ratelimit.decorators import ratelimit
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -28,6 +29,7 @@ UUID_RE = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-f
 
 @api_view(["POST"])
 @require_auth
+@ratelimit(key="ip", rate="60/m", block=True)
 def issue_ticket(request):
     body = request.data if isinstance(request.data, dict) else {}
     question_id = body.get("questionId")
@@ -40,6 +42,7 @@ def issue_ticket(request):
 
 @api_view(["POST"])
 @require_auth
+@ratelimit(key="ip", rate="60/m", block=True)
 def submit_answer(request):
     user = request.current_user
     body = request.data if isinstance(request.data, dict) else {}

@@ -6,6 +6,7 @@ javob qaytarishi mumkin, xabarlar fonda yuboriladi.
 """
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Any
 
@@ -13,6 +14,7 @@ import requests
 from django.conf import settings
 
 
+logger = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = 10
 
 
@@ -51,9 +53,14 @@ def send_message_sync(chat_id: int, text: str, *, with_mini_app_button: bool = T
             timeout=_REQUEST_TIMEOUT,
         )
         if not response.ok:
-            print(f"[telegram] sendMessage failed chat={chat_id} status={response.status_code}: {response.text[:200]}")
+            logger.warning(
+                "Telegram sendMessage failed chat=%s status=%s body=%s",
+                chat_id,
+                response.status_code,
+                response.text[:200],
+            )
     except requests.RequestException as error:
-        print(f"[telegram] sendMessage error chat={chat_id}: {error}")
+        logger.warning("Telegram sendMessage error chat=%s: %s", chat_id, error)
 
 
 def send_message(chat_id: int, text: str, *, with_mini_app_button: bool = True) -> None:

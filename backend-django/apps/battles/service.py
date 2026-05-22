@@ -7,6 +7,7 @@ Race-condition'lardan saqlash uchun atomik gate'lar (`try_*`) ishlatamiz:
 """
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -24,6 +25,9 @@ from apps.teams.repositories import (
 from apps.users.repositories import add_score as add_user_score
 
 from . import repositories as battle_repo
+
+
+logger = logging.getLogger(__name__)
 
 
 TOTAL_ROUNDS = 10
@@ -47,7 +51,7 @@ def _notify_challenge_created(challenger_team_name: str, opponent_team_id: str) 
         )
         notify_members([m["telegramId"] for m in team.get("members", [])], text)
     except Exception as error:  # noqa: BLE001
-        print(f"notifyChallengeCreated failed: {error}")
+        logger.warning("notifyChallengeCreated: %s", error)
 
 
 def _notify_challenge_cancelled(challenger_team_name: str, opponent_team_id: str) -> None:
@@ -56,7 +60,7 @@ def _notify_challenge_cancelled(challenger_team_name: str, opponent_team_id: str
         text = f"✖️ <b>{escape_html(challenger_team_name)}</b> yuborgan chaqiruvni bekor qildi."
         notify_members([m["telegramId"] for m in team.get("members", [])], text)
     except Exception as error:  # noqa: BLE001
-        print(f"notifyChallengeCancelled failed: {error}")
+        logger.warning("notifyChallengeCancelled: %s", error)
 
 
 def _notify_challenge_declined(opponent_team_name: str, challenger_team_id: str) -> None:
@@ -65,7 +69,7 @@ def _notify_challenge_declined(opponent_team_name: str, challenger_team_id: str)
         text = f"❌ <b>{escape_html(opponent_team_name)}</b> taklifingizni rad etdi."
         notify_members([m["telegramId"] for m in team.get("members", [])], text)
     except Exception as error:  # noqa: BLE001
-        print(f"notifyChallengeDeclined failed: {error}")
+        logger.warning("notifyChallengeDeclined: %s", error)
 
 
 def _notify_battle_started(challenger_team_id: str, opponent_team_id: str) -> None:
@@ -81,7 +85,7 @@ def _notify_battle_started(challenger_team_id: str, opponent_team_id: str) -> No
         ids.extend(m["telegramId"] for m in opponent.get("members", []))
         notify_members(ids, text)
     except Exception as error:  # noqa: BLE001
-        print(f"notifyBattleStarted failed: {error}")
+        logger.warning("notifyBattleStarted: %s", error)
 
 
 def _notify_battle_finished(
@@ -117,7 +121,7 @@ def _notify_battle_finished(
         ids.extend(m["telegramId"] for m in opponent.get("members", []))
         notify_members(ids, text)
     except Exception as error:  # noqa: BLE001
-        print(f"notifyBattleFinished failed: {error}")
+        logger.warning("notifyBattleFinished: %s", error)
 
 
 # ---------------- Yordamchi ----------------
@@ -325,15 +329,15 @@ def finalize_battle(battle_id: str) -> None:
                 try:
                     add_user_score(member["telegramId"], WINNER_BONUS)
                 except Exception as member_error:  # noqa: BLE001
-                    print(f"addScore winner failed: {member_error}")
+                    logger.warning("addScore winner: %s", member_error)
         except Exception as win_error:  # noqa: BLE001
-            print(f"finalizeBattle winner award failed: {win_error}")
+            logger.warning("finalizeBattle winner award: %s", win_error)
 
     for team_id in (challenge["challengerTeamId"], challenge["opponentTeamId"]):
         try:
             update_team_status(team_id, "open")
         except Exception as error:  # noqa: BLE001
-            print(f"reset team status failed: {error}")
+            logger.warning("reset team status: %s", error)
 
     _notify_battle_finished(
         challenge["challengerTeamId"],

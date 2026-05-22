@@ -8,6 +8,7 @@ Eski Node loyihasidagi `services/gemini.service.ts` ga to'liq mos keladi:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -17,6 +18,7 @@ from django.conf import settings
 from .scoring import AnswerStatus
 
 
+logger = logging.getLogger(__name__)
 GEMINI_TIMEOUT_S = 10
 MIN_PARTIAL_LENGTH = 3
 _PUNCTUATION_RE = re.compile(r"[().,!?\-]")
@@ -83,7 +85,7 @@ def _call_gemini_text(prompt: str) -> Optional[str]:
         )
         return (response.text or "").strip()
     except Exception as error:  # noqa: BLE001 — har qanday xatoni fallback bilan jim qoldiramiz
-        print(f"[gemini] call failed: {error}")
+        logger.warning("Gemini call failed (lokal fallback ishlatiladi): %s", error)
         return None
 
 

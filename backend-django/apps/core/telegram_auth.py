@@ -26,12 +26,16 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
     """initData ichidagi `hash` ni bot tokeni bilan tekshiradi.
 
     Muvaffaqiyatli bo'lsa TelegramUser qaytaradi, aks holda None.
-    Dev rejimida `initData == "guest"` mehmonni qaytarib beradi.
+    Dev rejimida `initData == "guest"` mehmonni qaytarib beradi —
+    production'da bu rad etiladi.
     """
     if not init_data:
         return None
 
     if init_data.strip() == "guest":
+        # Guest fallback faqat dev/test rejimda — production'da rad etiladi.
+        if getattr(settings, "IS_PRODUCTION", False):
+            return None
         return TelegramUser(telegram_id=0, first_name="Zakovatchi", last_name=None, username="guest")
 
     token = settings.TELEGRAM_BOT_TOKEN
