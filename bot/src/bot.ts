@@ -550,10 +550,27 @@ const stop = (sig: string) => {
 process.once("SIGINT", () => stop("SIGINT"));
 process.once("SIGTERM", () => stop("SIGTERM"));
 
-void bot.start({
-  onStart: info => {
-    console.log(`Zakovat bot ishga tushdi: @${info.username}`);
-    if (!BACKEND_URL) console.warn("⚠️  BACKEND_URL ko'rsatilmagan — admin API ishlamaydi");
-    if (!ADMIN_ID) console.warn("⚠️  ADMIN_ID ko'rsatilmagan");
-  },
-});
+// 409 Conflict: eski long-polling ulanishi tugashini kutib, qayta urinadi
+async function startBot(attemptsLeft = 5): Promise<void> {
+  try {
+    await bot.start({
+      onStart: info => {
+        console.log(`Zakovat bot ishga tushdi: @${info.username}`);
+        if (!BACKEND_URL) console.warn("⚠️  BACKEND_URL ko'rsatilmagan — admin API ishlamaydi");
+        if (!ADMIN_ID) console.warn("⚠️  ADMIN_ID ko'rsatilmagan");
+      },
+    });
+  } catch (err: any) {
+    const is409 = err instanceof GrammyError && err.error_code === 409;
+    if (is409 && attemptsLeft > 0) {
+      const wait = 35_000;
+      console.log(`[bot] 409 Conflict — ${attemptsLeft} urinish qoldi. ${wait / 1000}s kutilmoqda...`);
+      await new Promise(r => setTimeout(r, wait));
+      return startBot(attemptsLeft - 1);
+    }
+    console.error("[bot] Bot ishga tushmadi:", err);
+    process.exit(1);
+  }
+}
+
+void startBot();
