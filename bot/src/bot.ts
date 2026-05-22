@@ -144,12 +144,37 @@ const bot = new Bot(token);
 bot.command("start", async ctx => {
   const uid = ctx.from!.id;
   clearState(uid);
-  const name = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ") || "do'st";
-  const text = `Assalomu Aleykum, ${name}!\n\nPastdagi tugmani bosing 👇`;
-  const kb = new Keyboard();
-  if (MINI_APP_URL) kb.webApp("🧠 Zakovat o'yinini ochish", MINI_APP_URL).row();
-  if (isAdmin(uid)) kb.text("🔧 Admin panel").row();
-  await ctx.reply(text, { reply_markup: kb.resized().persistent() });
+  const name = ctx.from?.first_name || "do'st";
+
+  const welcomeText =
+    `🎯 *Zakovat O'yiniga Xush Kelibsiz, ${name}!*\n\n` +
+    `🧠 Bilimingizni sinab ko'ring, do'stlaringiz bilan raqobatlashing!\n\n` +
+    `✨ *Nima kutmoqda:*\n` +
+    `  🏆 Savollar va balllar\n` +
+    `  ⚔️ Jamoa bellashuvlari\n` +
+    `  📊 Reyting va yutuqlar\n\n` +
+    `👇 *Pastdagi tugmani bosib o'yinni boshlang!*`;
+
+  const inlineKb = new InlineKeyboard();
+  if (MINI_APP_URL) {
+    inlineKb.row().webApp("🚀 Zakovat O'yinini Ochish", MINI_APP_URL);
+  } else {
+    inlineKb.row().text("⚠️ O'yin hozircha mavjud emas", "noop");
+  }
+
+  const replyKb = new Keyboard();
+  if (isAdmin(uid)) replyKb.text("🔧 Admin panel").row();
+
+  await ctx.reply(welcomeText, {
+    parse_mode: "Markdown",
+    reply_markup: inlineKb,
+  });
+
+  if (isAdmin(uid)) {
+    await ctx.reply("👨‍💼 Admin sifatida kirgansiz:", {
+      reply_markup: replyKb.resized().persistent(),
+    });
+  }
 });
 
 // 🔧 Admin panel

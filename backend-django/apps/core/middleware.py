@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Callable
 
+from django.conf import settings
+
 from .telegram_auth import TelegramUser, verify_init_data
 
 
