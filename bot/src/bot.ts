@@ -13,6 +13,8 @@ const BACKEND_URL = (process.env.BACKEND_URL || "").replace(/\/$/, "");
 if (MINI_APP_URL && !MINI_APP_URL.startsWith("https://"))
   throw new Error(`MINI_APP_URL HTTPS bo'lishi shart. Hozirgi: ${MINI_APP_URL}`);
 
+const PDF_TIMEOUT_MS = 20_000;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Question { id: string; text: string; correctAnswer: string; category: string | null; difficulty: string | null; }
 interface PdfQuestion { text: string; correctAnswer: string; category?: string; }
@@ -57,8 +59,20 @@ async function apiDelete(path: string): Promise<any> {
 let pdfParse: ((buf: Buffer) => Promise<{ text: string }>) | null = null;
 try {
   const _req = createRequire(import.meta.url);
-  pdfParse = _req("pdf-parse");
-} catch { /* pdf-parse o'rnatilmagan */ }
+  // lib/pdf-parse.js — test faylni yuklamaydigan to'g'ridan-to'g'ri import
+  pdfParse = _req("pdf-parse/lib/pdf-parse.js");
+  console.log("[bot] pdf-parse yuklandi ✓");
+} catch (e) {
+  console.warn("[bot] pdf-parse yuklanmadi:", e);
+}
+
+async function parsePdfBuffer(buf: Buffer): Promise<{ text: string }> {
+  const parse = Promise.resolve(pdfParse!(buf));
+  const timeout = new Promise<never>((_, rej) =>
+    setTimeout(() => rej(new Error("PDF parse timeout")), PDF_TIMEOUT_MS)
+  );
+  return Promise.race([parse, timeout]);
+}
 
 function parsePdfText(raw: string): PdfQuestion[] {
   const questions: PdfQuestion[] = [];
@@ -295,18 +309,33 @@ bot.on("message:document", async ctx => {
     return;
   }
 
-  const msg = await ctx.reply("⏳ PDF tahlil qilinmoqda...");
+  let msg: any;
   try {
+    msg = await ctx.reply("⏳ PDF tahlil qilinmoqda...");
+  } catch { return; }
+
+  try {
+    if (!pdfParse) throw new Error("pdf-parse moduli yuklanmagan");
+
     const file = await ctx.getFile();
     const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
     const resp = await fetch(fileUrl);
+    if (!resp.ok) throw new Error(`Fayl yuklab bo'lmadi: ${resp.status}`);
     const buffer = Buffer.from(await resp.arrayBuffer());
-    const parsed = await pdfParse!(buffer);
+
+    console.log(`[bot] PDF parsing: ${buffer.length} bytes`);
+    const parsed = await parsePdfBuffer(buffer);
+    console.log(`[bot] PDF parsed, text length: ${parsed.text.length}`);
+
     const questions = parsePdfText(parsed.text);
+    console.log(`[bot] Topilgan savollar: ${questions.length}`);
 
     if (questions.length === 0) {
-      setState(uid, { t: "idle" });
-      await ctx.reply("❌ Savollar topilmadi. Fayl formatini tekshiring.");
+      clearState(uid);
+      await ctx.api.editMessageText(ctx.chat.id, msg.message_id,
+        "❌ Savollar topilmadi.\n\nFayl quyidagi formatda bo'lishi kerak:\n`Savol: ...\\nJavob: ...`",
+        { parse_mode: "Markdown" }
+      );
       return;
     }
 
@@ -325,10 +354,16 @@ bot.on("message:document", async ctx => {
           .text("❌ Bekor", "pdf_cancel"),
       }
     );
-  } catch (e) {
-    console.error("PDF parse error:", e);
+  } catch (e: any) {
+    console.error("[bot] PDF parse error:", e?.message ?? e);
     clearState(uid);
-    await ctx.reply("❌ PDF o'qishda xatolik yuz berdi.");
+    try {
+      await ctx.api.editMessageText(ctx.chat.id, msg.message_id,
+        `❌ PDF o'qishda xatolik: ${e?.message ?? "noma'lum xato"}`
+      );
+    } catch {
+      await ctx.reply("❌ PDF o'qishda xatolik yuz berdi.");
+    }
   }
 });
 
