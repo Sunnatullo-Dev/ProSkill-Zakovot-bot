@@ -589,10 +589,22 @@ process.once("SIGTERM", () => stop("SIGTERM"));
 async function startBot(attemptsLeft = 5): Promise<void> {
   try {
     await bot.start({
-      onStart: info => {
+      onStart: async info => {
         console.log(`Zakovat bot ishga tushdi: @${info.username}`);
+        console.log(`[bot] MINI_APP_URL: ${MINI_APP_URL || "(belgilanmagan)"}`);
         if (!BACKEND_URL) console.warn("⚠️  BACKEND_URL ko'rsatilmagan — admin API ishlamaydi");
         if (!ADMIN_ID) console.warn("⚠️  ADMIN_ID ko'rsatilmagan");
+        // Mini App URL ni avtomatik o'rnatish
+        if (MINI_APP_URL) {
+          try {
+            await bot.api.setChatMenuButton({
+              menu_button: { type: "web_app", text: "Zakovat", web_app: { url: MINI_APP_URL } },
+            });
+            console.log(`[bot] Menu button o'rnatildi: ${MINI_APP_URL}`);
+          } catch (e: any) {
+            console.warn("[bot] Menu button o'rnatilmadi:", e?.message);
+          }
+        }
       },
     });
   } catch (err: any) {
