@@ -57,27 +57,7 @@ export type AuthResponse = {
   isAdmin: boolean;
 };
 
-export type SubmissionStatus = "pending" | "approved" | "rejected";
-
-export type Submission = {
-  id: string;
-  text: string;
-  correctAnswer: string;
-  category: string | null;
-  difficulty: string | null;
-  submittedBy: number;
-  status: SubmissionStatus;
-  createdAt: string;
-};
-
 export type Difficulty = "easy" | "medium" | "hard";
-
-export type NewQuestionInput = {
-  text: string;
-  correctAnswer: string;
-  category?: string;
-  difficulty?: Difficulty;
-};
 
 export type RoundFilter = {
   category: string | null;

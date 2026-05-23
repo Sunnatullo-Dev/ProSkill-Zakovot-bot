@@ -93,15 +93,18 @@ def _fetch_members(team: Team) -> list[dict[str, Any]]:
         u.telegram_id: u
         for u in User.objects.filter(telegram_id__in=ids)
     }
-    return [
-        {
-            "telegramId": m.telegram_id,
-            "joinedAt": m.joined_at.isoformat() if m.joined_at else None,
-            "firstName": (user_map.get(m.telegram_id) or User()).first_name,
-            "username": (user_map.get(m.telegram_id) or User()).username,
-        }
-        for m in member_rows
-    ]
+    output = []
+    for m in member_rows:
+        u = user_map.get(m.telegram_id)
+        output.append(
+            {
+                "telegramId": m.telegram_id,
+                "joinedAt": m.joined_at.isoformat() if m.joined_at else None,
+                "firstName": u.first_name if u else None,
+                "username": u.username if u else None,
+            }
+        )
+    return output
 
 
 def get_team_by_telegram_id(telegram_id: int) -> dict[str, Any] | None:

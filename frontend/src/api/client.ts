@@ -122,11 +122,6 @@ export async function getReferrals(): Promise<ReferralData> {
   }
 }
 
-export async function getCategories(): Promise<string[]> {
-  const response = await request<{ categories: string[] }>("/questions/categories");
-  return [...(response?.categories ?? [])].sort((left, right) => left.localeCompare(right));
-}
-
 export async function getRound(
   filter: RoundFilter,
   count = DEFAULT_ROUND_COUNT
@@ -224,12 +219,6 @@ export async function getReportedQuestions(): Promise<ReportedQuestion[]> {
   const response = await request<{ questions: ReportedQuestion[] }>("/questions/reported");
 
   return response?.questions ?? [];
-}
-
-export async function deleteQuestion(questionId: string): Promise<boolean> {
-  const response = await request<{ ok: boolean }>(`/questions/${questionId}`, { method: "DELETE" });
-
-  return Boolean(response?.ok);
 }
 
 export async function getTopUsers(limit = 3): Promise<LeaderboardUser[]> {
