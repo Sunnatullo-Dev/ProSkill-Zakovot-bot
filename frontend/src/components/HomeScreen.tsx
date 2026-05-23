@@ -1,6 +1,5 @@
-import { useState } from "react";
 import type { ReactNode } from "react";
-import type { Difficulty, RoundFilter } from "../types";
+import type { RoundFilter } from "../types";
 import { PlayIcon, StarIcon, TrophyIcon } from "./icons";
 
 type HomeScreenProps = {
@@ -12,13 +11,6 @@ type HomeScreenProps = {
   onStart: (filter: RoundFilter) => void;
 };
 
-const DIFFICULTY_OPTIONS: Array<{ value: Difficulty | null; label: string }> = [
-  { value: null, label: "Barchasi" },
-  { value: "easy", label: "Oson" },
-  { value: "medium", label: "O'rta" },
-  { value: "hard", label: "Qiyin" }
-];
-
 const cardStyle = {
   background: "var(--card)",
   border: "1px solid var(--border)",
@@ -26,37 +18,6 @@ const cardStyle = {
   padding: "18px"
 };
 
-const labelStyle = {
-  fontSize: "11px",
-  fontWeight: 700,
-  color: "var(--muted)",
-  letterSpacing: "2px",
-  marginBottom: "10px"
-};
-
-function chip(label: string, isActive: boolean, onClick: () => void) {
-  return (
-    <button
-      key={label}
-      style={{
-        padding: "8px 15px",
-        borderRadius: "999px",
-        border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
-        background: isActive ? "var(--accent)" : "var(--surface)",
-        color: isActive ? "#ffffff" : "var(--muted)",
-        fontSize: "13px",
-        fontWeight: 600,
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-        transition: "background 0.15s, color 0.15s, border-color 0.15s"
-      }}
-      type="button"
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  );
-}
 
 function statCell(icon: ReactNode, value: number, label: string, color: string) {
   return (
@@ -78,7 +39,6 @@ export default function HomeScreen({
   score,
   onStart
 }: HomeScreenProps) {
-  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
   const userInitial = playerName.trim()[0]?.toUpperCase() ?? "Z";
 
   return (
@@ -173,17 +133,6 @@ export default function HomeScreen({
         </div>
       </div>
 
-      <div style={cardStyle}>
-        <div style={labelStyle}>QIYINLIK</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {DIFFICULTY_OPTIONS.map((option) =>
-            chip(option.label, selectedDifficulty === option.value, () =>
-              setSelectedDifficulty(option.value)
-            )
-          )}
-        </div>
-      </div>
-
       {error ? (
         <div
           style={{
@@ -219,7 +168,7 @@ export default function HomeScreen({
           transition: "opacity 0.15s"
         }}
         type="button"
-        onClick={() => onStart({ category: null, difficulty: selectedDifficulty })}
+        onClick={() => onStart({ category: null, difficulty: null })}
       >
         {isLoading ? (
           "Yuklanmoqda..."

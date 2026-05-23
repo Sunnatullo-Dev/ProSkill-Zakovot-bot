@@ -385,10 +385,12 @@ export default function App() {
   }
 
   // displayName foydalanuvchi tomonidan profilda o'rnatilgan — eng yuqori ustuvorlik.
+  const telegramFullName = [telegramUser?.first_name, telegramUser?.last_name].filter(Boolean).join(" ");
+  const dbFullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
   const playerName =
     user?.displayName ||
-    telegramUser?.first_name ||
-    user?.firstName ||
+    telegramFullName ||
+    dbFullName ||
     user?.username ||
     "Zakovatchi";
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);

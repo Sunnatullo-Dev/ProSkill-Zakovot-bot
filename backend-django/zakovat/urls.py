@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.contrib import admin
 from django.http import JsonResponse
-from django.urls import include, path
+from django.urls import include, path, re_path
 
 
 def health(_request):
@@ -22,7 +22,7 @@ urlpatterns = [
     path("api/questions/", include("apps.questions.urls")),
     path("api/answer/", include("apps.answers.urls")),
     path("api/game-results/", include("apps.game_results.urls")),
-    path("api/teams/", include("apps.teams.urls")),
+    re_path(r"^api/teams(?:/|$)", include("apps.teams.urls")),
     path("api/battles/", include("apps.battles.urls")),
     path("api/admin/", include("apps.admin_api.urls")),
 ]
