@@ -34,9 +34,10 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
 
     if init_data.strip() == "guest":
         # Guest fallback faqat dev/test rejimda — production'da rad etiladi.
+        # Ism bo'sh — frontend Telegram'dan first_name ko'rsatadi yoki "Foydalanuvchi" placeholder.
         if getattr(settings, "IS_PRODUCTION", False):
             return None
-        return TelegramUser(telegram_id=0, first_name="Zakovatchi", last_name=None, username="guest")
+        return TelegramUser(telegram_id=0, first_name=None, last_name=None, username=None)
 
     token = settings.TELEGRAM_BOT_TOKEN
     if not token:
