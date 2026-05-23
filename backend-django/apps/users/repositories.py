@@ -130,3 +130,57 @@ def get_referral_leaderboard() -> list[dict[str, Any]]:
 
 def count_all() -> int:
     return User.objects.count()
+
+
+def list_users(page: int = 1, limit: int = 20, search: str | None = None) -> dict:
+    from django.db.models import Q
+    qs = User.objects.order_by("-created_at")
+    if search:
+        q = Q(first_name__icontains=search) | Q(last_name__icontains=search) | Q(username__icontains=search)
+        if search.strip().lstrip("-").isdigit():
+            q |= Q(telegram_id=int(search.strip()))
+        qs = qs.filter(q)
+    total = qs.count()
+    offset = (page - 1) * limit
+    return {"items": [_map_user(u) for u in qs[offset : offset + limit]], "total": total}
+
+
+def get_all_users_for_export() -> list[dict]:
+    return [_map_user(u) for u in User.objects.order_by("-score").all()]
+
+
+def get_all_telegram_ids() -> list[int]:
+    return list(User.objects.values_list("telegram_id", flat=True))
+
+
+def list_admins() -> list[dict]:
+    from .models import BotAdmin
+    return [
+        {
+            "telegramId": a.telegram_id,
+            "firstName": a.first_name,
+            "username": a.username,
+            "addedBy": a.added_by,
+            "addedAt": a.added_at.isoformat(),
+            "note": a.note,
+        }
+        for a in BotAdmin.objects.order_by("added_at")
+    ]
+
+
+def add_admin(telegram_id: int, added_by: int, first_name: str | None = None, username: str | None = None, note: str = "") -> dict:
+    from .models import BotAdmin
+    from apps.core.exceptions import AppError
+    obj, created = BotAdmin.objects.get_or_create(
+        telegram_id=telegram_id,
+        defaults={"added_by": added_by, "first_name": first_name, "username": username, "note": note},
+    )
+    if not created:
+        raise AppError(409, "Bu foydalanuvchi allaqachon admin")
+    return {"telegramId": obj.telegram_id, "firstName": obj.first_name, "username": obj.username}
+
+
+def remove_admin(telegram_id: int) -> bool:
+    from .models import BotAdmin
+    deleted, _ = BotAdmin.objects.filter(telegram_id=telegram_id).delete()
+    return deleted > 0
