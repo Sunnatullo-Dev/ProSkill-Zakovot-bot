@@ -15,7 +15,9 @@ const EMPTY_LEADERBOARD: LeaderboardData = { users: [], rank: 0 };
 const EMPTY_REFERRALS: ReferralData = { referrers: [], myCount: 0 };
 
 function displayName(user: LeaderboardUser): string {
-  return user.firstName || user.username || "Zakovatchi";
+  // Telegram first_name + last_name (agar last_name DB'da bo'lsa) → username → placeholder.
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
+  return fullName || user.username || "Foydalanuvchi";
 }
 
 export default function LeaderboardScreen({ currentUserId, playerName, score }: LeaderboardScreenProps) {

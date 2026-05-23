@@ -21,7 +21,8 @@ def login(request):
 
     if not telegram_user:
         # Production'da soxta yoki bo'sh initData rad etiladi.
-        # Dev/test rejimda — eski Express qoidasiga ko'ra mehmon foydalanuvchi qaytariladi.
+        # Dev/test rejimda — bo'sh mehmon foydalanuvchi qaytariladi (ism yo'q,
+        # frontend Telegram first_name'ini ko'rsatadi).
         if getattr(settings, "IS_PRODUCTION", False):
             raise AppError(401, "Telegram autentifikatsiya talab qilinadi")
         return Response(
@@ -29,9 +30,10 @@ def login(request):
                 "user": {
                     "id": "0",
                     "telegramId": 0,
-                    "firstName": "Zakovatchi",
+                    "firstName": None,
                     "lastName": None,
-                    "username": "guest",
+                    "username": None,
+                    "displayName": None,
                     "score": 0,
                 },
                 "isAdmin": False,

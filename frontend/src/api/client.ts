@@ -22,12 +22,14 @@ const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
 const DEFAULT_ROUND_COUNT = 10;
 const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
+// Login muvaffaqiyatsiz bo'lganda zaxira foydalanuvchi — ism bo'sh, frontend
+// Telegram first_name'ini ishlatadi (yoki "Foydalanuvchi" placeholder).
 const DEFAULT_USER: AppUser = {
   id: "0",
   telegramId: 0,
-  firstName: "Zakovatchi",
+  firstName: null,
   lastName: null,
-  username: "guest",
+  username: null,
   displayName: null,
   score: 0
 };

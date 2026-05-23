@@ -3,10 +3,12 @@ import "@twa-dev/sdk";
 import type { TelegramUser, TelegramWebApp } from "../types";
 
 export const tg: TelegramWebApp | null = window.Telegram?.WebApp ?? null;
+// Telegram tashqarisida (yoki initData yo'q bo'lganda) — bo'sh BROWSER_USER.
+// Hech qanday "Zakovatchi" hardcoded ism qo'yilmaydi — ism faqat real Telegram'dan keladi.
 const BROWSER_USER: TelegramUser = {
   id: 0,
-  first_name: "Zakovatchi",
-  username: "guest"
+  first_name: "",
+  username: ""
 };
 
 type TelegramState = {

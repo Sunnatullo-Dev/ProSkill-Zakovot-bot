@@ -44,12 +44,14 @@ const BOOTSTRAP_TIMEOUT_MS = 1000;
 const RESULT_AUTO_DELAY_MS = 3000;
 const PARTIAL_RESULT_AUTO_DELAY_MS = 3500;
 const DEFAULT_FILTER: RoundFilter = { category: null, difficulty: null };
+// Auth ishlamay qolganda zaxira foydalanuvchi — ism bo'sh, frontend Telegram'dan
+// keladigan ismni ishlatadi (yoki "Foydalanuvchi" placeholder ko'rsatadi).
 const DEFAULT_APP_USER: AppUser = {
   id: "0",
   telegramId: 0,
-  firstName: "Zakovatchi",
+  firstName: null,
   lastName: null,
-  username: "guest",
+  username: null,
   displayName: null,
   score: 0
 };
@@ -384,7 +386,9 @@ export default function App() {
     setScreen("team");
   }
 
-  // displayName foydalanuvchi tomonidan profilda o'rnatilgan — eng yuqori ustuvorlik.
+  // Ism ustuvorligi: profilda o'zi qo'ygan ism → Telegram first_name + last_name →
+  // DB'dagi ism+familiya → username → "Foydalanuvchi" (hech qaysisi bo'lmaganda).
+  // "Zakovatchi" hardcoded ism endi ishlatilmaydi.
   const telegramFullName = [telegramUser?.first_name, telegramUser?.last_name].filter(Boolean).join(" ");
   const dbFullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
   const playerName =
@@ -392,7 +396,7 @@ export default function App() {
     telegramFullName ||
     dbFullName ||
     user?.username ||
-    "Zakovatchi";
+    "Foydalanuvchi";
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
   const navActive: NavTab =
