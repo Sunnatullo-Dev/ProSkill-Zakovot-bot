@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   acceptBattle,
   cancelBattle,
@@ -11,27 +11,26 @@ import type { PendingChallenge, TeamMember, TeamWithMembers } from "../types";
 import ChallengeModal from "./ChallengeModal";
 import ConfirmDialog from "./ConfirmDialog";
 import CreateTeamModal from "./CreateTeamModal";
-import { TeamIcon } from "./icons";
 import JoinTeamModal from "./JoinTeamModal";
+import { TeamIcon } from "./icons";
 
-type TeamScreenProps = {
+type Props = {
   currentUserId: number;
   onEnterBattle: (battleId: string) => void;
 };
 
-function memberLabel(member: TeamMember): string {
-  return member.firstName || (member.username ? `@${member.username}` : `#${member.telegramId}`);
+const POLL_MS = 3000;
+
+function memberLabel(m: TeamMember): string {
+  return m.firstName || (m.username ? `@${m.username}` : `#${m.telegramId}`);
 }
 
-function memberInitial(member: TeamMember): string {
-  const name = member.firstName || member.username || "?";
-
-  return name[0]?.toUpperCase() ?? "?";
+function memberInitial(m: TeamMember): string {
+  const n = m.firstName || m.username || "?";
+  return n[0]?.toUpperCase() ?? "?";
 }
 
-const PENDING_POLL_INTERVAL_MS = 5000;
-
-export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenProps) {
+export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
   const [team, setTeam] = useState<TeamWithMembers | null>(null);
   const [pending, setPending] = useState<PendingChallenge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,85 +41,60 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
   const [codeCopied, setCodeCopied] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
-  const initialLoadRef = useRef(true);
+  const mountedRef = useRef(true);
 
-  async function refresh() {
-    if (initialLoadRef.current) {
-      setLoading(true);
-    }
+  const refresh = useCallback(async () => {
     const [t, p] = await Promise.all([getMyTeam(), getPendingBattles()]);
+    if (!mountedRef.current) return;
     setTeam(t);
     setPending(p);
-    setLoading(false);
-    initialLoadRef.current = false;
-  }
-
-  useEffect(() => {
-    void refresh();
   }, []);
 
-  // Raqibdan kelgan chaqiruv real vaqtda ko'rinishi uchun TeamScreen ochiq turganda
-  // har 5 sekundda yengil polling qilamiz. Tab orqada turganda to'xtatib turiladi.
   useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
+    setLoading(true);
+    void refresh().finally(() => {
+      if (mountedRef.current) setLoading(false);
+    });
 
-    async function tick() {
-      if (!active || document.hidden) {
-        return;
-      }
-
-      const p = await getPendingBattles();
-
-      if (active) {
-        setPending(p);
-      }
-    }
-
-    const id = window.setInterval(() => void tick(), PENDING_POLL_INTERVAL_MS);
+    const pollId = window.setInterval(() => {
+      if (!document.hidden) void refresh();
+    }, POLL_MS);
 
     function handleVisibility() {
-      if (!document.hidden) {
-        void tick();
-      }
+      if (!document.hidden) void refresh();
     }
-
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      active = false;
-      window.clearInterval(id);
+      mountedRef.current = false;
+      window.clearInterval(pollId);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
-
-  // Agar foydalanuvchining jamoasida aktiv bellashuv bo'lsa — battle ekraniga avtomatik o'tamiz.
-  useEffect(() => {
-    const active = pending.find((c) => c.status === "in_progress");
-
-    if (active) {
-      onEnterBattle(active.battleId);
-    }
-  }, [pending, onEnterBattle]);
+  }, [refresh]);
 
   async function handleLeave() {
     setLeaveOpen(false);
     await leaveTeam();
     setTeam(null);
-    await refresh();
+    setPending([]);
+    void refresh();
   }
 
   async function handleCopyCode() {
-    if (!team) {
-      return;
-    }
-
+    if (!team) return;
     try {
       await navigator.clipboard.writeText(team.code);
-      setCodeCopied(true);
-      window.setTimeout(() => setCodeCopied(false), 1500);
     } catch {
-      // jim qoldiramiz
+      const el = document.createElement("textarea");
+      el.value = team.code;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
     }
+    setCodeCopied(true);
+    window.setTimeout(() => setCodeCopied(false), 2000);
   }
 
   async function handleAccept(battleId: string) {
@@ -128,12 +102,12 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
     setActionError("");
     const result = await acceptBattle(battleId);
     setActionId(null);
-
     if (result.ok) {
+      await refresh();
       onEnterBattle(result.data.battleId);
     } else {
       setActionError(result.error);
-      await refresh();
+      void refresh();
     }
   }
 
@@ -142,12 +116,8 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
     setActionError("");
     const result = await declineBattle(battleId);
     setActionId(null);
-
-    if (result.ok) {
-      await refresh();
-    } else {
-      setActionError(result.error);
-    }
+    if (!result.ok) setActionError(result.error);
+    void refresh();
   }
 
   async function handleCancel(battleId: string) {
@@ -155,15 +125,14 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
     setActionError("");
     const result = await cancelBattle(battleId);
     setActionId(null);
-
-    if (result.ok) {
-      await refresh();
-    } else {
-      setActionError(result.error);
-    }
+    if (!result.ok) setActionError(result.error);
+    void refresh();
   }
 
-  const isOwner = team !== null && team.ownerId === currentUserId;
+  const isOwner = team !== null && team.ownerId === currentUserId && currentUserId !== 0;
+
+  // *** FIX: No more auto-redirect. Show banner instead. ***
+  const activeBattle = pending.find((c) => c.status === "in_progress");
   const incoming = pending.filter((c) => c.iAmOpponent && c.status === "pending");
   const outgoing = pending.filter((c) => !c.iAmOpponent && c.status === "pending");
 
@@ -173,383 +142,268 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
       style={{
         minHeight: "100vh",
         background: "var(--bg)",
-        padding: "24px 20px 104px",
+        padding: "24px 16px 104px",
         maxWidth: "430px",
         margin: "0 auto"
       }}
     >
-      <h1 style={{ fontSize: "22px", fontWeight: 900, color: "var(--text)", marginBottom: "16px" }}>
+      <h1
+        style={{
+          fontSize: "22px",
+          fontWeight: 900,
+          color: "var(--text)",
+          marginBottom: "16px"
+        }}
+      >
         Jamoa
       </h1>
 
-      {loading ? (
-        <p style={{ fontSize: "13px", color: "var(--muted)" }}>Yuklanmoqda...</p>
-      ) : !team ? (
-        <>
-          <div
-            style={{
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "20px",
-              padding: "24px",
-              textAlign: "center",
-              marginBottom: "16px"
-            }}
-          >
-            <div style={{ color: "var(--accent)", marginBottom: "12px", display: "flex", justifyContent: "center" }}>
-              <TeamIcon size={48} />
+      {/* Active in-progress battle banner — no auto-redirect, user decides */}
+      {activeBattle ? (
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(77,166,255,0.14), rgba(124,58,237,0.14))",
+            border: "1.5px solid var(--accent)",
+            borderRadius: "18px",
+            padding: "14px 16px",
+            marginBottom: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px"
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: "10px",
+                fontWeight: 700,
+                color: "var(--accent)",
+                letterSpacing: "1.5px",
+                marginBottom: "3px"
+              }}
+            >
+              ⚔️ BELLASHUV DAVOM ETMOQDA
             </div>
-            <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--text)", marginBottom: "6px" }}>
-              Hali jamoadа emassiz
-            </div>
-            <div style={{ fontSize: "13px", color: "var(--muted)", lineHeight: 1.5 }}>
-              Yangi jamoa yarating yoki do'stingizning kodi bilan mavjud jamoaga qo'shiling.
+            <div
+              style={{
+                fontSize: "14px",
+                fontWeight: 700,
+                color: "var(--text)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap"
+              }}
+            >
+              {activeBattle.challengerTeam.name} vs {activeBattle.opponentTeam.name}
             </div>
           </div>
-
           <button
             style={{
-              width: "100%",
-              padding: "15px",
-              background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+              padding: "10px 16px",
+              background: "var(--accent)",
               border: "none",
-              borderRadius: "14px",
-              fontSize: "15px",
+              borderRadius: "10px",
+              fontSize: "13px",
               fontWeight: 800,
               color: "white",
               cursor: "pointer",
-              marginBottom: "10px"
+              whiteSpace: "nowrap",
+              flex: "0 0 auto",
+              boxShadow: "0 4px 12px rgba(77,166,255,0.35)"
             }}
             type="button"
-            onClick={() => setCreateOpen(true)}
+            onClick={() => onEnterBattle(activeBattle.battleId)}
           >
-            Yangi jamoa yaratish
+            Kirish ▶
           </button>
-          <button
+        </div>
+      ) : null}
+
+      {/* Incoming challenges */}
+      {incoming.map((ch) => {
+        const canAct = ch.opponentTeam.ownerId === currentUserId && currentUserId !== 0;
+        const busy = actionId === ch.battleId;
+        return (
+          <div
+            key={ch.battleId}
             style={{
-              width: "100%",
-              padding: "15px",
-              background: "var(--card)",
-              border: "1.5px solid var(--accent)",
-              borderRadius: "14px",
-              fontSize: "15px",
-              fontWeight: 700,
-              color: "var(--accent)",
-              cursor: "pointer"
+              background: "linear-gradient(135deg, rgba(245,200,66,0.10), rgba(239,68,68,0.08))",
+              border: "1.5px solid var(--gold)",
+              borderRadius: "18px",
+              padding: "16px",
+              marginBottom: "12px"
             }}
-            type="button"
-            onClick={() => setJoinOpen(true)}
           >
-            Kod orqali qo'shilish
-          </button>
-        </>
-      ) : (
-        <>
-          {incoming.map((challenge) => (
             <div
-              key={challenge.battleId}
               style={{
-                background: "linear-gradient(135deg, rgba(245,200,66,0.18), rgba(124,58,237,0.18))",
-                border: "1px solid var(--gold)",
-                borderRadius: "18px",
-                padding: "16px",
-                marginBottom: "14px"
+                fontSize: "10px",
+                fontWeight: 700,
+                color: "var(--gold)",
+                letterSpacing: "1.5px",
+                marginBottom: "6px"
               }}
             >
-              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--gold)", marginBottom: "6px" }}>
-                ⚔️ BELLASHUV TAKLIFI
-              </div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text)", marginBottom: "12px" }}>
-                "{challenge.challengerTeam.name}" sizning jamoangizga taklif yubordi
-              </div>
-              <div style={{ display: "flex", gap: "10px" }}>
+              ⚔️ BELLASHUV TAKLIFI
+            </div>
+            <div
+              style={{
+                fontSize: "15px",
+                fontWeight: 700,
+                color: "var(--text)",
+                marginBottom: canAct ? "12px" : "6px"
+              }}
+            >
+              "{ch.challengerTeam.name}" jamoangizni bellashuvga chaqirdi
+            </div>
+            {canAct ? (
+              <div style={{ display: "flex", gap: "8px" }}>
                 <button
-                  disabled={actionId === challenge.battleId}
+                  disabled={busy}
                   style={{
                     flex: 1,
-                    padding: "12px",
+                    padding: "11px",
                     background: "var(--success)",
                     border: "none",
-                    borderRadius: "12px",
-                    fontSize: "14px",
+                    borderRadius: "10px",
+                    fontSize: "13px",
                     fontWeight: 800,
                     color: "white",
-                    cursor: "pointer",
-                    opacity: actionId === challenge.battleId ? 0.6 : 1
+                    cursor: busy ? "not-allowed" : "pointer",
+                    opacity: busy ? 0.6 : 1
                   }}
                   type="button"
-                  onClick={() => void handleAccept(challenge.battleId)}
+                  onClick={() => void handleAccept(ch.battleId)}
                 >
-                  Qabul qilish
+                  {busy ? "..." : "Qabul qilish"}
                 </button>
                 <button
-                  disabled={actionId === challenge.battleId}
+                  disabled={busy}
                   style={{
                     flex: 1,
-                    padding: "12px",
-                    background: "transparent",
-                    border: "1px solid var(--error)",
-                    borderRadius: "12px",
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: "var(--error)",
-                    cursor: "pointer",
-                    opacity: actionId === challenge.battleId ? 0.6 : 1
-                  }}
-                  type="button"
-                  onClick={() => void handleDecline(challenge.battleId)}
-                >
-                  Rad etish
-                </button>
-              </div>
-              {actionError ? (
-                <div style={{ fontSize: "12px", color: "var(--error)", marginTop: "8px" }}>
-                  {actionError}
-                </div>
-              ) : null}
-            </div>
-          ))}
-
-          {outgoing.map((challenge) => (
-            <div
-              key={challenge.battleId}
-              style={{
-                background: "var(--card)",
-                border: "1px dashed var(--border)",
-                borderRadius: "16px",
-                padding: "14px",
-                marginBottom: "14px"
-              }}
-            >
-              <div style={{ fontSize: "13px", color: "var(--muted)", textAlign: "center", marginBottom: isOwner ? "10px" : 0 }}>
-                ⏳ "{challenge.opponentTeam.name}" jamoasidan javob kutilmoqda...
-              </div>
-              {isOwner ? (
-                <button
-                  disabled={actionId === challenge.battleId}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
+                    padding: "11px",
                     background: "transparent",
                     border: "1px solid var(--error)",
                     borderRadius: "10px",
                     fontSize: "13px",
                     fontWeight: 700,
                     color: "var(--error)",
-                    cursor: actionId === challenge.battleId ? "not-allowed" : "pointer",
-                    opacity: actionId === challenge.battleId ? 0.6 : 1
+                    cursor: busy ? "not-allowed" : "pointer",
+                    opacity: busy ? 0.6 : 1
                   }}
                   type="button"
-                  onClick={() => void handleCancel(challenge.battleId)}
+                  onClick={() => void handleDecline(ch.battleId)}
                 >
-                  Taklifni bekor qilish
+                  Rad etish
                 </button>
-              ) : null}
-            </div>
-          ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                Faqat jamoa egasi qabul yoki rad eta oladi
+              </div>
+            )}
+          </div>
+        );
+      })}
 
+      {/* Outgoing challenges */}
+      {outgoing.map((ch) => {
+        const canCancel = ch.challengerTeam.ownerId === currentUserId && currentUserId !== 0;
+        const busy = actionId === ch.battleId;
+        return (
           <div
+            key={ch.battleId}
             style={{
               background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "20px",
-              padding: "20px",
-              marginBottom: "16px"
+              border: "1px dashed var(--border)",
+              borderRadius: "16px",
+              padding: "14px",
+              marginBottom: "12px"
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-              <div
-                style={{
-                  width: "44px",
-                  height: "44px",
-                  borderRadius: "12px",
-                  background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  flex: "0 0 auto"
-                }}
-              >
-                <TeamIcon size={22} />
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: "17px",
-                    fontWeight: 800,
-                    color: "var(--text)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap"
-                  }}
-                >
-                  {team.name}
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                  {team.members.length} / {team.maxMembers} a'zo
-                </div>
-              </div>
-            </div>
-
             <div
               style={{
-                background: "var(--surface)",
-                border: "1px dashed var(--border)",
-                borderRadius: "12px",
-                padding: "12px 14px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "10px"
+                fontSize: "13px",
+                color: "var(--muted)",
+                marginBottom: canCancel ? "10px" : 0
               }}
             >
-              <div>
-                <div style={{ fontSize: "10px", color: "var(--muted)", letterSpacing: "1.5px", marginBottom: "2px" }}>
-                  QO'SHILISH KODI
-                </div>
-                <div
-                  style={{
-                    fontSize: "22px",
-                    fontWeight: 900,
-                    color: "var(--accent)",
-                    letterSpacing: "4px",
-                    fontFamily: "monospace"
-                  }}
-                >
-                  {team.code}
-                </div>
-              </div>
+              ⏳ "{ch.opponentTeam.name}" jamoasidan javob kutilmoqda...
+            </div>
+            {canCancel ? (
               <button
+                disabled={busy}
                 style={{
-                  padding: "8px 12px",
+                  width: "100%",
+                  padding: "9px",
+                  background: "transparent",
+                  border: "1px solid var(--error)",
                   borderRadius: "10px",
-                  border: "1px solid var(--border)",
-                  background: codeCopied ? "var(--success)" : "var(--card)",
-                  color: codeCopied ? "white" : "var(--accent)",
                   fontSize: "12px",
                   fontWeight: 700,
-                  cursor: "pointer"
+                  color: "var(--error)",
+                  cursor: busy ? "not-allowed" : "pointer",
+                  opacity: busy ? 0.6 : 1
                 }}
                 type="button"
-                onClick={() => void handleCopyCode()}
+                onClick={() => void handleCancel(ch.battleId)}
               >
-                {codeCopied ? "✓" : "Nusxa"}
+                Taklifni bekor qilish
               </button>
-            </div>
+            ) : null}
           </div>
+        );
+      })}
 
-          <h2 style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)", marginBottom: "10px" }}>
-            A'zolar
-          </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "20px" }}>
-            {team.members.map((member) => {
-              const isMemberOwner = member.telegramId === team.ownerId;
-              const isMe = member.telegramId === currentUserId && currentUserId !== 0;
+      {actionError ? (
+        <div
+          style={{
+            fontSize: "12px",
+            color: "var(--error)",
+            marginBottom: "10px",
+            textAlign: "center",
+            fontWeight: 600
+          }}
+        >
+          {actionError}
+        </div>
+      ) : null}
 
-              return (
-                <div
-                  key={member.telegramId}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "14px",
-                    padding: "10px 14px"
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "34px",
-                      height: "34px",
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      fontSize: "14px",
-                      fontWeight: 700
-                    }}
-                  >
-                    {memberInitial(member)}
-                  </div>
-                  <div style={{ flex: 1, fontSize: "14px", fontWeight: 600, color: "var(--text)" }}>
-                    {memberLabel(member)}
-                    {isMe ? " (siz)" : ""}
-                  </div>
-                  {isMemberOwner ? (
-                    <span
-                      style={{
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        color: "var(--gold)",
-                        background: "rgba(245,200,66,0.14)",
-                        border: "1px solid rgba(245,200,66,0.3)",
-                        padding: "3px 8px",
-                        borderRadius: "20px"
-                      }}
-                    >
-                      EGASI
-                    </span>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-
-          {isOwner ? (
-            <button
-              disabled={outgoing.length > 0 || team.status !== "open"}
-              style={{
-                width: "100%",
-                padding: "15px",
-                background:
-                  outgoing.length > 0 || team.status !== "open"
-                    ? "var(--card)"
-                    : "linear-gradient(135deg, #F5C842, #7C3AED)",
-                border: outgoing.length > 0 || team.status !== "open" ? "1px dashed var(--border)" : "none",
-                borderRadius: "14px",
-                fontSize: "15px",
-                fontWeight: 800,
-                color: outgoing.length > 0 || team.status !== "open" ? "var(--muted)" : "white",
-                cursor: outgoing.length > 0 || team.status !== "open" ? "not-allowed" : "pointer",
-                marginBottom: "10px"
-              }}
-              type="button"
-              onClick={() => setChallengeOpen(true)}
-            >
-              ⚔️ Bellashuvga taklif qilish
-            </button>
-          ) : null}
-
-          <button
-            style={{
-              width: "100%",
-              padding: "13px",
-              background: "transparent",
-              border: "1px solid var(--error)",
-              borderRadius: "14px",
-              fontSize: "14px",
-              fontWeight: 700,
-              color: "var(--error)",
-              cursor: "pointer"
-            }}
-            type="button"
-            onClick={() => setLeaveOpen(true)}
-          >
-            Jamoadan chiqish
-          </button>
-        </>
+      {/* Main content */}
+      {loading ? (
+        <div style={{ padding: "48px 0", textAlign: "center" }}>
+          <div style={{ fontSize: "13px", color: "var(--muted)" }}>Yuklanmoqda...</div>
+        </div>
+      ) : !team ? (
+        <NoTeamView
+          onCreate={() => setCreateOpen(true)}
+          onJoin={() => setJoinOpen(true)}
+        />
+      ) : (
+        <HasTeamView
+          team={team}
+          currentUserId={currentUserId}
+          isOwner={isOwner}
+          codeCopied={codeCopied}
+          hasOutgoing={outgoing.length > 0}
+          activeBattle={activeBattle}
+          onCopyCode={() => void handleCopyCode()}
+          onChallenge={() => setChallengeOpen(true)}
+          onLeave={() => setLeaveOpen(true)}
+        />
       )}
 
       {createOpen ? (
-        <CreateTeamModal onClose={() => setCreateOpen(false)} onCreated={() => void refresh()} />
+        <CreateTeamModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => void refresh()}
+        />
       ) : null}
       {joinOpen ? (
-        <JoinTeamModal onClose={() => setJoinOpen(false)} onJoined={() => void refresh()} />
+        <JoinTeamModal
+          onClose={() => setJoinOpen(false)}
+          onJoined={() => void refresh()}
+        />
       ) : null}
       {challengeOpen ? (
         <ChallengeModal
@@ -572,5 +426,398 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: TeamScreenP
         />
       ) : null}
     </div>
+  );
+}
+
+/* ──────── Sub-components ──────── */
+
+function NoTeamView({
+  onCreate,
+  onJoin
+}: {
+  onCreate: () => void;
+  onJoin: () => void;
+}) {
+  return (
+    <>
+      <div
+        style={{
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "20px",
+          padding: "32px 20px",
+          textAlign: "center",
+          marginBottom: "16px"
+        }}
+      >
+        <div
+          style={{
+            color: "var(--accent)",
+            marginBottom: "14px",
+            display: "flex",
+            justifyContent: "center"
+          }}
+        >
+          <TeamIcon size={52} />
+        </div>
+        <div
+          style={{
+            fontSize: "17px",
+            fontWeight: 800,
+            color: "var(--text)",
+            marginBottom: "8px"
+          }}
+        >
+          Hali jamoada emassiz
+        </div>
+        <div
+          style={{
+            fontSize: "13px",
+            color: "var(--muted)",
+            lineHeight: 1.6
+          }}
+        >
+          Yangi jamoa yarating yoki do'stingizning kodi orqali qo'shiling
+        </div>
+      </div>
+
+      <button
+        style={{
+          width: "100%",
+          padding: "16px",
+          background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+          border: "none",
+          borderRadius: "14px",
+          fontSize: "15px",
+          fontWeight: 800,
+          color: "white",
+          cursor: "pointer",
+          marginBottom: "10px",
+          boxShadow: "0 8px 24px rgba(77,166,255,0.28)"
+        }}
+        type="button"
+        onClick={onCreate}
+      >
+        + Yangi jamoa yaratish
+      </button>
+      <button
+        style={{
+          width: "100%",
+          padding: "16px",
+          background: "var(--card)",
+          border: "2px solid var(--accent)",
+          borderRadius: "14px",
+          fontSize: "15px",
+          fontWeight: 700,
+          color: "var(--accent)",
+          cursor: "pointer"
+        }}
+        type="button"
+        onClick={onJoin}
+      >
+        Kod orqali qo'shilish
+      </button>
+    </>
+  );
+}
+
+function HasTeamView({
+  team,
+  currentUserId,
+  isOwner,
+  codeCopied,
+  hasOutgoing,
+  activeBattle,
+  onCopyCode,
+  onChallenge,
+  onLeave
+}: {
+  team: TeamWithMembers;
+  currentUserId: number;
+  isOwner: boolean;
+  codeCopied: boolean;
+  hasOutgoing: boolean;
+  activeBattle: PendingChallenge | undefined;
+  onCopyCode: () => void;
+  onChallenge: () => void;
+  onLeave: () => void;
+}) {
+  const challengeDisabled = hasOutgoing || team.status !== "open" || !!activeBattle;
+
+  return (
+    <>
+      {/* Team card */}
+      <div
+        style={{
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "20px",
+          padding: "18px",
+          marginBottom: "12px"
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "16px"
+          }}
+        >
+          <div
+            style={{
+              width: "46px",
+              height: "46px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              flex: "0 0 auto",
+              boxShadow: "0 4px 12px rgba(124,58,237,0.35)"
+            }}
+          >
+            <TeamIcon size={22} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: "18px",
+                fontWeight: 900,
+                color: "var(--text)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                marginBottom: "4px"
+              }}
+            >
+              {team.name}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  letterSpacing: "0.5px",
+                  color:
+                    team.status === "open"
+                      ? "var(--success)"
+                      : "var(--gold)",
+                  background:
+                    team.status === "open"
+                      ? "rgba(34,197,94,0.12)"
+                      : "rgba(245,200,66,0.12)",
+                  border: `1px solid ${
+                    team.status === "open"
+                      ? "rgba(34,197,94,0.3)"
+                      : "rgba(245,200,66,0.3)"
+                  }`,
+                  padding: "2px 8px",
+                  borderRadius: "20px"
+                }}
+              >
+                {team.status === "open"
+                  ? "● OCHIQ"
+                  : team.status === "in_battle"
+                    ? "⚔ BELLASHUVDA"
+                    : "🔒 YOPIQ"}
+              </span>
+              <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                {team.members.length}/{team.maxMembers} a'zo
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Code block */}
+        <div
+          style={{
+            background: "rgba(77,166,255,0.06)",
+            border: "1px dashed rgba(77,166,255,0.3)",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            marginBottom: "16px"
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "9px",
+                color: "var(--muted)",
+                letterSpacing: "2px",
+                marginBottom: "3px",
+                fontWeight: 700
+              }}
+            >
+              QO'SHILISH KODI
+            </div>
+            <div
+              style={{
+                fontSize: "26px",
+                fontWeight: 900,
+                color: "var(--accent)",
+                letterSpacing: "5px",
+                fontFamily: "monospace"
+              }}
+            >
+              {team.code}
+            </div>
+          </div>
+          <button
+            style={{
+              padding: "9px 14px",
+              borderRadius: "10px",
+              border: `1px solid ${codeCopied ? "rgba(34,197,94,0.4)" : "var(--border)"}`,
+              background: codeCopied ? "rgba(34,197,94,0.12)" : "var(--surface)",
+              color: codeCopied ? "var(--success)" : "var(--accent)",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.15s",
+              whiteSpace: "nowrap"
+            }}
+            type="button"
+            onClick={onCopyCode}
+          >
+            {codeCopied ? "✓ Nusxalandi" : "Nusxa"}
+          </button>
+        </div>
+
+        {/* Members */}
+        <div
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            color: "var(--muted)",
+            letterSpacing: "1.5px",
+            marginBottom: "8px"
+          }}
+        >
+          A'ZOLAR
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {team.members.map((m) => {
+            const isMe = m.telegramId === currentUserId && currentUserId !== 0;
+            const isTeamOwner = m.telegramId === team.ownerId;
+            return (
+              <div
+                key={m.telegramId}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "9px 10px",
+                  background: isMe
+                    ? "rgba(77,166,255,0.07)"
+                    : "transparent",
+                  border: `1px solid ${isMe ? "rgba(77,166,255,0.2)" : "var(--border)"}`,
+                  borderRadius: "12px"
+                }}
+              >
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    flex: "0 0 auto"
+                  }}
+                >
+                  {memberInitial(m)}
+                </div>
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    color: "var(--text)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  {memberLabel(m)}
+                  {isMe ? " (siz)" : ""}
+                </span>
+                {isTeamOwner ? (
+                  <span
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      color: "var(--gold)",
+                      background: "rgba(245,200,66,0.14)",
+                      border: "1px solid rgba(245,200,66,0.3)",
+                      padding: "2px 7px",
+                      borderRadius: "20px",
+                      letterSpacing: "0.5px",
+                      flex: "0 0 auto"
+                    }}
+                  >
+                    EGASI
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Challenge button — only for owner */}
+      {isOwner ? (
+        <button
+          disabled={challengeDisabled}
+          style={{
+            width: "100%",
+            padding: "15px",
+            background: challengeDisabled
+              ? "var(--card)"
+              : "linear-gradient(135deg, #F5C842, #7C3AED)",
+            border: challengeDisabled ? "1px dashed var(--border)" : "none",
+            borderRadius: "14px",
+            fontSize: "15px",
+            fontWeight: 800,
+            color: challengeDisabled ? "var(--muted)" : "white",
+            cursor: challengeDisabled ? "not-allowed" : "pointer",
+            marginBottom: "10px",
+            boxShadow: challengeDisabled ? "none" : "0 6px 20px rgba(124,58,237,0.3)"
+          }}
+          type="button"
+          onClick={onChallenge}
+        >
+          ⚔️ Bellashuvga taklif qilish
+        </button>
+      ) : null}
+
+      {/* Leave team */}
+      <button
+        style={{
+          width: "100%",
+          padding: "13px",
+          background: "transparent",
+          border: "1px solid var(--error)",
+          borderRadius: "14px",
+          fontSize: "14px",
+          fontWeight: 700,
+          color: "var(--error)",
+          cursor: "pointer"
+        }}
+        type="button"
+        onClick={onLeave}
+      >
+        Jamoadan chiqish
+      </button>
+    </>
   );
 }

@@ -11,4 +11,5 @@ urlpatterns = [
     path("<str:battle_id>/cancel", views.cancel_challenge),
     path("<str:battle_id>/answer", views.submit_answer),
     path("<str:battle_id>/state", views.get_state),
+    path("<str:battle_id>/forfeit", views.forfeit_battle_view),
 ]

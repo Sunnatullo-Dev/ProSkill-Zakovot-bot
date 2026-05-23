@@ -547,3 +547,17 @@ def get_pending_for_user(telegram_id: int) -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+def forfeit_battle(battle_id: str, telegram_id: int) -> None:
+    """Foydalanuvchi bellashuvdan chiqsa — bellashuvni hozirgi natija bilan yakunlaydi."""
+    challenge = battle_repo.get_challenge_by_id(battle_id)
+    if not challenge or challenge["status"] != "in_progress":
+        return
+    membership = find_membership(telegram_id)
+    if not membership or membership["team_id"] not in (
+        challenge["challengerTeamId"],
+        challenge["opponentTeamId"],
+    ):
+        return
+    finalize_battle(battle_id)

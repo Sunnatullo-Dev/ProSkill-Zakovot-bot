@@ -343,6 +343,17 @@ export async function cancelBattle(battleId: string): Promise<ApiResult<{ ok: bo
   });
 }
 
+export async function forfeitBattle(battleId: string): Promise<void> {
+  try {
+    await request<{ ok: boolean }>(`/battles/${battleId}/forfeit`, {
+      method: "POST",
+      body: {}
+    });
+  } catch {
+    // Forfeit silently fails — we still exit the page
+  }
+}
+
 export async function getBattleState(battleId: string): Promise<BattleState | null> {
   try {
     const response = await request<BattleState>(`/battles/${battleId}/state`);

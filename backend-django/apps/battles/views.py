@@ -99,3 +99,12 @@ def get_state(request, battle_id: str):
     battle_id = _validate_uuid(battle_id)
     state = service.get_battle_state(battle_id, user.telegram_id)
     return Response(state)
+
+
+@api_view(["POST"])
+@require_auth
+def forfeit_battle_view(request, battle_id: str):
+    user = request.current_user
+    battle_id = _validate_uuid(battle_id)
+    service.forfeit_battle(battle_id, user.telegram_id)
+    return Response({"ok": True})

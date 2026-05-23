@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getBattleState, submitBattleAnswer } from "../api/client";
+import { forfeitBattle, getBattleState, submitBattleAnswer } from "../api/client";
 import type { BattleState, BattleTeamView } from "../types";
 import { hapticResult } from "../utils/haptics";
 
@@ -123,6 +123,8 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ isCorrect: boolean; correctAnswer: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [exitConfirm, setExitConfirm] = useState(false);
+  const [forfeiting, setForfeiting] = useState(false);
   const lastRoundIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -218,6 +220,12 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
       window.clearInterval(id);
     };
   }, [state?.currentRound?.roundId, state?.finished]);
+
+  async function handleForfeit() {
+    setForfeiting(true);
+    await forfeitBattle(battleId);
+    onExit();
+  }
 
   async function handleSubmit() {
     if (!state?.currentRound || submitting || state.currentRound.myAnswered) {
@@ -375,6 +383,80 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         margin: "0 auto"
       }}
     >
+      {exitConfirm ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: "24px"
+          }}
+        >
+          <div
+            style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "20px",
+              padding: "28px 24px",
+              textAlign: "center",
+              width: "100%",
+              maxWidth: "320px"
+            }}
+          >
+            <div style={{ fontSize: "40px", marginBottom: "12px" }}>🏳️</div>
+            <div style={{ fontSize: "17px", fontWeight: 800, color: "var(--text)", marginBottom: "8px" }}>
+              Bellashuvdan chiqasizmi?
+            </div>
+            <div style={{ fontSize: "13px", color: "var(--muted)", marginBottom: "24px" }}>
+              Chiqsangiz, raqib g'olib deb hisoblanadi
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                disabled={forfeiting}
+                style={{
+                  flex: 1,
+                  padding: "13px",
+                  background: "var(--border)",
+                  border: "none",
+                  borderRadius: "12px",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  color: "var(--text)",
+                  cursor: "pointer"
+                }}
+                type="button"
+                onClick={() => setExitConfirm(false)}
+              >
+                Qolish
+              </button>
+              <button
+                disabled={forfeiting}
+                style={{
+                  flex: 1,
+                  padding: "13px",
+                  background: "linear-gradient(135deg, #ef4444, #b91c1c)",
+                  border: "none",
+                  borderRadius: "12px",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  color: "white",
+                  cursor: forfeiting ? "not-allowed" : "pointer",
+                  opacity: forfeiting ? 0.6 : 1
+                }}
+                type="button"
+                onClick={() => void handleForfeit()}
+              >
+                {forfeiting ? "..." : "Chiqish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div
         style={{
           display: "flex",
@@ -386,15 +468,33 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)" }}>
           Bellashuv {round ? `· Round ${round.roundNumber}/${round.totalRounds}` : ""}
         </span>
-        <span
-          style={{
-            fontSize: "16px",
-            fontWeight: 800,
-            color: secondsLeft <= 5 ? "var(--error)" : secondsLeft <= 10 ? "var(--warning)" : "var(--accent)"
-          }}
-        >
-          ⏱ {secondsLeft}s
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span
+            style={{
+              fontSize: "16px",
+              fontWeight: 800,
+              color: secondsLeft <= 5 ? "var(--error)" : secondsLeft <= 10 ? "var(--warning)" : "var(--accent)"
+            }}
+          >
+            ⏱ {secondsLeft}s
+          </span>
+          <button
+            style={{
+              background: "rgba(239,68,68,0.15)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: "8px",
+              color: "var(--error)",
+              fontSize: "12px",
+              fontWeight: 700,
+              padding: "5px 10px",
+              cursor: "pointer"
+            }}
+            type="button"
+            onClick={() => setExitConfirm(true)}
+          >
+            Tark etish
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: "10px", marginBottom: "18px" }}>
