@@ -39,8 +39,13 @@ def join_team(request):
     if not (4 <= len(code) <= 8):
         raise AppError(400, "Kod noto'g'ri")
 
-    if repositories.find_membership(user.telegram_id):
-        raise AppError(409, "Siz allaqachon jamoadasiz")
+    membership = repositories.find_membership(user.telegram_id)
+    if membership:
+        existing = repositories.get_team_by_telegram_id(user.telegram_id)
+        team_name = (existing or {}).get("name", "")
+        if team_name:
+            raise AppError(409, f"Siz allaqachon '{team_name}' jamoasidasiz. Avval u yerdan chiqing.")
+        raise AppError(409, "Siz allaqachon jamoadasiz. Avval u yerdan chiqing.")
 
     team = repositories.join_team_by_code(code, user.telegram_id)
     return Response({"team": team, "members": team.get("members", [])})

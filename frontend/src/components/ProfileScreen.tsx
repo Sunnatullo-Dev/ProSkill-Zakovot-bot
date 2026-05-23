@@ -213,17 +213,14 @@ export default function ProfileScreen({
     setNameError("");
     const trimmed = draftName.trim();
 
-    if (trimmed.length === 0) {
-      setNameError("Ism bo'sh bo'lmasin");
-      return;
-    }
+    // Empty string clears displayName so Telegram name shows again
     if (trimmed.length > 30) {
       setNameError("Ism 30 belgidan oshmasin");
       return;
     }
 
     setSavingName(true);
-    const result = await updateMyDisplayName(trimmed);
+    const result = await updateMyDisplayName(trimmed.length > 0 ? trimmed : null);
     setSavingName(false);
 
     if (!result.ok) {
@@ -297,7 +294,7 @@ export default function ProfileScreen({
                 <input
                   autoFocus
                   maxLength={30}
-                  placeholder="Ismingiz"
+                  placeholder="Bo'sh qoldirsa Telegram ismi ko'rinadi"
                   style={{
                     width: "100%",
                     padding: "8px 10px",

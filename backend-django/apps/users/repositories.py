@@ -10,6 +10,9 @@ from .models import User
 
 
 REFERRAL_LEADERBOARD_LIMIT = 20
+# Legacy placeholder values that were used before the Telegram name fix.
+# On login we clear these so the real Telegram name shows automatically.
+_LEGACY_DISPLAY_NAMES: frozenset[str] = frozenset({"Zakovatchi", "guest", "Zakovatchi guest"})
 
 
 def _map_user(user: User) -> dict[str, Any]:
@@ -38,6 +41,10 @@ def upsert_user(
             "username": username,
         },
     )
+    # Clear stale placeholder displayNames set during early testing
+    if user.display_name in _LEGACY_DISPLAY_NAMES:
+        User.objects.filter(telegram_id=telegram_id).update(display_name=None)
+        user.display_name = None
     return _map_user(user)
 
 
