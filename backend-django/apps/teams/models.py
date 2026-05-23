@@ -14,7 +14,7 @@ class Team(models.Model):
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=10, unique=True, db_index=True)
     owner_id = models.BigIntegerField()
-    max_members = models.IntegerField(default=4)
+    max_members = models.IntegerField(default=6)
     status = models.CharField(max_length=20, default="open", choices=STATUS_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
 
