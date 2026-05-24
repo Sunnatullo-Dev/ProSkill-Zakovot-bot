@@ -18,7 +18,17 @@ type TelegramState = {
   startParam: string;
   error: string;
   tg: TelegramWebApp | null;
+  // Foydalanuvchi haqiqiy Telegram klientida (mobil/desktop/web)mi?
+  inTelegram: boolean;
+  // Telegram ichida bo'lib, initData topib bo'lmadimi? (broken auth situation)
+  initDataMissing: boolean;
 };
+
+function isRealTelegramPlatform(platform?: string): boolean {
+  if (!platform) return false;
+  const p = platform.toLowerCase();
+  return p !== "unknown" && p !== "";
+}
 
 export function useTelegram(): TelegramState {
   const [state, setState] = useState<TelegramState>({
@@ -27,7 +37,9 @@ export function useTelegram(): TelegramState {
     user: null,
     startParam: "",
     error: "",
-    tg
+    tg,
+    inTelegram: false,
+    initDataMissing: false
   });
 
   useEffect(() => {
@@ -40,7 +52,9 @@ export function useTelegram(): TelegramState {
         user: BROWSER_USER,
         startParam: "",
         error: "",
-        tg: null
+        tg: null,
+        inTelegram: false,
+        initDataMissing: false
       });
       return;
     }
@@ -51,13 +65,22 @@ export function useTelegram(): TelegramState {
       webApp.setHeaderColor?.("#080f1e");
       webApp.setBackgroundColor?.("#080f1e");
 
+      const realPlatform = isRealTelegramPlatform(webApp.platform);
+      const rawInitData = webApp.initData ?? "";
+      const hasInitData = rawInitData.length > 0;
+
       setState({
-        initData: webApp.initData || "guest",
+        // Telegram ichida bo'lib initData bo'sh bo'lsa "guest" qaytarmaymiz —
+        // backend mehmon deb noto'g'ri belgilab qo'yadi. Bo'sh string qaytaramiz
+        // va App.tsx yuqorida xato ekran ko'rsatadi.
+        initData: hasInitData ? rawInitData : (realPlatform ? "" : "guest"),
         isReady: true,
         user: normalizeTelegramUser(webApp.initDataUnsafe?.user) ?? BROWSER_USER,
         startParam: webApp.initDataUnsafe?.start_param ?? "",
         error: "",
-        tg: webApp
+        tg: webApp,
+        inTelegram: realPlatform,
+        initDataMissing: realPlatform && !hasInitData
       });
     } catch (error) {
       console.error("Telegram WebApp init failed", error);
@@ -67,7 +90,9 @@ export function useTelegram(): TelegramState {
         user: BROWSER_USER,
         startParam: "",
         error: "",
-        tg: null
+        tg: null,
+        inTelegram: false,
+        initDataMissing: false
       });
     }
   }, []);

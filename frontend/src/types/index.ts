@@ -24,8 +24,11 @@ export type TelegramWebApp = {
     user?: TelegramUser;
     start_param?: string;
   };
+  platform?: string;
+  version?: string;
   ready: () => void;
   expand: () => void;
+  close?: () => void;
   openTelegramLink?: (url: string) => void;
   openLink?: (url: string) => void;
   setHeaderColor?: (color: string) => void;

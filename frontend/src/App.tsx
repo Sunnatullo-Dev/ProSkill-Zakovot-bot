@@ -93,7 +93,7 @@ type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 const isAdminRoute = window.location.pathname.replace(/\/+$/, "").endsWith("/admin");
 
 export default function App() {
-  const { initData, isReady, startParam, user: telegramUser } = useTelegram();
+  const { initData, isReady, startParam, user: telegramUser, inTelegram, initDataMissing } = useTelegram();
   const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<AppUser | null>(null);
   const [score, setScore] = useState(0);
@@ -236,6 +236,12 @@ export default function App() {
       return;
     }
 
+    // Telegram ichida bo'lib initData topib bo'lmagan bo'lsa — login chaqirmaymiz,
+    // chunki "guest" yuborilsa backend bizni mehmon deb belgilab qo'yadi.
+    if (initDataMissing) {
+      return;
+    }
+
     async function bootstrap() {
       try {
         setScreen("loading");
@@ -312,7 +318,7 @@ export default function App() {
     }
 
     void bootstrap();
-  }, [initData, isReady, loadTopUsers, startParam, telegramUser]);
+  }, [initData, initDataMissing, isReady, loadTopUsers, startParam, telegramUser]);
 
   useEffect(() => {
     const backButton = window.Telegram?.WebApp?.BackButton;
@@ -504,6 +510,41 @@ export default function App() {
           : screen === "leaderboard"
             ? "leaderboard"
             : "home";
+
+  // Telegram ichida ochilgan, lekin initData topib bo'lmadi — auth ishlamaydi.
+  // Foydalanuvchini "guest" sifatida o'tkazib yuborish o'rniga aniq xato ko'rsatamiz.
+  if (isReady && initDataMissing) {
+    return (
+      <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+        <section className="mx-auto grid min-h-screen w-full max-w-[430px] place-items-center px-6 text-center">
+          <div className="space-y-5">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[var(--card)] text-4xl">
+              {"⚠️"}
+            </div>
+            <h1 className="text-xl font-black">Telegram ulanmadi</h1>
+            <p className="text-sm font-semibold text-[var(--muted)]">
+              Mini-app ochildi, ammo Telegram identifikatsiya ma'lumotlarini
+              uzata olmadi. Iltimos, mini-app oynasini yopib, botning menyu
+              tugmasi orqali qayta oching.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  window.Telegram?.WebApp?.close?.();
+                } catch {
+                  /* ignore */
+                }
+              }}
+              className="rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-black text-[var(--bg)]"
+            >
+              Yopish
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
