@@ -7,9 +7,9 @@ import {
   reportQuestion,
   revealAnswer,
   saveGameResult,
-  submitAnswer,
-  updateMyDisplayName
+  submitAnswer
 } from "./api/client";
+import { isCleanName } from "./utils/nameQuality";
 import TeamScreen from "./components/TeamScreen";
 import AdminPanel from "./components/AdminPanel";
 import BattlePage from "./components/BattlePage";
@@ -264,20 +264,35 @@ export default function App() {
           return;
         }
 
-        // Foydalanuvchining biror tanish nomi bormi tekshiramiz —
-        // bo'lmasa avval ism so'rash ekranini ko'rsatamiz.
-        const hasName = pickDisplayName(response.user, telegramUser) !== "";
+        // Ism so'rash ekranini faqat zaruriy hollarda ko'rsatamiz:
+        //
+        // 1) Haqiqiy Telegram foydalanuvchi (telegramId > 0):
+        //    - displayName saqlangan → uni ishlatamiz, ekranni o'tkazib yuboramiz
+        //    - Telegram first_name + last_name "toza" (emoji/nuqta yo'q) → uni ishlatamiz
+        //    - Aks holda — ism so'raymiz, backend'ga PATCH /me yuboramiz
+        // 2) Mehmon foydalanuvchi (telegramId === 0):
+        //    - localStorage'da saqlangan nom → uni ishlatamiz
+        //    - Aks holda — ism so'raymiz, faqat localStorage'ga yozamiz
+        const isGuest = response.user.telegramId <= 0;
+        const tgFull = [telegramUser?.first_name, telegramUser?.last_name]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
         const cachedName = readCachedName();
 
-        if (!hasName && !cachedName) {
-          setScreen("name");
+        let needsName = false;
+
+        if (isGuest) {
+          needsName = !cachedName;
+        } else if (response.user.displayName?.trim()) {
+          needsName = false;
+        } else if (isCleanName(tgFull)) {
+          needsName = false;
         } else {
-          if (!hasName && cachedName) {
-            // localStorage'da saqlangan ism — backend'ga ham yuboramiz.
-            void updateMyDisplayName(cachedName);
-          }
-          setScreen("home");
+          needsName = true;
         }
+
+        setScreen(needsName ? "name" : "home");
       } catch (error) {
         console.error("Login failed", error);
         setUser(DEFAULT_APP_USER);
@@ -439,10 +454,21 @@ export default function App() {
   // Ism ustuvorligi: profilda o'zi qo'ygan ism → Telegram first_name + last_name →
   // DB'dagi ism+familiya → username → "Foydalanuvchi" (hech qaysisi bo'lmaganda).
   // "Zakovatchi" hardcoded ism endi ishlatilmaydi.
-  // pickDisplayName backend + Telegram'dan kelgan ismni tartib bilan oladi.
-  // Hech qaysisi bo'lmasa, brauzer localStorage'dagi ism (NameEntryScreen'dan).
-  const playerName =
-    pickDisplayName(user, telegramUser) || readCachedName() || "Foydalanuvchi";
+  // Mehmonlar uchun (telegram_id=0) backend'dagi displayName barcha mehmonlar
+  // o'rtasida umumiy bo'ladi, shuning uchun lokal localStorage'dan o'qiymiz.
+  // Real Telegram foydalanuvchilarda esa odatdagi tartib.
+  const playerName = (() => {
+    if (user && user.telegramId <= 0) {
+      const cached = readCachedName();
+      if (cached) return cached;
+      const tg = [telegramUser?.first_name, telegramUser?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      return tg || "Foydalanuvchi";
+    }
+    return pickDisplayName(user, telegramUser) || readCachedName() || "Foydalanuvchi";
+  })();
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
   const navActive: NavTab =
@@ -474,11 +500,13 @@ export default function App() {
         {screen === "name" ? (
           <NameEntryScreen
             initialName={pickDisplayName(user, telegramUser) || readCachedName()}
+            isGuest={(user?.telegramId ?? 0) <= 0}
             onDone={(updated, enteredName) => {
               writeCachedName(enteredName);
               if (updated) {
                 setUser(updated);
               } else if (user) {
+                // Mehmon — DB o'rniga faqat lokal state'ga yozamiz.
                 setUser({ ...user, displayName: enteredName });
               }
               setScreen("home");

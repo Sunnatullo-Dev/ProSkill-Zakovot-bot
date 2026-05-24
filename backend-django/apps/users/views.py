@@ -43,6 +43,13 @@ def get_referrals(request):
 def update_me(request):
     """Faqat display_name'ni yangilaymiz — qolgan maydonlar Telegram'dan."""
     user = request.current_user
+
+    # Mehmon foydalanuvchi (telegram_id=0) bitta DB qatorida bo'ladi — uning
+    # nomini DB'ga yozsak, hamma mehmon shu nomni ko'radi. Frontend
+    # localStorage'ga saqlasin, backend rad etadi.
+    if user.telegram_id <= 0:
+        raise AppError(403, "Mehmon foydalanuvchining ismi DB'ga saqlanmaydi")
+
     body = request.data if isinstance(request.data, dict) else {}
 
     if "displayName" not in body:

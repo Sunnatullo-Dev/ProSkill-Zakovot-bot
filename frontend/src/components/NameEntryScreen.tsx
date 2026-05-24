@@ -5,12 +5,16 @@ import type { AppUser } from "../types";
 
 type NameEntryScreenProps = {
   initialName: string;
+  isGuest: boolean;
   onDone: (user: AppUser | null, name: string) => void;
 };
 
 // Birinchi marta kirgan foydalanuvchidan ismni so'raydigan oddiy ekran.
-// Bo'sh kelgan Telegram first_name yoki mehmon rejimida ko'rinadi.
-export default function NameEntryScreen({ initialName, onDone }: NameEntryScreenProps) {
+// - Real Telegram foydalanuvchi: backend'ga PATCH /me yuboradi (DB'ga saqlanadi)
+// - Mehmon (telegram_id=0): faqat localStorage'ga yozadi — chunki barcha mehmon
+//   bitta DB qatorida (telegram_id=0) bo'lib qoladi va boshqa mehmonlarning
+//   nomini ko'rib qolmasligi uchun.
+export default function NameEntryScreen({ initialName, isGuest, onDone }: NameEntryScreenProps) {
   const [name, setName] = useState(initialName);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -30,18 +34,25 @@ export default function NameEntryScreen({ initialName, onDone }: NameEntryScreen
 
     setSaving(true);
     setError("");
+
+    try {
+      window.localStorage.setItem("zakovat:playerName", trimmed);
+    } catch {
+      // localStorage o'chirilgan bo'lishi mumkin
+    }
+
+    if (isGuest) {
+      // Mehmon — DB'ga yozmaymiz (shared bug oldini olish uchun).
+      setSaving(false);
+      onDone(null, trimmed);
+      return;
+    }
+
     const result = await updateMyDisplayName(trimmed);
     setSaving(false);
 
     if (!result.ok) {
-      // Backend xatosi bo'lsa ham, ism saqlangan deb davom etamiz —
-      // browser localStorage'da turadi.
-      try {
-        window.localStorage.setItem("zakovat:playerName", trimmed);
-      } catch {
-        // localStorage o'chirilgan bo'lishi mumkin (private browsing)
-      }
-      onDone(null, trimmed);
+      setError(result.error);
       return;
     }
 

@@ -205,7 +205,7 @@ export default function ProfileScreen({
   }, [playerName]);
 
   async function saveName() {
-    if (!user || user.telegramId <= 0) {
+    if (!user) {
       setEditingName(false);
       return;
     }
@@ -213,9 +213,25 @@ export default function ProfileScreen({
     setNameError("");
     const trimmed = draftName.trim();
 
-    // Empty string clears displayName so Telegram name shows again
     if (trimmed.length > 30) {
       setNameError("Ism 30 belgidan oshmasin");
+      return;
+    }
+
+    // Mehmon (telegram_id=0) — DB'ga yozmaymiz, faqat localStorage va lokal state.
+    if (user.telegramId <= 0) {
+      try {
+        if (trimmed.length > 0) {
+          window.localStorage.setItem("zakovat:playerName", trimmed);
+        } else {
+          window.localStorage.removeItem("zakovat:playerName");
+        }
+      } catch {
+        // localStorage o'chirilgan
+      }
+      onUserUpdate?.({ ...user, displayName: trimmed.length > 0 ? trimmed : null });
+      hapticTap();
+      setEditingName(false);
       return;
     }
 
@@ -246,7 +262,8 @@ export default function ProfileScreen({
     bestRoundScore: stats.bestRoundScore
   });
   const userInitial = playerName.trim()[0]?.toUpperCase() ?? "Z";
-  const canEdit = Boolean(user && user.telegramId > 0);
+  // Mehmonlar uchun ham ism tahrirlash mumkin — localStorage'ga saqlanadi.
+  const canEdit = Boolean(user);
 
   return (
     <div
