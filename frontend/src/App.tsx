@@ -7,11 +7,13 @@ import {
   reportQuestion,
   revealAnswer,
   saveGameResult,
-  submitAnswer
+  submitAnswer,
+  updateMyDisplayName
 } from "./api/client";
 import TeamScreen from "./components/TeamScreen";
 import AdminPanel from "./components/AdminPanel";
 import BattlePage from "./components/BattlePage";
+import NameEntryScreen from "./components/NameEntryScreen";
 import BottomNav from "./components/BottomNav";
 import ConfirmDialog from "./components/ConfirmDialog";
 import FinishScreen from "./components/FinishScreen";
@@ -32,8 +34,37 @@ import type {
   Question,
   RevealInfo,
   RoundFilter,
-  Screen
+  Screen,
+  TelegramUser
 } from "./types";
+
+const NAME_STORAGE_KEY = "zakovat:playerName";
+
+function pickDisplayName(user: AppUser | null, tgUser: TelegramUser | null): string {
+  if (user?.displayName?.trim()) return user.displayName.trim();
+  const tgFull = [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(" ").trim();
+  if (tgFull) return tgFull;
+  const dbFull = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim();
+  if (dbFull) return dbFull;
+  if (user?.username?.trim()) return user.username.trim();
+  return "";
+}
+
+function readCachedName(): string {
+  try {
+    return window.localStorage.getItem(NAME_STORAGE_KEY)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeCachedName(name: string): void {
+  try {
+    window.localStorage.setItem(NAME_STORAGE_KEY, name);
+  } catch {
+    // localStorage o'chirilgan — jim qoldiramiz
+  }
+}
 
 // Admin alohida to'liq oyna sifatida ochiladi — foydalanuvchi navigatsiyasiga aralashmaydi.
 const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "leaderboard"];
@@ -227,7 +258,26 @@ export default function App() {
         setUser(response.user);
         setScore(response.user.score);
         await loadTopUsers();
-        setScreen(isAdminRoute ? "admin" : "home");
+
+        if (isAdminRoute) {
+          setScreen("admin");
+          return;
+        }
+
+        // Foydalanuvchining biror tanish nomi bormi tekshiramiz —
+        // bo'lmasa avval ism so'rash ekranini ko'rsatamiz.
+        const hasName = pickDisplayName(response.user, telegramUser) !== "";
+        const cachedName = readCachedName();
+
+        if (!hasName && !cachedName) {
+          setScreen("name");
+        } else {
+          if (!hasName && cachedName) {
+            // localStorage'da saqlangan ism — backend'ga ham yuboramiz.
+            void updateMyDisplayName(cachedName);
+          }
+          setScreen("home");
+        }
       } catch (error) {
         console.error("Login failed", error);
         setUser(DEFAULT_APP_USER);
@@ -389,14 +439,10 @@ export default function App() {
   // Ism ustuvorligi: profilda o'zi qo'ygan ism → Telegram first_name + last_name →
   // DB'dagi ism+familiya → username → "Foydalanuvchi" (hech qaysisi bo'lmaganda).
   // "Zakovatchi" hardcoded ism endi ishlatilmaydi.
-  const telegramFullName = [telegramUser?.first_name, telegramUser?.last_name].filter(Boolean).join(" ");
-  const dbFullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
+  // pickDisplayName backend + Telegram'dan kelgan ismni tartib bilan oladi.
+  // Hech qaysisi bo'lmasa, brauzer localStorage'dagi ism (NameEntryScreen'dan).
   const playerName =
-    user?.displayName ||
-    telegramFullName ||
-    dbFullName ||
-    user?.username ||
-    "Foydalanuvchi";
+    pickDisplayName(user, telegramUser) || readCachedName() || "Foydalanuvchi";
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
   const navActive: NavTab =
@@ -423,6 +469,21 @@ export default function App() {
               <p className="mt-2 text-sm font-semibold text-[var(--muted)]">Yuklanmoqda...</p>
             </div>
           </div>
+        ) : null}
+
+        {screen === "name" ? (
+          <NameEntryScreen
+            initialName={pickDisplayName(user, telegramUser) || readCachedName()}
+            onDone={(updated, enteredName) => {
+              writeCachedName(enteredName);
+              if (updated) {
+                setUser(updated);
+              } else if (user) {
+                setUser({ ...user, displayName: enteredName });
+              }
+              setScreen("home");
+            }}
+          />
         ) : null}
 
         {screen === "home" ? (

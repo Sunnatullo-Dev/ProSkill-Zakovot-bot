@@ -105,6 +105,7 @@ export type AnswerResult = {
 
 export type Screen =
   | "loading"
+  | "name"
   | "home"
   | "question"
   | "result"
