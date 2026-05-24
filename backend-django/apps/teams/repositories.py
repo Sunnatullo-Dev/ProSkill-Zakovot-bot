@@ -9,7 +9,7 @@ from django.db import IntegrityError
 from apps.core.exceptions import AppError
 from apps.users.models import User
 
-from .models import Team, TeamMember
+from .models import Team, TeamChatMessage, TeamMember
 
 
 CODE_CHARS = string.ascii_uppercase + string.digits
@@ -152,6 +152,36 @@ def update_status(team_id: str, status: TeamStatus) -> None:
 def update_name(team_id: str, name: str) -> dict[str, Any]:
     Team.objects.filter(id=team_id).update(name=name)
     return get_team_with_members(team_id)
+
+
+# ---------------- Chat ----------------
+
+
+def post_chat_message(team_id: str, telegram_id: int, text: str) -> dict[str, Any]:
+    """Yangi xabar saqlaydi va to'liq ma'lumotini qaytaradi."""
+    msg = TeamChatMessage.objects.create(
+        team_id=team_id, telegram_id=telegram_id, text=text
+    )
+    return _map_message(msg)
+
+
+def list_chat_messages(team_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    """Eng so'nggi `limit` ta xabarni eski → yangi tartibda qaytaradi."""
+    msgs = list(
+        TeamChatMessage.objects.filter(team_id=team_id)
+        .order_by("-created_at")[:limit]
+    )
+    msgs.reverse()
+    return [_map_message(m) for m in msgs]
+
+
+def _map_message(msg: "TeamChatMessage") -> dict[str, Any]:
+    return {
+        "id": str(msg.id),
+        "telegramId": msg.telegram_id,
+        "text": msg.text,
+        "createdAt": msg.created_at.isoformat() if msg.created_at else None,
+    }
 
 
 def leave_team(telegram_id: int) -> None:

@@ -301,6 +301,34 @@ export async function renameMyTeam(
   });
 }
 
+// ----- Team chat -----
+
+export type TeamChatMessage = {
+  id: string;
+  telegramId: number;
+  text: string;
+  createdAt: string | null;
+};
+
+export async function getTeamChat(): Promise<TeamChatMessage[]> {
+  try {
+    const response = await request<{ messages: TeamChatMessage[] }>("/teams/my/chat");
+    return response?.messages ?? [];
+  } catch (error) {
+    console.error("getTeamChat failed", error);
+    return [];
+  }
+}
+
+export async function postTeamChat(
+  text: string
+): Promise<ApiResult<{ message: TeamChatMessage }>> {
+  return requestResult<{ message: TeamChatMessage }>("/teams/my/chat/send", {
+    method: "POST",
+    body: { text }
+  });
+}
+
 export async function getPendingBattles(): Promise<PendingChallenge[]> {
   try {
     const response = await request<{ challenges: PendingChallenge[] }>("/battles/pending");

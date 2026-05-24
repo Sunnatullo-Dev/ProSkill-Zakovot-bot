@@ -13,6 +13,7 @@ import ChallengeModal from "./ChallengeModal";
 import ConfirmDialog from "./ConfirmDialog";
 import CreateTeamModal from "./CreateTeamModal";
 import JoinTeamModal from "./JoinTeamModal";
+import TeamChatPanel from "./TeamChatPanel";
 import { EditIcon, TeamIcon } from "./icons";
 
 type Props = {
@@ -986,7 +987,14 @@ function HasTeamView({
         </div>
       </div>
 
-      {/* Challenge button — only for owner */}
+      {/* Team chat */}
+      <TeamChatPanel
+        canSend={currentUserId > 0}
+        currentUserId={currentUserId}
+        members={team.members}
+      />
+
+      {/* Challenge button — owner-only with explanation */}
       {isOwner ? (
         <button
           disabled={challengeDisabled}
@@ -1010,7 +1018,23 @@ function HasTeamView({
         >
           ⚔️ Bellashuvga taklif qilish
         </button>
-      ) : null}
+      ) : (
+        <div
+          style={{
+            padding: "12px 14px",
+            background: "var(--card)",
+            border: "1px dashed var(--border)",
+            borderRadius: "14px",
+            fontSize: "12.5px",
+            color: "var(--muted)",
+            textAlign: "center",
+            marginBottom: "10px",
+            lineHeight: 1.5
+          }}
+        >
+          Bellashuvga taklif qilish — faqat jamoa egasining qo'lida
+        </div>
+      )}
 
       {/* Leave team */}
       <button

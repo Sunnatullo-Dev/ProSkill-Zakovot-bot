@@ -67,6 +67,43 @@ def leave_team(request):
     return Response({"ok": True})
 
 
+@api_view(["GET"])
+@require_auth
+def get_team_chat(request):
+    """Jamoa chat xabarlarini qaytaradi. Faqat a'zolar uchun."""
+    user = request.current_user
+    membership = repositories.find_membership(user.telegram_id)
+    if not membership:
+        raise AppError(403, "Siz jamoaga a'zo emassiz")
+
+    messages = repositories.list_chat_messages(membership["team_id"])
+    return Response({"messages": messages})
+
+
+@api_view(["POST"])
+@require_auth
+def post_team_chat(request):
+    """Yangi chat xabarini saqlaydi. Faqat a'zolar uchun."""
+    user = request.current_user
+    if user.telegram_id <= 0:
+        raise AppError(403, "Mehmon chatda yoza olmaydi")
+
+    membership = repositories.find_membership(user.telegram_id)
+    if not membership:
+        raise AppError(403, "Siz jamoaga a'zo emassiz")
+
+    body = request.data if isinstance(request.data, dict) else {}
+    text = (body.get("text") or "").strip()
+
+    if not text:
+        raise AppError(400, "Xabar bo'sh bo'lmasin")
+    if len(text) > 500:
+        raise AppError(400, "Xabar 500 belgidan oshmasin")
+
+    msg = repositories.post_chat_message(membership["team_id"], user.telegram_id, text)
+    return Response({"message": msg}, status=201)
+
+
 @api_view(["PATCH"])
 @require_auth
 def rename_my_team(request):
