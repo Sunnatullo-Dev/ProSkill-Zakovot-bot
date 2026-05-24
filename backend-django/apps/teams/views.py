@@ -14,6 +14,13 @@ from . import repositories
 @require_auth
 def create_team(request):
     user = request.current_user
+
+    # Mehmon foydalanuvchi (telegram_id=0) jamoa yarata olmaydi — chunki
+    # u barcha mehmonlar bilan baham ko'rinadi va shu jamoa hammasiga
+    # ko'rinib qoladi (shared-guest leak).
+    if user.telegram_id <= 0:
+        raise AppError(403, "Jamoa yaratish uchun Telegram orqali kiring")
+
     body = request.data if isinstance(request.data, dict) else {}
     name = (body.get("name") or "").strip()
 
@@ -33,6 +40,12 @@ def create_team(request):
 @require_auth
 def join_team(request):
     user = request.current_user
+
+    # Mehmon (shared row) jamoaga qo'shila olmaydi — boshqalarni ham
+    # avtomatik ham shu jamoaga qo'shgan bo'lar edi.
+    if user.telegram_id <= 0:
+        raise AppError(403, "Jamoaga qo'shilish uchun Telegram orqali kiring")
+
     body = request.data if isinstance(request.data, dict) else {}
     code = (body.get("code") or "").strip()
 
@@ -55,6 +68,12 @@ def join_team(request):
 @require_auth
 def get_my_team(request):
     user = request.current_user
+
+    # Mehmon uchun har doim "jamoasi yo'q" qaytaramiz — telegram_id=0
+    # qatorida saqlangan team_member boshqalarga "leak" bo'lmasligi uchun.
+    if user.telegram_id <= 0:
+        return Response({"team": None})
+
     team = repositories.get_team_by_telegram_id(user.telegram_id)
     return Response({"team": team})
 
@@ -102,6 +121,48 @@ def post_team_chat(request):
 
     msg = repositories.post_chat_message(membership["team_id"], user.telegram_id, text)
     return Response({"message": msg}, status=201)
+
+
+@api_view(["POST"])
+@require_auth
+def transfer_team_owner(request):
+    """Jamoa sardorligini boshqa a'zoga o'tkazadi.
+
+    Body: {"newOwnerTelegramId": <int>}
+    Tekshiruvlar:
+    - Faqat mavjud sardor o'tkaza oladi
+    - Yangi sardor shu jamoaning a'zosi bo'lishi kerak
+    - O'ziga qaytadan o'tkaza olmaydi (no-op)
+    """
+    user = request.current_user
+    if user.telegram_id <= 0:
+        raise AppError(403, "Mehmon foydalanuvchi sardorlikni o'tkaza olmaydi")
+
+    body = request.data if isinstance(request.data, dict) else {}
+    new_owner_raw = body.get("newOwnerTelegramId")
+
+    try:
+        new_owner_id = int(new_owner_raw)
+    except (TypeError, ValueError):
+        raise AppError(400, "newOwnerTelegramId noto'g'ri")
+
+    if new_owner_id <= 0:
+        raise AppError(400, "newOwnerTelegramId noto'g'ri")
+
+    team = repositories.get_team_by_telegram_id(user.telegram_id)
+    if not team:
+        raise AppError(404, "Sizning jamoangiz yo'q")
+    if team.get("ownerId") != user.telegram_id:
+        raise AppError(403, "Faqat hozirgi sardor sardorlikni o'tkaza oladi")
+
+    if new_owner_id == user.telegram_id:
+        return Response({"team": team})  # no-op
+
+    if not repositories.is_team_member(team["id"], new_owner_id):
+        raise AppError(400, "Yangi sardor jamoaning a'zosi bo'lishi kerak")
+
+    updated = repositories.transfer_owner(team["id"], new_owner_id)
+    return Response({"team": updated})
 
 
 @api_view(["PATCH"])

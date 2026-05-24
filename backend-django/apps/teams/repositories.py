@@ -154,6 +154,20 @@ def update_name(team_id: str, name: str) -> dict[str, Any]:
     return get_team_with_members(team_id)
 
 
+def transfer_owner(team_id: str, new_owner_telegram_id: int) -> dict[str, Any]:
+    """Jamoa egaligini boshqa a'zoga o'tkazadi.
+
+    Faqat repository qatlami — auth tekshiruvi view'da bajariladi.
+    """
+    Team.objects.filter(id=team_id).update(owner_id=new_owner_telegram_id)
+    return get_team_with_members(team_id)
+
+
+def is_team_member(team_id: str, telegram_id: int) -> bool:
+    """Foydalanuvchi shu jamoa a'zosimi tekshiradi."""
+    return TeamMember.objects.filter(team_id=team_id, telegram_id=telegram_id).exists()
+
+
 # ---------------- Chat ----------------
 
 

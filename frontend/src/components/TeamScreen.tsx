@@ -6,7 +6,8 @@ import {
   getMyTeam,
   getPendingBattles,
   leaveTeam,
-  renameMyTeam
+  renameMyTeam,
+  transferTeamOwner
 } from "../api/client";
 import type { PendingChallenge, TeamMember, TeamWithMembers } from "../types";
 import ChallengeModal from "./ChallengeModal";
@@ -48,6 +49,19 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState("");
   const mountedRef = useRef(true);
+
+  const [transferTarget, setTransferTarget] = useState<TeamMember | null>(null);
+
+  async function handleTransferOwner() {
+    if (!transferTarget) return;
+    const result = await transferTeamOwner(transferTarget.telegramId);
+    setTransferTarget(null);
+    if (result.ok) {
+      setTeam(result.data.team);
+    } else {
+      setActionError(result.error);
+    }
+  }
 
   async function handleRename() {
     setRenameError("");
@@ -430,6 +444,7 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
             setRenameOpen(true);
             setRenameError("");
           }}
+          onTransferOwner={(member) => setTransferTarget(member)}
         />
       )}
 
@@ -463,6 +478,17 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
           cancelLabel="Yo'q"
           onConfirm={() => void handleLeave()}
           onCancel={() => setLeaveOpen(false)}
+        />
+      ) : null}
+
+      {transferTarget ? (
+        <ConfirmDialog
+          title="Sardorlikni o'tkazish"
+          message={`Sardorlikni "${transferTarget.firstName || transferTarget.username || `#${transferTarget.telegramId}`}" ga o'tkazasizmi? Buni qaytarib bo'lmaydi.`}
+          confirmLabel="Ha, o'tkazaman"
+          cancelLabel="Yo'q"
+          onConfirm={() => void handleTransferOwner()}
+          onCancel={() => setTransferTarget(null)}
         />
       ) : null}
 
@@ -708,7 +734,8 @@ function HasTeamView({
   onCopyCode,
   onChallenge,
   onLeave,
-  onRename
+  onRename,
+  onTransferOwner
 }: {
   team: TeamWithMembers;
   currentUserId: number;
@@ -720,6 +747,7 @@ function HasTeamView({
   onChallenge: () => void;
   onLeave: () => void;
   onRename: () => void;
+  onTransferOwner: (member: TeamMember) => void;
 }) {
   const challengeDisabled = hasOutgoing || team.status !== "open" || !!activeBattle;
 
@@ -978,8 +1006,27 @@ function HasTeamView({
                       flex: "0 0 auto"
                     }}
                   >
-                    EGASI
+                    SARDOR
                   </span>
+                ) : isOwner ? (
+                  <button
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      color: "var(--accent)",
+                      background: "rgba(77,166,255,0.10)",
+                      border: "1px solid rgba(77,166,255,0.3)",
+                      padding: "5px 10px",
+                      borderRadius: "20px",
+                      cursor: "pointer",
+                      flex: "0 0 auto"
+                    }}
+                    title="Bu a'zoga sardorlikni o'tkazish"
+                    type="button"
+                    onClick={() => onTransferOwner(m)}
+                  >
+                    Sardor qil
+                  </button>
                 ) : null}
               </div>
             );

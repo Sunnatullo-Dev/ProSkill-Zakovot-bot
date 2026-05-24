@@ -301,6 +301,15 @@ export async function renameMyTeam(
   });
 }
 
+export async function transferTeamOwner(
+  newOwnerTelegramId: number
+): Promise<ApiResult<{ team: TeamWithMembers }>> {
+  return requestResult<{ team: TeamWithMembers }>("/teams/my/transfer-owner", {
+    method: "POST",
+    body: { newOwnerTelegramId }
+  });
+}
+
 // ----- Team chat -----
 
 export type TeamChatMessage = {
