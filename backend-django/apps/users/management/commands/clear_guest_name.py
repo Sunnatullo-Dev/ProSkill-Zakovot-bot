@@ -1,0 +1,40 @@
+"""telegram_id=0 (umumiy mehmon) yozuvidagi ism maydonlarini tozalaydi.
+
+Bu yozuv barcha mehmonlar tomonidan baham ko'riladi. Eski kod uning
+ichiga "Sunnatulla" kabi ismni yozib qo'ygan bo'lsa — boshqa mehmonlar
+ham shu nomni ko'rib qoladi. Production'dan keyin bir marta ishga
+tushiring:
+
+    python manage.py clear_guest_name
+"""
+from __future__ import annotations
+
+from django.core.management.base import BaseCommand
+
+from apps.users.models import User
+
+
+class Command(BaseCommand):
+    help = "telegram_id=0 yozuvining ism, familiya, username, display_name maydonlarini NULL ga o'rnatadi."
+
+    def handle(self, *args, **options):
+        user = User.objects.filter(telegram_id=0).first()
+        if not user:
+            self.stdout.write(self.style.WARNING("Mehmon yozuvi (telegram_id=0) topilmadi"))
+            return
+
+        before = {
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "username": user.username,
+            "display_name": user.display_name,
+        }
+        user.first_name = None
+        user.last_name = None
+        user.username = None
+        user.display_name = None
+        user.save(update_fields=["first_name", "last_name", "username", "display_name"])
+
+        self.stdout.write(self.style.SUCCESS("Mehmon yozuvi tozalandi"))
+        for key, value in before.items():
+            self.stdout.write(f"  {key}: {value!r} -> None")

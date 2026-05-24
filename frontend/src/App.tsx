@@ -264,32 +264,42 @@ export default function App() {
           return;
         }
 
-        // Ism so'rash ekranini faqat zaruriy hollarda ko'rsatamiz:
+        // Ism so'rash ekranini faqat zaruriy hollarda ko'rsatamiz.
         //
-        // 1) Haqiqiy Telegram foydalanuvchi (telegramId > 0):
-        //    - displayName saqlangan → uni ishlatamiz, ekranni o'tkazib yuboramiz
-        //    - Telegram first_name + last_name "toza" (emoji/nuqta yo'q) → uni ishlatamiz
-        //    - Aks holda — ism so'raymiz, backend'ga PATCH /me yuboramiz
-        // 2) Mehmon foydalanuvchi (telegramId === 0):
-        //    - localStorage'da saqlangan nom → uni ishlatamiz
-        //    - Aks holda — ism so'raymiz, faqat localStorage'ga yozamiz
-        const isGuest = response.user.telegramId <= 0;
+        // MUHIM: backend HMAC tekshiruvi muvaffaqiyatsiz bo'lsa response.user.telegramId=0
+        // bo'lib qoladi. Lekin Telegram WebApp SDK'dan kelgan telegramUser.id baribir
+        // haqiqiy. Shuning uchun "haqiqiy Telegram foydalanuvchi" ekanligini SDK
+        // ma'lumotidan aniqlaymiz, backend response'idan emas.
+        const tgRealId = telegramUser?.id ?? 0;
+        const isRealTelegram = tgRealId > 0;
         const tgFull = [telegramUser?.first_name, telegramUser?.last_name]
           .filter(Boolean)
           .join(" ")
           .trim();
         const cachedName = readCachedName();
 
+        // displayName backend'dan kelgan — faqat shu Telegram user'iniki bo'lsa
+        // ishonamiz. Aks holda u "umumiy mehmon" qatoridan kelgan bo'lishi mumkin.
+        const ownDisplayName =
+          response.user.telegramId === tgRealId
+            ? response.user.displayName?.trim() ?? ""
+            : "";
+
         let needsName = false;
 
-        if (isGuest) {
-          needsName = !cachedName;
-        } else if (response.user.displayName?.trim()) {
-          needsName = false;
-        } else if (isCleanName(tgFull)) {
-          needsName = false;
+        if (isRealTelegram) {
+          if (ownDisplayName) {
+            needsName = false; // o'zi qo'ygan ism
+          } else if (isCleanName(tgFull)) {
+            needsName = false; // Telegram'dagi ism toza — shuni ishlatamiz
+          } else if (cachedName) {
+            needsName = false; // localStorage'dagi
+          } else {
+            needsName = true;
+          }
         } else {
-          needsName = true;
+          // Brauzer/dev rejim — Telegram tashqarisida
+          needsName = !cachedName;
         }
 
         setScreen(needsName ? "name" : "home");
@@ -454,20 +464,33 @@ export default function App() {
   // Ism ustuvorligi: profilda o'zi qo'ygan ism → Telegram first_name + last_name →
   // DB'dagi ism+familiya → username → "Foydalanuvchi" (hech qaysisi bo'lmaganda).
   // "Zakovatchi" hardcoded ism endi ishlatilmaydi.
-  // Mehmonlar uchun (telegram_id=0) backend'dagi displayName barcha mehmonlar
-  // o'rtasida umumiy bo'ladi, shuning uchun lokal localStorage'dan o'qiymiz.
-  // Real Telegram foydalanuvchilarda esa odatdagi tartib.
+  // Ism aniqlash mantig'i:
+  // - Haqiqiy Telegram foydalanuvchi (SDK'dan): backend displayName faqat shu user'iniki
+  //   bo'lsa ishlatiladi (umumiy mehmon qatoridagi "Sunnatulla" kelmasligi uchun).
+  //   So'ng Telegram'dagi first_name+last_name, undan keyin localStorage.
+  // - Brauzer: localStorage > Telegram (agar bor bo'lsa) > "Foydalanuvchi".
   const playerName = (() => {
-    if (user && user.telegramId <= 0) {
-      const cached = readCachedName();
+    const tgRealId = telegramUser?.id ?? 0;
+    const tgFull = [telegramUser?.first_name, telegramUser?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const cached = readCachedName();
+
+    if (tgRealId > 0) {
+      // SDK orqali haqiqiy Telegram user
+      if (user?.telegramId === tgRealId && user.displayName?.trim()) {
+        return user.displayName.trim();
+      }
+      if (tgFull) return tgFull;
       if (cached) return cached;
-      const tg = [telegramUser?.first_name, telegramUser?.last_name]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
-      return tg || "Foydalanuvchi";
+      return "Foydalanuvchi";
     }
-    return pickDisplayName(user, telegramUser) || readCachedName() || "Foydalanuvchi";
+
+    // Brauzer rejim
+    if (cached) return cached;
+    if (tgFull) return tgFull;
+    return "Foydalanuvchi";
   })();
   const recordScore = Math.max(score, leaderboard[0]?.score ?? 0);
   const showBottomNav = NAV_SCREENS.includes(screen);
@@ -499,14 +522,23 @@ export default function App() {
 
         {screen === "name" ? (
           <NameEntryScreen
-            initialName={pickDisplayName(user, telegramUser) || readCachedName()}
-            isGuest={(user?.telegramId ?? 0) <= 0}
+            initialName={(() => {
+              // Faqat Telegram'dan kelgan toza ismni prefill qilamiz.
+              // Backend'dagi displayName boshqa user'niki bo'lishi mumkin —
+              // uni avtomatik kiritmaymiz, foydalanuvchi o'zi yozsin.
+              const tgFull = [telegramUser?.first_name, telegramUser?.last_name]
+                .filter(Boolean)
+                .join(" ")
+                .trim();
+              if (isCleanName(tgFull)) return tgFull;
+              return "";
+            })()}
+            isGuest={(telegramUser?.id ?? 0) <= 0}
             onDone={(updated, enteredName) => {
               writeCachedName(enteredName);
               if (updated) {
                 setUser(updated);
               } else if (user) {
-                // Mehmon — DB o'rniga faqat lokal state'ga yozamiz.
                 setUser({ ...user, displayName: enteredName });
               }
               setScreen("home");
