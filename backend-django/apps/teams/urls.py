@@ -7,5 +7,6 @@ urlpatterns = [
     path("", views.create_team),
     path("join", views.join_team),
     path("my", views.get_my_team),
+    path("my/rename", views.rename_my_team),
     path("leave", views.leave_team),
 ]

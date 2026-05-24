@@ -292,6 +292,15 @@ export async function leaveTeam(): Promise<boolean> {
   return Boolean(response?.ok);
 }
 
+export async function renameMyTeam(
+  name: string
+): Promise<ApiResult<{ team: TeamWithMembers }>> {
+  return requestResult<{ team: TeamWithMembers }>("/teams/my/rename", {
+    method: "PATCH",
+    body: { name }
+  });
+}
+
 export async function getPendingBattles(): Promise<PendingChallenge[]> {
   try {
     const response = await request<{ challenges: PendingChallenge[] }>("/battles/pending");

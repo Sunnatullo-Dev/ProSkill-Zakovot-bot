@@ -5,14 +5,15 @@ import {
   declineBattle,
   getMyTeam,
   getPendingBattles,
-  leaveTeam
+  leaveTeam,
+  renameMyTeam
 } from "../api/client";
 import type { PendingChallenge, TeamMember, TeamWithMembers } from "../types";
 import ChallengeModal from "./ChallengeModal";
 import ConfirmDialog from "./ConfirmDialog";
 import CreateTeamModal from "./CreateTeamModal";
 import JoinTeamModal from "./JoinTeamModal";
-import { TeamIcon } from "./icons";
+import { EditIcon, TeamIcon } from "./icons";
 
 type Props = {
   currentUserId: number;
@@ -41,7 +42,40 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
   const [codeCopied, setCodeCopied] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState("");
   const mountedRef = useRef(true);
+
+  async function handleRename() {
+    setRenameError("");
+    const trimmed = renameDraft.trim();
+    if (trimmed.length < 2) {
+      setRenameError("Nom kamida 2 belgi");
+      return;
+    }
+    if (trimmed.length > 30) {
+      setRenameError("Nom 30 belgidan oshmasin");
+      return;
+    }
+    if (team && trimmed === team.name) {
+      setRenameOpen(false);
+      return;
+    }
+
+    setRenaming(true);
+    const result = await renameMyTeam(trimmed);
+    setRenaming(false);
+
+    if (!result.ok) {
+      setRenameError(result.error);
+      return;
+    }
+
+    setTeam(result.data.team);
+    setRenameOpen(false);
+  }
 
   const refresh = useCallback(async () => {
     const [t, p] = await Promise.all([getMyTeam(), getPendingBattles()]);
@@ -390,6 +424,11 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
           onCopyCode={() => void handleCopyCode()}
           onChallenge={() => setChallengeOpen(true)}
           onLeave={() => setLeaveOpen(true)}
+          onRename={() => {
+            setRenameDraft(team.name);
+            setRenameOpen(true);
+            setRenameError("");
+          }}
         />
       )}
 
@@ -425,6 +464,143 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
           onCancel={() => setLeaveOpen(false)}
         />
       ) : null}
+
+      {renameOpen ? (
+        <RenameTeamDialog
+          busy={renaming}
+          error={renameError}
+          value={renameDraft}
+          onCancel={() => {
+            setRenameOpen(false);
+            setRenameError("");
+          }}
+          onChange={(v) => {
+            setRenameDraft(v);
+            setRenameError("");
+          }}
+          onSubmit={() => void handleRename()}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function RenameTeamDialog({
+  value,
+  error,
+  busy,
+  onChange,
+  onCancel,
+  onSubmit
+}: {
+  value: string;
+  error: string;
+  busy: boolean;
+  onChange: (v: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        zIndex: 1000,
+        backdropFilter: "blur(4px)"
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "360px",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "18px",
+          padding: "20px",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.5)"
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "16px",
+            fontWeight: 900,
+            color: "var(--text)",
+            margin: 0,
+            marginBottom: "12px"
+          }}
+        >
+          Jamoa nomini o'zgartirish
+        </h2>
+        <input
+          autoFocus
+          maxLength={30}
+          placeholder="Yangi nom"
+          style={{
+            width: "100%",
+            padding: "12px 14px",
+            background: "var(--surface)",
+            border: "1.5px solid var(--border)",
+            borderRadius: "12px",
+            fontSize: "14px",
+            color: "var(--text)",
+            outline: "none",
+            fontFamily: "inherit"
+          }}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSubmit();
+            if (e.key === "Escape") onCancel();
+          }}
+        />
+        {error ? (
+          <div style={{ fontSize: "12px", color: "var(--error)", marginTop: "8px" }}>{error}</div>
+        ) : null}
+        <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
+          <button
+            disabled={busy}
+            style={{
+              flex: 1,
+              padding: "12px",
+              background: busy ? "var(--border)" : "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "14px",
+              fontWeight: 800,
+              color: "white",
+              cursor: busy ? "not-allowed" : "pointer",
+              opacity: busy ? 0.6 : 1
+            }}
+            type="button"
+            onClick={onSubmit}
+          >
+            {busy ? "Saqlanmoqda..." : "Saqlash"}
+          </button>
+          <button
+            disabled={busy}
+            style={{
+              padding: "12px 18px",
+              background: "transparent",
+              border: "1px solid var(--border)",
+              borderRadius: "12px",
+              fontSize: "14px",
+              fontWeight: 700,
+              color: "var(--text)",
+              cursor: "pointer"
+            }}
+            type="button"
+            onClick={onCancel}
+          >
+            Bekor
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -530,7 +706,8 @@ function HasTeamView({
   activeBattle,
   onCopyCode,
   onChallenge,
-  onLeave
+  onLeave,
+  onRename
 }: {
   team: TeamWithMembers;
   currentUserId: number;
@@ -541,6 +718,7 @@ function HasTeamView({
   onCopyCode: () => void;
   onChallenge: () => void;
   onLeave: () => void;
+  onRename: () => void;
 }) {
   const challengeDisabled = hasOutgoing || team.status !== "open" || !!activeBattle;
 
@@ -584,16 +762,50 @@ function HasTeamView({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
-                fontSize: "18px",
-                fontWeight: 900,
-                color: "var(--text)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
                 marginBottom: "4px"
               }}
             >
-              {team.name}
+              <span
+                style={{
+                  fontSize: "18px",
+                  fontWeight: 900,
+                  color: "var(--text)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  minWidth: 0,
+                  flex: 1
+                }}
+              >
+                {team.name}
+              </span>
+              {team.ownerId === currentUserId ? (
+                <button
+                  aria-label="Jamoa nomini o'zgartirish"
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    padding: 0,
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    color: "var(--accent)",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flex: "0 0 auto"
+                  }}
+                  title="Jamoa nomini o'zgartirish"
+                  type="button"
+                  onClick={onRename}
+                >
+                  <EditIcon size={13} />
+                </button>
+              ) : null}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span

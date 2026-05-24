@@ -149,6 +149,11 @@ def update_status(team_id: str, status: TeamStatus) -> None:
     Team.objects.filter(id=team_id).update(status=status)
 
 
+def update_name(team_id: str, name: str) -> dict[str, Any]:
+    Team.objects.filter(id=team_id).update(name=name)
+    return get_team_with_members(team_id)
+
+
 def leave_team(telegram_id: int) -> None:
     member = TeamMember.objects.filter(telegram_id=telegram_id).first()
     if not member:
