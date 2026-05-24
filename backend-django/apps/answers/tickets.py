@@ -1,10 +1,13 @@
-"""HMAC-imzolangan javob biletlari.
+"""HMAC-imzolangan, single-use javob biletlari.
 
-Frontend bilan to'g'ri javobni almashish o'rniga, server faqat tiket
-chiqaradi. Tiket savol id, vaqt va imzodan iborat; foydalanuvchi javob
-yuborganda biz tiketni qaytadan tekshirib, savol va vaqtni qayta
-tiklaymiz. Bu eski `backend/src/services/answerTicket.service.ts` ning
-Python varianti.
+Tiket = `questionId.issuedAtMs.jti.HMAC` (base64url).
+
+- `jti` (UUID) har biletga noyob — qaytadan ishlatib bo'lmaydi
+- Submit'da `jti` cache'ga "consumed" deb yoziladi; takror urinishlar 409
+- HMAC kalit `settings.TELEGRAM_BOT_TOKEN` bilan imzolanadi
+
+Replay attack himoyasi: bitta bilet bilan turli vaqtlarda bir nechta javob
+yuborish va ko'p ball ham olib bo'lmaydi.
 """
 from __future__ import annotations
 
@@ -13,39 +16,48 @@ import binascii
 import hashlib
 import hmac
 import time
+import uuid
 from dataclasses import dataclass
 
 from django.conf import settings
+from django.core.cache import cache
 
 from apps.core.exceptions import AppError
+
+
+CONSUMED_TTL_SECONDS = 60  # answer timeout 15s + grace 2s — keng marja
 
 
 @dataclass(frozen=True)
 class TicketPayload:
     question_id: str
     issued_at_ms: int
+    jti: str
 
 
 def issue_answer_ticket(question_id: str) -> str:
+    """Yangi single-use bilet chiqaradi."""
     issued_at = int(time.time() * 1000)
-    body = f"{question_id}.{issued_at}"
+    jti = uuid.uuid4().hex
+    body = f"{question_id}.{issued_at}.{jti}"
     signed = f"{body}.{_sign(body)}"
     return _b64url_encode(signed.encode("utf-8"))
 
 
 def verify_answer_ticket(ticket: str) -> TicketPayload:
+    """Bilet imzosini va formatini tekshiradi; consumed bo'lmasa ham qabul qiladi."""
     try:
         decoded = _b64url_decode(ticket).decode("utf-8")
     except (binascii.Error, UnicodeDecodeError, ValueError):
         raise AppError(400, "Javob tiketi noto'g'ri")
 
     parts = decoded.split(".")
-    if len(parts) != 3:
+    if len(parts) != 4:
         raise AppError(400, "Javob tiketi noto'g'ri")
 
-    question_id, issued_at_raw, signature = parts
+    question_id, issued_at_raw, jti, signature = parts
 
-    if not _signature_matches(f"{question_id}.{issued_at_raw}", signature):
+    if not _signature_matches(f"{question_id}.{issued_at_raw}.{jti}", signature):
         raise AppError(400, "Javob tiketi imzosi noto'g'ri")
 
     try:
@@ -53,7 +65,18 @@ def verify_answer_ticket(ticket: str) -> TicketPayload:
     except ValueError:
         raise AppError(400, "Javob tiketi noto'g'ri")
 
-    return TicketPayload(question_id=question_id, issued_at_ms=issued_at_ms)
+    return TicketPayload(question_id=question_id, issued_at_ms=issued_at_ms, jti=jti)
+
+
+def consume_answer_ticket(jti: str) -> bool:
+    """Biletni "ishlatilgan" deb belgilashga urinadi.
+
+    Atomik: cache'da hali yo'q bo'lsa True qaytaradi va belgilaydi;
+    allaqachon bor bo'lsa False qaytaradi (replay urinish).
+    """
+    key = f"used_ticket:{jti}"
+    # `cache.add` faqat key mavjud bo'lmaganda yozadi va True qaytaradi.
+    return bool(cache.add(key, "1", timeout=CONSUMED_TTL_SECONDS))
 
 
 def _sign(body: str) -> str:

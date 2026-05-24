@@ -125,6 +125,9 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   const [errorMessage, setErrorMessage] = useState("");
   const [exitConfirm, setExitConfirm] = useState(false);
   const [forfeiting, setForfeiting] = useState(false);
+  // Ketma-ket muvaffaqiyatsiz polling sonini hisoblaymiz — agar 5+ marta
+  // qaytib kela olmasa, "Chiqish" tugmasini ko'rsatamiz.
+  const [failureCount, setFailureCount] = useState(0);
   const lastRoundIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -150,6 +153,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
       }
 
       if (next) {
+        setFailureCount(0);
         setState(next);
 
         if (next.currentRound) {
@@ -173,6 +177,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         scheduleNext(POLL_INTERVAL_MS);
       } else {
         // Server xato qaytarsa yoki tarmoq uzilsa — backoff bilan urinishni sekinlatamiz.
+        setFailureCount((prev) => prev + 1);
         scheduleNext(POLL_BACKOFF_MS);
       }
     }
@@ -258,17 +263,43 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   }
 
   if (!state) {
+    const stuck = failureCount >= 3;
     return (
       <div
         style={{
           minHeight: "100vh",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "var(--bg)"
+          background: "var(--bg)",
+          gap: "16px",
+          padding: "24px"
         }}
       >
-        <p style={{ color: "var(--muted)", fontSize: "14px" }}>Yuklanmoqda...</p>
+        <p style={{ color: "var(--muted)", fontSize: "14px", textAlign: "center" }}>
+          {stuck
+            ? "Bellashuv ma'lumotlarini olib bo'lmadi. Tarmoq aloqasini tekshiring."
+            : "Yuklanmoqda..."}
+        </p>
+        {stuck ? (
+          <button
+            style={{
+              padding: "12px 24px",
+              background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+              border: "none",
+              borderRadius: "12px",
+              color: "white",
+              fontSize: "14px",
+              fontWeight: 700,
+              cursor: "pointer"
+            }}
+            type="button"
+            onClick={onExit}
+          >
+            Chiqish
+          </button>
+        ) : null}
       </div>
     );
   }

@@ -3,11 +3,16 @@
 POST /ticket  → savol uchun imzolangan bilet chiqaradi
 POST /        → biletni tekshirib, javobni baholaydi va ball beradi
 POST /reveal  → "Javobni bilmayman" tugmasi uchun to'g'ri javob va izoh
+
+Replay attack himoyasi: har biletda noyob `jti` bor, submit'da
+`consume_answer_ticket` orqali "ishlatilgan" deb belgilanadi.
 """
 from __future__ import annotations
 
+import re
 import time
 
+from django.db import transaction
 from django_ratelimit.decorators import ratelimit
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -19,22 +24,32 @@ from apps.users.repositories import add_score
 
 from .gemini import check_answer, explain_question
 from .scoring import ScoreInput, calculate_answer_score
-from .tickets import issue_answer_ticket, verify_answer_ticket
+from .tickets import consume_answer_ticket, issue_answer_ticket, verify_answer_ticket
 
 
 ANSWER_TIMEOUT_MS = 15_000
 TIMEOUT_GRACE_MS = 2_000
-UUID_RE = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def _rate_key(group: str, request) -> str:
+    """Rate-limit user-id bo'yicha (mavjud bo'lsa), aks holda IP."""
+    user = getattr(request, "current_user", None)
+    if user and getattr(user, "telegram_id", 0) > 0:
+        return f"u:{user.telegram_id}"
+    return f"ip:{request.META.get('REMOTE_ADDR', 'unknown')}"
 
 
 @api_view(["POST"])
 @require_auth
-@ratelimit(key="ip", rate="60/m", block=True)
+@ratelimit(key=_rate_key, rate="60/m", block=True)
 def issue_ticket(request):
     body = request.data if isinstance(request.data, dict) else {}
     question_id = body.get("questionId")
 
-    if not isinstance(question_id, str) or not _looks_like_uuid(question_id):
+    if not isinstance(question_id, str) or not UUID_RE.match(question_id):
         raise AppError(400, "questionId noto'g'ri")
 
     return Response({"ticket": issue_answer_ticket(question_id)})
@@ -42,7 +57,7 @@ def issue_ticket(request):
 
 @api_view(["POST"])
 @require_auth
-@ratelimit(key="ip", rate="60/m", block=True)
+@ratelimit(key=_rate_key, rate="60/m", block=True)
 def submit_answer(request):
     user = request.current_user
     body = request.data if isinstance(request.data, dict) else {}
@@ -63,6 +78,12 @@ def submit_answer(request):
         raise AppError(400, "streak noto'g'ri")
 
     payload = verify_answer_ticket(ticket)
+
+    # Replay himoyasi: biletni ishlatilgan deb belgilashga urinamiz —
+    # allaqachon ishlatilgan bo'lsa, takror jorayotgan bo'ladi.
+    if not consume_answer_ticket(payload.jti):
+        raise AppError(409, "Bu bilet allaqachon ishlatilgan")
+
     question = get_question_by_id(payload.question_id)
     if not question:
         raise AppError(404, "Question not found")
@@ -92,7 +113,10 @@ def submit_answer(request):
     )
 
     if score.points_earned > 0:
-        add_score(user.telegram_id, score.points_earned)
+        # Score yangilashni atomik bajaramiz — concurrent answer submission
+        # vaqtida "database is locked" yoki yo'qotilgan o'zgartirishlardan saqlaydi.
+        with transaction.atomic():
+            add_score(user.telegram_id, score.points_earned)
 
     return Response(
         {
@@ -108,6 +132,7 @@ def submit_answer(request):
 
 @api_view(["POST"])
 @require_auth
+@ratelimit(key=_rate_key, rate="20/m", block=True)
 def reveal_answer(request):
     body = request.data if isinstance(request.data, dict) else {}
     ticket = body.get("ticket")
@@ -119,10 +144,9 @@ def reveal_answer(request):
     if not question:
         raise AppError(404, "Question not found")
 
+    # Reveal'da ham biletni "consumed" deb belgilaymiz — Gemini'ni qaytadan
+    # so'rab kvota yoqib bo'lmasin. Submit endpoint'i ham shu jti'ni rad etadi.
+    consume_answer_ticket(payload.jti)
+
     explanation = explain_question(question["text"], question["correctAnswer"])
     return Response({"correctAnswer": question["correctAnswer"], "explanation": explanation})
-
-
-def _looks_like_uuid(value: str) -> bool:
-    import re
-    return re.match(UUID_RE, value) is not None

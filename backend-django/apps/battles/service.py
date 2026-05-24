@@ -176,10 +176,23 @@ def start_game_flow(battle_id: str) -> None:
         }
         for index, question in enumerate(questions)
     ]
-    battle_repo.create_rounds(battle_id, items)
 
-    update_team_status(challenge["challengerTeamId"], "in_battle")
-    update_team_status(challenge["opponentTeamId"], "in_battle")
+    # Round'larni yaratish va status yangilash atomik tranzaksiya ichida —
+    # server o'rtada qulasa, bellashuv "in_progress" lekin round'larsiz qolib
+    # ketmasligi uchun. Xato bo'lsa challenge'ni "declined" ga qaytaramiz.
+    from django.db import transaction
+
+    try:
+        with transaction.atomic():
+            battle_repo.create_rounds(battle_id, items)
+            update_team_status(challenge["challengerTeamId"], "in_battle")
+            update_team_status(challenge["opponentTeamId"], "in_battle")
+    except Exception as error:  # noqa: BLE001
+        logger.exception("start_game_flow setup failed: %s", error)
+        # Rollback challenge'ni pending o'rniga declined ga qaytarmaymiz —
+        # try_start_game allaqachon in_progress qilgan. Lekin frontend uchun
+        # 500 qaytaramiz va admin watchdog'i hal qiladi.
+        raise AppError(500, "Bellashuvni boshlab bo'lmadi")
 
     first_round = battle_repo.get_round_by_number(battle_id, 1)
     if first_round:
@@ -222,6 +235,11 @@ def process_answer(
     question = get_question_by_id(round_row["questionId"])
     if not question:
         raise AppError(500, "Savol topilmadi")
+
+    # Gemini chaqirishdan oldin duplicate-check — double-tap paytida ortiqcha
+    # LLM chaqiruvini va xarajatni oldini olamiz.
+    if battle_repo.has_user_answered(round_id, telegram_id):
+        raise AppError(409, "Siz bu round'ga javob bergansiz")
 
     trimmed = user_answer.strip()
     if trimmed:
@@ -550,14 +568,60 @@ def get_pending_for_user(telegram_id: int) -> list[dict[str, Any]]:
 
 
 def forfeit_battle(battle_id: str, telegram_id: int) -> None:
-    """Foydalanuvchi bellashuvdan chiqsa — bellashuvni hozirgi natija bilan yakunlaydi."""
+    """Bellashuvdan chiqish: chiqayotgan jamoa AVTOMATIK yutqazadi.
+
+    Hisob qanday bo'lsa ham (yetakchi yoki orqada) — raqib g'olib deb belgilanadi.
+    Bu qoidani buzuvchi exploit'ni oldini oladi: oldinda turgan jamoa
+    "chiqib ketib" g'alabani qulflay olmaydi.
+    """
     challenge = battle_repo.get_challenge_by_id(battle_id)
     if not challenge or challenge["status"] != "in_progress":
         return
+
     membership = find_membership(telegram_id)
     if not membership or membership["team_id"] not in (
         challenge["challengerTeamId"],
         challenge["opponentTeamId"],
     ):
         return
-    finalize_battle(battle_id)
+
+    forfeiting_team_id = membership["team_id"]
+    winner_team_id = (
+        challenge["opponentTeamId"]
+        if forfeiting_team_id == challenge["challengerTeamId"]
+        else challenge["challengerTeamId"]
+    )
+
+    # Atomik gate — boshqa client allaqachon finalize qilgan bo'lsa rad etadi.
+    if not battle_repo.try_finalize(battle_id):
+        return
+
+    # G'olib jamoa a'zolariga bonus (chiqib ketgan jamoaga emas).
+    try:
+        winning_team = get_team_with_members(winner_team_id)
+        for member in winning_team.get("members", []):
+            try:
+                add_user_score(member["telegramId"], WINNER_BONUS)
+            except Exception as member_error:  # noqa: BLE001
+                logger.warning("forfeit bonus failed: %s", member_error)
+    except Exception as win_error:  # noqa: BLE001
+        logger.warning("forfeit_battle bonus block failed: %s", win_error)
+
+    # Jamoalar statusini "open" ga qaytaramiz.
+    for team_id in (challenge["challengerTeamId"], challenge["opponentTeamId"]):
+        try:
+            update_team_status(team_id, "open")
+        except Exception as error:  # noqa: BLE001
+            logger.warning("reset team status failed: %s", error)
+
+    answers = battle_repo.get_answers_for_battle(battle_id)
+    challenger_score = _team_score(answers, challenge["challengerTeamId"])
+    opponent_score = _team_score(answers, challenge["opponentTeamId"])
+
+    _notify_battle_finished(
+        challenge["challengerTeamId"],
+        challenge["opponentTeamId"],
+        challenger_score,
+        opponent_score,
+        winner_team_id,
+    )

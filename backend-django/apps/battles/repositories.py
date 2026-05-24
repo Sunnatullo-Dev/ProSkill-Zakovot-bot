@@ -144,6 +144,16 @@ def get_answers_for_round(round_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def has_user_answered(round_id: str, telegram_id: int) -> bool:
+    """Foydalanuvchi shu round'ga javob berganmi — duplicate'ni oldindan tekshirish.
+
+    Gemini chaqirilishidan oldin tekshirib, ortiqcha LLM xarajatini oldini olamiz.
+    """
+    return BattleAnswer.objects.filter(
+        round_id=round_id, telegram_id=telegram_id
+    ).exists()
+
+
 def get_answers_for_battle(battle_id: str) -> list[dict[str, Any]]:
     answers = BattleAnswer.objects.filter(battle_id=battle_id)
     return [

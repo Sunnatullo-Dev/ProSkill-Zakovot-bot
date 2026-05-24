@@ -90,6 +90,13 @@ export default function TeamChatPanel({ currentUserId, members, canSend }: TeamC
   const refresh = useCallback(async () => {
     const next = await getTeamChat();
     if (!mountedRef.current) return;
+    // Tarmoq xatosida getTeamChat bo'sh massiv qaytaradi — mavjud xabarlar
+    // birdaniga yo'qolib qolmasligi uchun faqat haqiqiy javobni yozamiz.
+    // Birinchi marta yuklanganda esa bo'sh massivni qabul qilamiz (allaqachon bo'sh).
+    if (next.length === 0) {
+      setMessages((prev) => (prev.length === 0 ? [] : prev));
+      return;
+    }
     setMessages(next.slice(-MAX_MESSAGES));
   }, []);
 
@@ -97,10 +104,22 @@ export default function TeamChatPanel({ currentUserId, members, canSend }: TeamC
     mountedRef.current = true;
     void refresh();
 
-    const id = window.setInterval(() => void refresh(), POLL_INTERVAL_MS);
+    const id = window.setInterval(() => {
+      // Brauzer tab orqada bo'lsa polling'ni o'tkazib yuboramiz —
+      // batareya va server resurslarini tejaymiz.
+      if (typeof document !== "undefined" && document.hidden) return;
+      void refresh();
+    }, POLL_INTERVAL_MS);
+
+    function handleVisibilityChange() {
+      if (!document.hidden) void refresh();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       mountedRef.current = false;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refresh]);
 
