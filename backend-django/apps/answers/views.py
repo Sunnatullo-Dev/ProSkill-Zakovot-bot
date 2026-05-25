@@ -23,6 +23,7 @@ from apps.questions.repositories import get_question_by_id
 from apps.users.repositories import add_score
 
 from .gemini import check_answer, explain_question
+from .grading import GradingResult, exact_match_grade
 from .scoring import ScoreInput, calculate_answer_score
 from .tickets import consume_answer_ticket, issue_answer_ticket, verify_answer_ticket
 
@@ -103,7 +104,32 @@ def submit_answer(request):
             }
         )
 
-    grading = check_answer(question["text"], question["correctAnswer"], user_answer)
+    # A/B/C/D rejimi: savolda noto'g'ri variantlar bo'lsa Gemini'ga
+    # bormaymiz — darrov aniq taqqoslash bilan baholaymiz. Bu:
+    #   - tezroq (10s emas <100ms)
+    #   - bepul (Gemini API chaqiruvi yo'q)
+    #   - aniqroq (AI "qisman to'g'ri" deb adashmaydi)
+    wrong_answers = question.get("wrongAnswers") or []
+    if wrong_answers:
+        # Foydalanuvchi yuborgan javob — taqdim etilgan variantlardan biri
+        # bo'lishi kerak (xavfsizlik tekshiruvi: xohlagan matnni baholatmasin).
+        all_options = [question["correctAnswer"], *wrong_answers]
+        normalized_options = {opt.strip().casefold() for opt in all_options if isinstance(opt, str)}
+        if user_answer.casefold() not in normalized_options:
+            return Response(
+                {
+                    "status": "incorrect",
+                    "isCorrect": False,
+                    "explanation": "Noto'g'ri variant tanlandi",
+                    "correctAnswer": question["correctAnswer"],
+                    "pointsEarned": 0,
+                    "streak": 0,
+                }
+            )
+        grading = exact_match_grade(user_answer, question["correctAnswer"])
+    else:
+        # Eski yo'l: erkin matn → Gemini AI baholaydi.
+        grading = check_answer(question["text"], question["correctAnswer"], user_answer)
     score = calculate_answer_score(
         ScoreInput(
             status=grading.status,

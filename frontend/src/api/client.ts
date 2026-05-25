@@ -68,6 +68,7 @@ type RemoteQuestion = {
   text: string;
   category: string | null;
   difficulty: string | null;
+  options?: string[] | null;
 };
 
 type SubmitAnswerApiResponse = {
@@ -657,10 +658,18 @@ function getTelegramInitData() {
 }
 
 function normalizeQuestion(question: RemoteQuestion): Question {
+  const rawOptions = Array.isArray(question.options) ? question.options : [];
+  // String list bo'lishi va bo'sh qatorlarsiz qoldirishni kafolatlaymiz —
+  // backend ishonchli, lekin defensive (ko'pchilik manbalardan keladi).
+  const options = rawOptions
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
   return {
     id: String(question.id),
     text: question.text,
     category: question.category ?? null,
-    difficulty: question.difficulty ?? null
+    difficulty: question.difficulty ?? null,
+    options
   };
 }

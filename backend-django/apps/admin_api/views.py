@@ -68,6 +68,41 @@ def _coerce_text(raw, *, min_len: int, field: str) -> str:
     return trimmed
 
 
+def _coerce_wrong_answers(raw, *, field: str = "wrongAnswers") -> list[str]:
+    """A/B/C/D rejimi uchun 3 ta noto'g'ri variantni tekshirib qaytaradi.
+
+    - None yoki [] → bo'sh list (erkin javob rejimi)
+    - String list bo'lishi shart, har biri 1..200 belgi
+    - Aniq 3 ta bo'lishi shart (test 4 variantli)
+    - Takrorlanmaslik kerak
+    - To'g'ri javob bilan teng bo'lmasligi tekshiriladi caller tomonida
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise AppError(400, f"{field} ro'yxat bo'lishi kerak")
+    if len(raw) == 0:
+        return []
+    if len(raw) != 3:
+        raise AppError(400, f"{field}: aniq 3 ta noto'g'ri variant kerak")
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(raw):
+        if not isinstance(item, str):
+            raise AppError(400, f"{field}[{index}] matn bo'lishi kerak")
+        text = item.strip()
+        if not text:
+            raise AppError(400, f"{field}[{index}] bo'sh bo'lmasin")
+        if len(text) > 200:
+            raise AppError(400, f"{field}[{index}] 200 belgidan oshmasin")
+        key = text.casefold()
+        if key in seen:
+            raise AppError(400, f"{field}: variantlar takrorlanmasin")
+        seen.add(key)
+        cleaned.append(text)
+    return cleaned
+
+
 # ── Stats ──────────────────────────────────────────────────────────────────────
 
 @api_view(["GET"])
@@ -106,7 +141,14 @@ def questions_collection(request):
         elif category is not None:
             raise AppError(400, "Kategoriya noto'g'ri")
         difficulty = _coerce_difficulty(body.get("difficulty"))
-        question_repo.create_question(text, correct_answer, category, difficulty)
+        wrong_answers = _coerce_wrong_answers(body.get("wrongAnswers"))
+        # To'g'ri javobning o'zi noto'g'ri variantlar ichida bo'lmasin —
+        # aks holda baholash chalkash bo'ladi.
+        if wrong_answers and correct_answer.casefold() in {w.casefold() for w in wrong_answers}:
+            raise AppError(400, "To'g'ri javob noto'g'ri variantlar orasida bo'lmasin")
+        question_repo.create_question(
+            text, correct_answer, category, difficulty, wrong_answers=wrong_answers
+        )
         return Response({"ok": True}, status=201)
 
     params = request.query_params
@@ -142,11 +184,16 @@ def bulk_create_questions(request):
     for index, item in enumerate(items_raw):
         if not isinstance(item, dict):
             raise AppError(400, f"#{index + 1}: noto'g'ri obyekt")
+        correct = _coerce_text(item.get("correctAnswer"), min_len=1, field=f"#{index + 1} javob")
+        wrong = _coerce_wrong_answers(item.get("wrongAnswers"), field=f"#{index + 1} wrongAnswers")
+        if wrong and correct.casefold() in {w.casefold() for w in wrong}:
+            raise AppError(400, f"#{index + 1}: To'g'ri javob noto'g'ri variantlar orasida")
         cleaned.append({
             "text": _coerce_text(item.get("text"), min_len=3, field=f"#{index + 1} savol matni"),
-            "correctAnswer": _coerce_text(item.get("correctAnswer"), min_len=1, field=f"#{index + 1} javob"),
+            "correctAnswer": correct,
             "category": (item.get("category") or "").strip() or None if isinstance(item.get("category"), str) else item.get("category"),
             "difficulty": _coerce_difficulty(item.get("difficulty")),
+            "wrongAnswers": wrong,
         })
     inserted = question_repo.bulk_create_questions(cleaned)
     return Response({"ok": True, "inserted": inserted}, status=201)
@@ -188,7 +235,29 @@ def question_detail(request, question_id: str):
             unset_difficulty = True
         else:
             difficulty = _coerce_difficulty(raw, allow_null=False)
-    question_repo.update_question(question_id, text=text, correct_answer=correct_answer, category=category, difficulty=difficulty, unset_category=unset_category, unset_difficulty=unset_difficulty)
+    wrong_answers: list[str] | None = None
+    if "wrongAnswers" in body:
+        wrong_answers = _coerce_wrong_answers(body.get("wrongAnswers"))
+        # PATCH'da wrong_answers'ni yangilash uchun mavjud correct_answer'ni
+        # ham olishimiz kerak (validatsiya uchun).
+        existing_correct = correct_answer
+        if existing_correct is None:
+            existing_q = question_repo.get_question_by_id(question_id)
+            if not existing_q:
+                raise AppError(404, "Savol topilmadi")
+            existing_correct = existing_q["correctAnswer"]
+        if wrong_answers and existing_correct.casefold() in {w.casefold() for w in wrong_answers}:
+            raise AppError(400, "To'g'ri javob noto'g'ri variantlar orasida bo'lmasin")
+    question_repo.update_question(
+        question_id,
+        text=text,
+        correct_answer=correct_answer,
+        category=category,
+        difficulty=difficulty,
+        wrong_answers=wrong_answers,
+        unset_category=unset_category,
+        unset_difficulty=unset_difficulty,
+    )
     return Response({"ok": True})
 
 

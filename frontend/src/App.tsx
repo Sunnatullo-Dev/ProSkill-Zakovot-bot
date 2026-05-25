@@ -678,7 +678,8 @@ export default function App() {
           <QuestionCard
             question={{
               id: currentQuestion?.id ?? "loading",
-              text: currentQuestion?.text ?? "Savol yuklanmoqda..."
+              text: currentQuestion?.text ?? "Savol yuklanmoqda...",
+              options: currentQuestion?.options ?? []
             }}
             questionNumber={questionIndex + 1}
             streak={streak}
@@ -686,6 +687,7 @@ export default function App() {
             totalQuestions={totalQuestions}
             reveal={revealInfo}
             isRevealing={isRevealing}
+            isSubmitting={isSubmitting}
             onSubmit={handleQuestionSubmit}
             onGiveUp={handleGiveUp}
             onContinue={handleContinue}

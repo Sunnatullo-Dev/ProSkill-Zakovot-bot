@@ -8,11 +8,40 @@ from .models import Question, QuestionReport
 
 
 def _map_question_public(q: Question) -> dict[str, Any]:
+    # wrong_answers'ni faqat valid string list bo'lsa qaytaramiz —
+    # JSON ichida buzilgan ma'lumot bo'lsa frontend xato qilmasin.
+    #
+    # A/B/C/D rejimi: backend `options` array tartibsiz qaytaradi va to'g'ri
+    # javob shu ichida bo'ladi. Foydalanuvchi tanlasa, backend tomonida ham
+    # taqqoslash bilan tekshiriladi. To'g'ri javob frontend'ga alohida
+    # `correctAnswer` sifatida YUBORILMAYDI — chunki sahifa manbasidan
+    # ko'rib qo'yib bo'ladi.
+    import secrets
+
+    raw_wrong = q.wrong_answers if isinstance(q.wrong_answers, list) else []
+    wrong = [str(item) for item in raw_wrong if isinstance(item, str) and item.strip()]
+
+    options: list[str] = []
+    if len(wrong) == 3 and q.correct_answer:
+        # crypto-shuffle: predict qilib bo'lmasin (qaysi variant doim "to'g'ri" deb
+        # bashorat qilishni qiyinlashtirish — odam o'yini uchun nisbatan ortiqcha,
+        # lekin "har doim A" kabi pattern'larni oldini olamiz).
+        pool = [q.correct_answer, *wrong]
+        # Fisher-Yates secrets bilan
+        for i in range(len(pool) - 1, 0, -1):
+            j = secrets.randbelow(i + 1)
+            pool[i], pool[j] = pool[j], pool[i]
+        options = pool
+
     return {
         "id": str(q.id),
         "text": q.text,
         "category": q.category,
         "difficulty": q.difficulty,
+        # Eski `wrongAnswers` qaytarmaymiz — chunki to'g'ri javob alohida
+        # body'da yo'q, lekin `wrongAnswers` ko'rinsa kim noto'g'ri ekanini
+        # bilib qoladi. Buning o'rniga `options` (aralashtirilgan, 4 ta).
+        "options": options,
     }
 
 
@@ -105,12 +134,15 @@ def create_question(
     correct_answer: str,
     category: str | None,
     difficulty: str | None,
+    *,
+    wrong_answers: list[str] | None = None,
 ) -> None:
     Question.objects.create(
         text=text,
         correct_answer=correct_answer,
         category=category,
         difficulty=difficulty,
+        wrong_answers=wrong_answers or [],
     )
 
 
@@ -121,6 +153,7 @@ def bulk_create_questions(items: list[dict[str, Any]]) -> int:
             correct_answer=item["correctAnswer"],
             category=item.get("category"),
             difficulty=item.get("difficulty"),
+            wrong_answers=item.get("wrongAnswers") or [],
         )
         for item in items
     ]
@@ -135,6 +168,7 @@ def update_question(
     correct_answer: str | None = None,
     category: str | None = None,
     difficulty: str | None = None,
+    wrong_answers: list[str] | None = None,
     unset_category: bool = False,
     unset_difficulty: bool = False,
 ) -> None:
@@ -151,6 +185,10 @@ def update_question(
         update["difficulty"] = None
     elif difficulty is not None:
         update["difficulty"] = difficulty
+    if wrong_answers is not None:
+        # `wrong_answers=[]` qabul qilinadi — bu "A/B/C/D rejimini o'chir"
+        # va savolni erkin matn rejimiga qaytar degani.
+        update["wrong_answers"] = wrong_answers
 
     if not update:
         return

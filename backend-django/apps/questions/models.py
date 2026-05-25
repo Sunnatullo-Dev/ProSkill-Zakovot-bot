@@ -9,6 +9,10 @@ class Question(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     text = models.TextField()
     correct_answer = models.TextField()
+    # 3 ta noto'g'ri variant. Bo'sh bo'lsa — savol "erkin javob" rejimida
+    # (Gemini AI tomonidan baholanadi). To'la bo'lsa — A/B/C/D test rejimi
+    # (darrov, AI'siz, aniq taqqoslash bilan baholanadi).
+    wrong_answers = models.JSONField(default=list, blank=True)
     category = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     difficulty = models.CharField(
         max_length=20, null=True, blank=True, choices=DIFFICULTY_CHOICES

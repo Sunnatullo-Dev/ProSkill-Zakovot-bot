@@ -91,6 +91,17 @@ export type Question = {
   text: string;
   category: string | null;
   difficulty: string | null;
+  /**
+   * A/B/C/D rejimi variantlari (backend aralashtirilgan tartibda yuboradi,
+   * to'g'ri javob shu massivning bir elementi). Bo'sh massiv yoki 4 ta
+   * emas — erkin matn rejimi (Gemini AI baholaydi).
+   *
+   * MUHIM: To'g'ri javob hech qachon alohida `correctAnswer` sifatida
+   * frontend'ga keladi emas — sahifa source orqali cheat'lash xavfi.
+   * Frontend faqat foydalanuvchi tanlovini server'ga yuboradi,
+   * server tasdiqlaydi.
+   */
+  options: string[];
 };
 
 export type RevealInfo = {

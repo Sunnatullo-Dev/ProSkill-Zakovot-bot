@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RevealInfo } from "../types";
 import { CloseIcon } from "./icons";
 
@@ -6,6 +6,12 @@ type QuestionCardProps = {
   question: {
     id: string;
     text: string;
+    /**
+     * Backend tomonidan aralashtirilgan 4 ta variant (A/B/C/D rejimi).
+     * To'g'ri javob shu ichida yashirin (frontend qaysi to'g'ri ekanini bilmaydi).
+     * Bo'sh yoki 4'dan kam bo'lsa — eski erkin matn rejimi (input + Gemini AI).
+     */
+    options?: string[];
   };
   questionNumber: number;
   totalQuestions: number;
@@ -13,11 +19,14 @@ type QuestionCardProps = {
   streak: number;
   reveal: RevealInfo | null;
   isRevealing: boolean;
+  isSubmitting?: boolean;
   onSubmit: (answer: string) => void;
   onGiveUp: () => void;
   onContinue: () => void;
   onExit: () => void;
 };
+
+const OPTION_LETTERS = ["A", "B", "C", "D"];
 
 export default function QuestionCard({
   question,
@@ -27,19 +36,35 @@ export default function QuestionCard({
   streak,
   reveal,
   isRevealing,
+  isSubmitting = false,
   onSubmit,
   onGiveUp,
   onContinue,
   onExit
 }: QuestionCardProps) {
   const [answer, setAnswer] = useState("");
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const timerColor = timeLeft > 10 ? "var(--accent)" : timeLeft > 5 ? "var(--warning)" : "var(--error)";
   const progress = timeLeft / 15;
   const circumference = 2 * Math.PI * 34;
   const strokeDashoffset = circumference * (1 - progress);
 
+  // A/B/C/D rejimi shartlari: backend aniq 4 ta variant yuborgan bo'lishi shart.
+  const isMultipleChoice = Boolean(
+    Array.isArray(question.options) && question.options.length === 4
+  );
+
+  // Backend allaqachon aralashtirilgan tartibda yuboradi (crypto-shuffle).
+  // Frontend faqat shu tartibni hurmat qiladi — qayta aralashtirilsa,
+  // har renderda joy almashinishi mumkin va tap noaniq tugmaga tushadi.
+  const options = useMemo<string[]>(
+    () => (isMultipleChoice ? (question.options as string[]) : []),
+    [isMultipleChoice, question.options]
+  );
+
   useEffect(() => {
     setAnswer("");
+    setSelectedOption(null);
   }, [question.id]);
 
   function handleSubmit() {
@@ -50,6 +75,12 @@ export default function QuestionCard({
     }
 
     onSubmit(trimmedAnswer);
+  }
+
+  function handlePickOption(option: string) {
+    if (isSubmitting || selectedOption) return;
+    setSelectedOption(option);
+    onSubmit(option);
   }
 
   return (
@@ -273,6 +304,76 @@ export default function QuestionCard({
             }}
           >
             Ma'lumot yuklanmoqda...
+          </div>
+        ) : isMultipleChoice ? (
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {options.map((option, index) => {
+              const isSelected = selectedOption === option;
+              const disabled = isSubmitting || selectedOption !== null;
+              return (
+                <button
+                  key={`${question.id}-${index}`}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => handlePickOption(option)}
+                  style={{
+                    width: "100%",
+                    padding: "14px 16px",
+                    borderRadius: "14px",
+                    border: isSelected ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+                    background: isSelected ? "rgba(77,166,255,0.16)" : "var(--card)",
+                    color: "var(--text)",
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    textAlign: "left",
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    opacity: disabled && !isSelected ? 0.55 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    transition: "all 0.15s"
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      background: isSelected ? "var(--accent)" : "rgba(255,255,255,0.05)",
+                      color: isSelected ? "white" : "var(--accent)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "14px",
+                      fontWeight: 900,
+                      flex: "0 0 auto"
+                    }}
+                  >
+                    {OPTION_LETTERS[index] ?? ""}
+                  </span>
+                  <span style={{ flex: 1, lineHeight: 1.4 }}>{option}</span>
+                </button>
+              );
+            })}
+            <button
+              style={{
+                width: "100%",
+                marginTop: "8px",
+                padding: "11px",
+                background: "transparent",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "var(--muted)",
+                textDecoration: "underline",
+                cursor: "pointer"
+              }}
+              type="button"
+              onClick={onGiveUp}
+              disabled={isSubmitting || selectedOption !== null}
+            >
+              Javobni bilmayman
+            </button>
           </div>
         ) : (
           <>
