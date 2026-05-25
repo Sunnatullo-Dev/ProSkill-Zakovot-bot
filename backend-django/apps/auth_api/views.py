@@ -76,11 +76,15 @@ def whoami(request):
     """
     user = getattr(request, "current_user", None)
     has_token = bool(getattr(settings, "TELEGRAM_BOT_TOKEN", ""))
+    admin_ids: list[int] = list(getattr(settings, "ADMIN_TELEGRAM_IDS", []))
+    current_telegram_id = getattr(user, "telegram_id", 0) if user else 0
+    is_in_admin_list = current_telegram_id in admin_ids if current_telegram_id > 0 else False
+
     return Response(
         {
             "isAuthenticated": user is not None,
-            "telegramId": getattr(user, "telegram_id", 0) if user else 0,
-            "isAdmin": is_admin(user.telegram_id) if user else False,
+            "telegramId": current_telegram_id,
+            "isAdmin": is_admin(current_telegram_id) if user else False,
             "environment": {
                 "isProduction": bool(getattr(settings, "IS_PRODUCTION", False)),
                 "hasBotToken": has_token,
@@ -91,6 +95,13 @@ def whoami(request):
                 "willAcceptGuest": (
                     not bool(getattr(settings, "IS_PRODUCTION", False))
                 ),
+                # Admin diagnostic — eng ko'p uchraydigan "Nega admin tugmasi
+                # ko'rinmayapti" muammosini darrov tashxis qilish uchun.
+                # Aniq ID'lar qaytarilmaydi (PII), faqat hisoblar:
+                "adminCount": len(admin_ids),
+                "currentUserIsInAdminList": is_in_admin_list,
+                # Yangi admin qo'shish maslahati uchun belgi:
+                "adminListEmpty": len(admin_ids) == 0,
             },
         }
     )

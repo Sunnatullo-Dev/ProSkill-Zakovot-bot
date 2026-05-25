@@ -80,18 +80,37 @@ if not BOT_INTERNAL_API_KEY and IS_PRODUCTION:
 
 ADMIN_TELEGRAM_IDS: list[int] = []
 for raw in env_list("ADMIN_TELEGRAM_IDS"):
+    # Render env qiymatlari ba'zan qo'shtirnoq bilan kiritiladi (`"123"`)
+    # yoki nuqta-vergul bilan ajratilgan (`123;456`). Eng keng tarqalgan
+    # typo'larni avtomatik tozalaymiz.
+    cleaned = raw.strip().strip('"').strip("'").strip()
+    if not cleaned:
+        continue
     try:
-        value = int(raw)
+        value = int(cleaned)
     except ValueError:
-        print(f"[settings] WARNING: ADMIN_TELEGRAM_IDS ichida noto'g'ri qiymat: {raw}", file=sys.stderr)
+        print(
+            f"[settings] WARNING: ADMIN_TELEGRAM_IDS ichida noto'g'ri qiymat: {raw!r} "
+            f"(tozalangandan keyin: {cleaned!r}) — faqat raqamlar bo'lishi shart",
+            file=sys.stderr,
+        )
         continue
     if value <= 0:
         print(
-            f"[settings] WARNING: ADMIN_TELEGRAM_IDS musbat bo'lishi shart (qiymat rad etildi: {value})",
+            f"[settings] WARNING: ADMIN_TELEGRAM_IDS musbat bo'lishi shart "
+            f"(qiymat rad etildi: {value})",
             file=sys.stderr,
         )
         continue
     ADMIN_TELEGRAM_IDS.append(value)
+
+# Startup log — Render Logs'da bir qarashda ko'rinishi uchun.
+# Aniq ID'larni log'ga yozmaymiz (PII), faqat son va birinchi/oxirgi raqam.
+_admin_summary = (
+    f"{len(ADMIN_TELEGRAM_IDS)} entries"
+    if ADMIN_TELEGRAM_IDS
+    else "EMPTY (Admin button will not show for anyone)"
+)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -213,8 +232,9 @@ LOGGING = {
 }
 
 logging.getLogger(__name__).info(
-    "Zakovat backend boshlanmoqda — env=%s, debug=%s, hosts=%s",
+    "Zakovat backend boshlanmoqda — env=%s, debug=%s, hosts=%s, admins=%s",
     NODE_ENV,
     DEBUG,
     ALLOWED_HOSTS,
+    _admin_summary,
 )

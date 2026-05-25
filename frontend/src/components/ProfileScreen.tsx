@@ -379,6 +379,52 @@ export default function ProfileScreen({
               hammaga baham ko'rinadi.
             </div>
           ) : null}
+
+          {/* Admin diagnostic — qaysi konkret sabab ekanini aytadi. */}
+          {authStateOk ? (
+            <div
+              style={{
+                fontSize: "11px",
+                marginTop: "8px",
+                lineHeight: 1.5,
+                padding: "8px 10px",
+                background: "rgba(0,0,0,0.20)",
+                borderRadius: "8px"
+              }}
+            >
+              <div style={{ color: "var(--muted)", marginBottom: "2px" }}>
+                Admin status:{" "}
+                <b style={{ color: authStatus.isAdmin ? "#86EFAC" : "#FCA5A5" }}>
+                  {authStatus.isAdmin ? "HA — admin tugmasi chiqishi kerak" : "YO'Q"}
+                </b>
+              </div>
+              <div style={{ color: "var(--muted)" }}>
+                ADMIN_TELEGRAM_IDS ichida: <b style={{ color: "var(--text)" }}>{authStatus.diagnostic.adminCount}</b> ta yozuv
+                {authStatus.diagnostic.adminListEmpty ? (
+                  <span style={{ color: "#FCA5A5" }}> — env umuman bo'sh!</span>
+                ) : authStatus.diagnostic.currentUserIsInAdminList ? (
+                  <span style={{ color: "#86EFAC" }}> ✓ siz ham ro'yxatda</span>
+                ) : (
+                  <span style={{ color: "#FCA5A5" }}>
+                    {" "}— sizning ID ({backendId}) ro'yxatda yo'q
+                  </span>
+                )}
+              </div>
+              {!authStatus.diagnostic.currentUserIsInAdminList && !authStatus.diagnostic.adminListEmpty ? (
+                <div style={{ color: "#FCA5A5", marginTop: "4px" }}>
+                  ⚠️ Render env'da <code>ADMIN_TELEGRAM_IDS</code> qiymatini tekshiring —
+                  vergul bilan ajrating, qo'shtirnoqsiz, bo'shliqsiz.
+                  Misol: <code>{backendId}</code>
+                </div>
+              ) : null}
+              {authStatus.diagnostic.adminListEmpty ? (
+                <div style={{ color: "#FCA5A5", marginTop: "4px" }}>
+                  ⚠️ Render env'ga <code>ADMIN_TELEGRAM_IDS={backendId}</code> qo'shing va
+                  service'ni qayta deploy qiling.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

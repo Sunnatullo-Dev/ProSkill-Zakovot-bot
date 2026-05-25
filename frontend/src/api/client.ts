@@ -138,6 +138,9 @@ export type WhoamiResponse = {
   diagnostic: {
     guestPathEnabled: boolean;
     willAcceptGuest: boolean;
+    adminCount: number;
+    currentUserIsInAdminList: boolean;
+    adminListEmpty: boolean;
   };
 };
 
