@@ -413,6 +413,9 @@ export default function App() {
         setScreen(needsName ? "name" : "home");
       } catch (error) {
         console.error("Login failed", error);
+        // Bootstrap fail bo'ldi — keyingi safar (foydalanuvchi qaytadan
+        // urinishi bilan) qayta urinish imkonini qoldiramiz.
+        bootstrapDoneRef.current = false;
         setUser(DEFAULT_APP_USER);
         setScore(DEFAULT_APP_USER.score);
         setScreen(isAdminRoute ? "admin" : "home");
