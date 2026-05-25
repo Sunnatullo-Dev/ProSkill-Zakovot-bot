@@ -6,7 +6,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
 
-  if (command === "build" && !env.VITE_API_URL) {
+  const apiUrl = env.VITE_API_URL || process.env["VITE_API_URL"];
+  if (command === "build" && !apiUrl) {
     throw new Error(
       "[zakovat] VITE_API_URL o'rnatilmagan. Production build uchun .env'ga " +
         "VITE_API_URL=https://your-backend.example.com qo'shing."
