@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import "@twa-dev/sdk";
 import type { TelegramUser, TelegramWebApp } from "../types";
 
 export const tg: TelegramWebApp | null = window.Telegram?.WebApp ?? null;
