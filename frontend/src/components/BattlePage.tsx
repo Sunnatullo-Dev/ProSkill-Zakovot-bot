@@ -288,7 +288,9 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   }
 
   if (!state) {
-    const stuck = failureCount >= 3;
+    // Stuck: ko'pchilik network xato hollarda 1 ta failure'dan keyin ham
+    // foydalanuvchiga chiqish imkonini beramiz — uzoq kutib turishi shart emas.
+    const stuck = failureCount >= 1;
     return (
       <div
         style={{

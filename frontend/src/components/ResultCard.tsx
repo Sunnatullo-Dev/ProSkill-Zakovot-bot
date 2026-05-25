@@ -124,7 +124,7 @@ export default function ResultCard({
       >
         {status !== "incorrect" ? <DiffDisplay correctAnswer={correctAnswer} userAnswer={userAnswer} /> : null}
 
-        {status !== "correct" ? (
+        {status !== "correct" && correctAnswer.trim() ? (
           <div>
             <div
               style={{

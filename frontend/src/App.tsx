@@ -47,7 +47,18 @@ const ONBOARDING_STORAGE_KEY = "zakovat:onboardingDone";
 
 function readOnboardingDone(): boolean {
   try {
-    return window.localStorage.getItem(ONBOARDING_STORAGE_KEY) === "1";
+    if (window.localStorage.getItem(ONBOARDING_STORAGE_KEY) === "1") {
+      return true;
+    }
+    // Eski foydalanuvchilar (onboarding feature'dan oldin ishlatganlar)
+    // uchun: agar `zakovat:playerName` saqlangan bo'lsa, demak ular
+    // allaqachon onboarding'ni o'tgan deb hisoblaymiz. Bu birinchi safar
+    // kelganda flag'ni ham yozib qo'yamiz.
+    if (window.localStorage.getItem(NAME_STORAGE_KEY)) {
+      window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
