@@ -10,14 +10,17 @@ const SUPER_ADMIN_ID = Number(process.env.ADMIN_ID || "0");
 const MINI_APP_URL = process.env.MINI_APP_URL || "";
 const BACKEND_URL = (process.env.BACKEND_URL || "").replace(/\/$/, "");
 
-// Backendning admin API'siga kirish uchun ALOHIDA server-internal kalit.
-// Telegram bot tokeni bilan ARALASHMASIN — bot tokeni Telegram bilan baham
-// ko'riladi, BOT_INTERNAL_API_KEY esa faqat bot va backend o'rtasida.
+// Backendning admin API'siga kirish kaliti. Tartibi:
+//   1) BOT_INTERNAL_API_KEY — afzal (alohida server-internal kalit)
+//   2) TELEGRAM_BOT_TOKEN — backward compat (eski sozlama)
+// Backend ikkalasini ham qabul qiladi (BOT_INTERNAL_API_KEY birinchi
+// tekshiriladi). Yangi loyihalar BOT_INTERNAL_API_KEY ishlatishi tavsiya.
 const BOT_INTERNAL_API_KEY = process.env.BOT_INTERNAL_API_KEY || "";
+const ADMIN_API_KEY = BOT_INTERNAL_API_KEY || token;
 if (!BOT_INTERNAL_API_KEY) {
   console.warn(
-    "[bot] BOT_INTERNAL_API_KEY o'rnatilmagan — admin API chaqiruvlari 401 qaytaradi. " +
-    "Backend env'iga ham, bot env'iga ham bir xil tasodifiy uzun string qo'ying."
+    "[bot] BOT_INTERNAL_API_KEY o'rnatilmagan — TELEGRAM_BOT_TOKEN fallback ishlatiladi. " +
+    "Yaxshiroq xavfsizlik uchun ikkala servisga bir xil tasodifiy uzun string qo'ying."
   );
 }
 
@@ -74,7 +77,7 @@ const clearState = (id: number) => states.set(id, { t: "idle" });
 
 // ─── API Client ───────────────────────────────────────────────────────────────
 const authHeader = () => ({
-  Authorization: `bot ${BOT_INTERNAL_API_KEY}`,
+  Authorization: `bot ${ADMIN_API_KEY}`,
   "Content-Type": "application/json"
 });
 
