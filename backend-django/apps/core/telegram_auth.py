@@ -46,16 +46,29 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
         # Guest fallback faqat dev/test rejimda — production'da rad etiladi.
         # Ism bo'sh — frontend Telegram'dan first_name ko'rsatadi yoki "Foydalanuvchi" placeholder.
         if getattr(settings, "IS_PRODUCTION", False):
+            logger.warning(
+                "verify_init_data: 'guest' rejected in production "
+                "(frontend sent guest token; check VITE_API_URL and Mini App URL)"
+            )
             return None
+        logger.info(
+            "verify_init_data: guest fallback accepted (dev mode). "
+            "If you see this in production, set NODE_ENV=production on Render."
+        )
         return TelegramUser(telegram_id=0, first_name=None, last_name=None, username=None)
 
     token = settings.TELEGRAM_BOT_TOKEN
     if not token:
+        logger.error(
+            "verify_init_data: TELEGRAM_BOT_TOKEN not configured — "
+            "all signed initData will be rejected"
+        )
         return None
 
     pairs = dict(parse_qsl(init_data, keep_blank_values=True))
     received_hash = pairs.pop("hash", None)
     if not received_hash:
+        logger.warning("verify_init_data: initData missing `hash` field")
         return None
 
     data_check_string = "\n".join(f"{key}={pairs[key]}" for key in sorted(pairs))
@@ -63,6 +76,13 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
     expected_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(expected_hash, received_hash):
+        # Token noto'g'ri sozlangan eng keng tarqalgan sabab. Sanitize log —
+        # received_hash to'liq emas, faqat oxirgi 8 belgini ko'rsatamiz.
+        logger.warning(
+            "verify_init_data: HMAC mismatch. Check TELEGRAM_BOT_TOKEN matches "
+            "the bot @BotFather gave you. (received hash ...%s)",
+            received_hash[-8:] if len(received_hash) >= 8 else "?",
+        )
         return None
 
     # auth_date — initData yangiligini tekshiramiz. Eski blob replay attack

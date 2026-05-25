@@ -136,6 +136,10 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  // Foydalanuvchi haqiqiy Telegram'da, lekin backend uni mehmon deb qabul
+  // qilyapti — bu HMAC nomos kelishi yoki NODE_ENV != production belgisi.
+  // Bunday holatda app'ga davom etmaymiz, aniq xato ekran ko'rsatamiz.
+  const [authBroken, setAuthBroken] = useState(false);
   const submitAnswerRef = useRef<SubmitAnswerFn | null>(null);
   // Stale ticket fetch'lardan himoya — har savolning o'z ticket fetch
   // belgisi bor; eski fetch keyin kelsa, biz uni e'tibordan chiqaramiz.
@@ -304,6 +308,23 @@ export default function App() {
         // o'zgarmay qolmasligi uchun. Loading state shu vaqt davomida ko'rinadi.
         const response = await login(effectiveInitData, referrerId);
 
+        // Auth desync aniqlash: Telegram SDK haqiqiy user.id berdi, lekin
+        // backend bizni mehmon (telegramId=0) deb hisobladi. Bu — backend
+        // HMAC tekshirishida xato yoki Render'da NODE_ENV != production
+        // belgisi. App'ga davom etmaymiz, foydalanuvchi noaniq "Telegram
+        // orqali kiring" xatosini takror-takror olmasin.
+        const tgRealId = telegramUser?.id ?? 0;
+        if (tgRealId > 0 && response.user.telegramId === 0) {
+          console.warn(
+            "Auth desync: Telegram SDK id=%d, backend telegramId=0. " +
+              "Backend HMAC failed yoki NODE_ENV != production.",
+            tgRealId
+          );
+          setAuthBroken(true);
+          return;
+        }
+        setAuthBroken(false);
+
         setUser(response.user);
         setScore(response.user.score);
 
@@ -329,11 +350,8 @@ export default function App() {
 
         // Ism so'rash ekranini faqat zaruriy hollarda ko'rsatamiz.
         //
-        // MUHIM: backend HMAC tekshiruvi muvaffaqiyatsiz bo'lsa response.user.telegramId=0
-        // bo'lib qoladi. Lekin Telegram WebApp SDK'dan kelgan telegramUser.id baribir
-        // haqiqiy. Shuning uchun "haqiqiy Telegram foydalanuvchi" ekanligini SDK
-        // ma'lumotidan aniqlaymiz, backend response'idan emas.
-        const tgRealId = telegramUser?.id ?? 0;
+        // `tgRealId` allaqachon yuqorida hisoblangan (auth desync check uchun) —
+        // qayta foydalanamiz.
         const isRealTelegram = tgRealId > 0;
         const tgFull = [telegramUser?.first_name, telegramUser?.last_name]
           .filter(Boolean)
@@ -594,6 +612,65 @@ export default function App() {
             <p className="text-sm font-semibold text-[var(--muted)]">
               {t("telegram_required_text")}
             </p>
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="w-full rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-black text-[var(--bg)]"
+              >
+                {t("retry")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    window.Telegram?.WebApp?.close?.();
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="w-full rounded-2xl border border-[var(--card-border)] px-6 py-3 text-sm font-black text-[var(--text)]"
+              >
+                {t("close")}
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  // Backend HMAC tekshiruvi muvaffaqiyatsiz / NODE_ENV != production —
+  // Telegram SDK haqiqiy user.id berdi-yu, backend bizni mehmon deb hisobladi.
+  // Bu holatda app'ga davom etishning hech qanday foydasi yo'q — har bir
+  // yozish amali 403 olib keladi. Aniq diagnostic ko'rsatamiz.
+  if (isReady && authBroken) {
+    const tgId = telegramUser?.id ?? 0;
+    return (
+      <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+        <section className="mx-auto grid min-h-screen w-full max-w-[430px] place-items-center px-6 text-center">
+          <div className="w-full space-y-5">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[var(--card)] text-4xl">
+              {"🔌"}
+            </div>
+            <h1 className="text-xl font-black">Server bilan auth muvaffaqiyatsiz</h1>
+            <p className="text-sm font-semibold text-[var(--muted)]">
+              Telegram sizni aniqladi (ID: {tgId}), lekin server tasdiqlay olmadi.
+              Bu Render serveridagi sozlama xatosi — quyidagilarni tekshiring:
+            </p>
+            <div
+              className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 text-left text-xs font-mono"
+              style={{ lineHeight: 1.6, color: "var(--muted)" }}
+            >
+              <div style={{ color: "var(--text)", fontWeight: 800, marginBottom: "6px" }}>
+                Render env:
+              </div>
+              <div>NODE_ENV=production</div>
+              <div>TELEGRAM_BOT_TOKEN=&lt;bot bilan bir xil&gt;</div>
+              <div>TICKET_HMAC_SECRET=&lt;random 48 byte&gt;</div>
+              <div>BOT_INTERNAL_API_KEY=&lt;random 48 byte&gt;</div>
+              <div>DJANGO_ALLOWED_HOSTS=&lt;domain&gt;</div>
+            </div>
             <div className="flex flex-col items-center gap-3">
               <button
                 type="button"
