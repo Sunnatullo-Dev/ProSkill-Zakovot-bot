@@ -1,6 +1,7 @@
 """Admin API — /api/admin/* — @require_admin himoyasi ostida."""
 from __future__ import annotations
 
+import logging
 import re
 
 from rest_framework.decorators import api_view
@@ -15,6 +16,10 @@ from apps.teams.models import Team
 from apps.users import repositories as user_repo
 from apps.users.repositories import count_all as count_users
 
+
+logger = logging.getLogger(__name__)
+
+
 MAX_PAGE_LIMIT = 50
 DEFAULT_PAGE_LIMIT = 20
 BULK_LIMIT = 500
@@ -25,16 +30,16 @@ VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 def _safe_count(callable_) -> int:
     try:
         return callable_()
-    except Exception as error:
-        print(f"admin stat count failed: {error}")
+    except Exception:
+        logger.exception("admin stat count failed")
         return 0
 
 
 def _safe_count_list(callable_):
     try:
         return callable_()
-    except Exception as error:
-        print(f"admin stat list failed: {error}")
+    except Exception:
+        logger.exception("admin stat list failed")
         return []
 
 
@@ -258,6 +263,11 @@ def admins_collection(request):
         username = (body.get("username") or "").strip() or None
         note = (body.get("note") or "").strip()
         result = user_repo.add_admin(telegram_id, added_by=added_by, first_name=first_name, username=username, note=note)
+        # Admin qo'shish — yuqori darajadagi audit event, WARNING bilan loglaymiz.
+        logger.warning(
+            "admin_added",
+            extra={"event": "admin_added", "target": telegram_id, "by": added_by, "note": note[:80]},
+        )
         return Response({"ok": True, "admin": result}, status=201)
     return Response({"items": user_repo.list_admins()})
 
@@ -268,4 +278,9 @@ def admin_detail(request, telegram_id: int):
     removed = user_repo.remove_admin(telegram_id)
     if not removed:
         raise AppError(404, "Admin topilmadi")
+    by = getattr(request.current_user, "telegram_id", 0)
+    logger.warning(
+        "admin_removed",
+        extra={"event": "admin_removed", "target": telegram_id, "by": by},
+    )
     return Response({"ok": True})

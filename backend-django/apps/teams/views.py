@@ -1,17 +1,33 @@
 """Teams API endpointlari — /api/teams/*."""
 from __future__ import annotations
 
+import logging
+
+from django_ratelimit.decorators import ratelimit
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from apps.core.decorators import require_auth
 from apps.core.exceptions import AppError
+from apps.core.ratelimit import user_or_ip
 
 from . import repositories
 
 
+logger = logging.getLogger(__name__)
+
+
+def _broken_auth_error() -> AppError:
+    return AppError(
+        403,
+        "Telegram bilan ulanish muvaffaqiyatsiz. Mini-app oynasini yopib, "
+        "bot menyusi orqali qayta oching."
+    )
+
+
 @api_view(["POST"])
 @require_auth
+@ratelimit(key=user_or_ip, rate="10/m", block=True)
 def create_team(request):
     user = request.current_user
 
@@ -20,11 +36,7 @@ def create_team(request):
     # ko'rinib qoladi (shared-guest leak). Bu yerga tushish — auth singan
     # belgi (frontend "guest" yuborgan), shuning uchun xato xabari amaliy bo'lsin.
     if user.telegram_id <= 0:
-        raise AppError(
-            403,
-            "Telegram bilan ulanish muvaffaqiyatsiz. Mini-app oynasini yopib, "
-            "bot menyusi orqali qayta oching."
-        )
+        raise _broken_auth_error()
 
     body = request.data if isinstance(request.data, dict) else {}
     name = (body.get("name") or "").strip()
@@ -38,22 +50,23 @@ def create_team(request):
         raise AppError(409, "Siz allaqachon jamoadasiz")
 
     team = repositories.create_team(name, user.telegram_id)
+    logger.info(
+        "team_created",
+        extra={"event": "team_created", "team_id": team["id"], "code": team["code"], "owner": user.telegram_id},
+    )
     return Response({"team": team, "code": team["code"]}, status=201)
 
 
 @api_view(["POST"])
 @require_auth
+@ratelimit(key=user_or_ip, rate="20/m", block=True)
 def join_team(request):
     user = request.current_user
 
     # Mehmon (shared row) jamoaga qo'shila olmaydi — boshqalarni ham
     # avtomatik ham shu jamoaga qo'shgan bo'lar edi.
     if user.telegram_id <= 0:
-        raise AppError(
-            403,
-            "Telegram bilan ulanish muvaffaqiyatsiz. Mini-app oynasini yopib, "
-            "bot menyusi orqali qayta oching."
-        )
+        raise _broken_auth_error()
 
     body = request.data if isinstance(request.data, dict) else {}
     code = (body.get("code") or "").strip()
@@ -70,6 +83,10 @@ def join_team(request):
         raise AppError(409, "Siz allaqachon jamoadasiz. Avval u yerdan chiqing.")
 
     team = repositories.join_team_by_code(code, user.telegram_id)
+    logger.info(
+        "team_joined",
+        extra={"event": "team_joined", "team_id": team.get("id"), "by": user.telegram_id},
+    )
     return Response({"team": team, "members": team.get("members", [])})
 
 
@@ -89,9 +106,14 @@ def get_my_team(request):
 
 @api_view(["DELETE"])
 @require_auth
+@ratelimit(key=user_or_ip, rate="20/m", block=True)
 def leave_team(request):
     user = request.current_user
     repositories.leave_team(user.telegram_id)
+    logger.info(
+        "team_left",
+        extra={"event": "team_left", "by": user.telegram_id},
+    )
     return Response({"ok": True})
 
 
@@ -110,6 +132,7 @@ def get_team_chat(request):
 
 @api_view(["POST"])
 @require_auth
+@ratelimit(key=user_or_ip, rate="20/m", block=True)
 def post_team_chat(request):
     """Yangi chat xabarini saqlaydi. Faqat a'zolar uchun."""
     user = request.current_user
@@ -134,6 +157,7 @@ def post_team_chat(request):
 
 @api_view(["POST"])
 @require_auth
+@ratelimit(key=user_or_ip, rate="10/m", block=True)
 def transfer_team_owner(request):
     """Jamoa sardorligini boshqa a'zoga o'tkazadi.
 
@@ -145,7 +169,7 @@ def transfer_team_owner(request):
     """
     user = request.current_user
     if user.telegram_id <= 0:
-        raise AppError(403, "Mehmon foydalanuvchi sardorlikni o'tkaza olmaydi")
+        raise _broken_auth_error()
 
     body = request.data if isinstance(request.data, dict) else {}
     new_owner_raw = body.get("newOwnerTelegramId")
@@ -171,11 +195,21 @@ def transfer_team_owner(request):
         raise AppError(400, "Yangi sardor jamoaning a'zosi bo'lishi kerak")
 
     updated = repositories.transfer_owner(team["id"], new_owner_id)
+    logger.info(
+        "team_owner_transferred",
+        extra={
+            "event": "team_owner_transferred",
+            "team_id": team["id"],
+            "from": user.telegram_id,
+            "to": new_owner_id,
+        },
+    )
     return Response({"team": updated})
 
 
 @api_view(["PATCH"])
 @require_auth
+@ratelimit(key=user_or_ip, rate="10/m", block=True)
 def rename_my_team(request):
     """Jamoa nomini o'zgartiradi. Faqat egasi qila oladi."""
     user = request.current_user
@@ -194,4 +228,8 @@ def rename_my_team(request):
         raise AppError(403, "Faqat jamoa egasi nomni o'zgartira oladi")
 
     updated = repositories.update_name(team["id"], name)
+    logger.info(
+        "team_renamed",
+        extra={"event": "team_renamed", "team_id": team["id"], "by": user.telegram_id},
+    )
     return Response({"team": updated})

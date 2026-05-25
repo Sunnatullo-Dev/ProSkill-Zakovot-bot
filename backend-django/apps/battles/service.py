@@ -153,7 +153,14 @@ def _now_ms() -> int:
 
 
 def start_game_flow(battle_id: str) -> None:
-    """Bellashuv accept qilinganda chaqiriladi. Idempotent — qaytar bossa 409."""
+    """Bellashuv accept qilinganda chaqiriladi. Idempotent — qaytar bossa 409.
+
+    Hammasi BITTA atomic blok ichida — agar o'rtada xato bo'lsa:
+      - challenge status pending'ga qaytadi (try_start_game o'zgarishi rollback)
+      - rounds yaratilmasdan qoladi
+      - team status'lari ham rollback
+    Shu bilan "in_progress lekin rounds yo'q" zombie holat butunlay yo'qoladi.
+    """
     challenge = battle_repo.get_challenge_by_id(battle_id)
     if not challenge:
         raise AppError(404, "Bellashuv topilmadi")
@@ -164,10 +171,6 @@ def start_game_flow(battle_id: str) -> None:
     if len(questions) < MIN_QUESTIONS_FOR_BATTLE:
         raise AppError(500, "Yetarli savol topilmadi")
 
-    # Atomik gate: faqat bitta accept-call pending -> in_progress qila oladi.
-    if not battle_repo.try_start_game(battle_id):
-        raise AppError(409, "Bellashuv allaqachon boshlangan")
-
     items = [
         {
             "questionId": question["id"],
@@ -177,21 +180,21 @@ def start_game_flow(battle_id: str) -> None:
         for index, question in enumerate(questions)
     ]
 
-    # Round'larni yaratish va status yangilash atomik tranzaksiya ichida —
-    # server o'rtada qulasa, bellashuv "in_progress" lekin round'larsiz qolib
-    # ketmasligi uchun. Xato bo'lsa challenge'ni "declined" ga qaytaramiz.
     from django.db import transaction
 
     try:
         with transaction.atomic():
+            # Atomik gate try_start_game ENDI atomic ichida — xato bo'lsa
+            # status pending'ga qaytadi.
+            if not battle_repo.try_start_game(battle_id):
+                raise AppError(409, "Bellashuv allaqachon boshlangan")
             battle_repo.create_rounds(battle_id, items)
             update_team_status(challenge["challengerTeamId"], "in_battle")
             update_team_status(challenge["opponentTeamId"], "in_battle")
+    except AppError:
+        raise
     except Exception as error:  # noqa: BLE001
         logger.exception("start_game_flow setup failed: %s", error)
-        # Rollback challenge'ni pending o'rniga declined ga qaytarmaymiz —
-        # try_start_game allaqachon in_progress qilgan. Lekin frontend uchun
-        # 500 qaytaramiz va admin watchdog'i hal qiladi.
         raise AppError(500, "Bellashuvni boshlab bo'lmadi")
 
     first_round = battle_repo.get_round_by_number(battle_id, 1)
@@ -226,7 +229,15 @@ def process_answer(
     if round_row["endedAt"]:
         raise AppError(409, "Round tugagan")
 
-    started_at_ms = _parse_iso(round_row["startedAt"]) or _now_ms()
+    # Round'ning startedAt yo'q bo'lsa — bu race condition (mark_round_started
+    # hali yozmagan). Eski kod `_now_ms()` ga fallback qilib taymerni "qayta
+    # boshlardi" — natijada o'yinchilar belgilangan vaqtdan keyin ham javob
+    # bera olishardi. Endi 409 bilan rad etamiz, frontend keyingi pollda
+    # qayta urinadi.
+    started_at_ms = _parse_iso(round_row["startedAt"])
+    if started_at_ms is None:
+        raise AppError(409, "Round hali tayyor emas, biroz kuting")
+
     elapsed = _now_ms() - started_at_ms
 
     if elapsed > round_row["timeLimitSeconds"] * 1000 + TIMEOUT_GRACE_MS:
@@ -394,9 +405,15 @@ def get_battle_state(battle_id: str, telegram_id: int) -> dict[str, Any]:
         round_row = battle_repo.get_round_by_number(battle_id, challenge["currentRoundNumber"])
         if round_row:
             question = get_question_by_id(round_row["questionId"])
-            started_at_ms = _parse_iso(round_row["startedAt"]) or _now_ms()
-            elapsed = _now_ms() - started_at_ms
-            remaining = max(0, round_row["timeLimitSeconds"] * 1000 - elapsed)
+            # Round hali boshlanmagan bo'lsa (startedAt yo'q) — to'liq vaqt
+            # qoldi deb ko'rsatamiz, _now_ms() fallback'i taymerni reset
+            # qilmasligi uchun.
+            started_at_ms = _parse_iso(round_row["startedAt"])
+            if started_at_ms is None:
+                remaining = round_row["timeLimitSeconds"] * 1000
+            else:
+                elapsed = _now_ms() - started_at_ms
+                remaining = max(0, round_row["timeLimitSeconds"] * 1000 - elapsed)
             my_answered = any(
                 ans.get("round_id") == round_row["id"] and ans.get("telegram_id") == telegram_id
                 for ans in answers

@@ -7,7 +7,9 @@ class User(models.Model):
     last_name = models.CharField(max_length=255, null=True, blank=True)
     username = models.CharField(max_length=255, null=True, blank=True)
     display_name = models.CharField(max_length=255, null=True, blank=True)
-    score = models.IntegerField(default=0)
+    # Leaderboard `score DESC` saralash uchun index — har leaderboard chaqiruvi
+    # `get_user_rank` ham `score__gt` filter qiladi.
+    score = models.IntegerField(default=0, db_index=True)
     unlocked_achievements = models.JSONField(default=list)
     referred_by = models.BigIntegerField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)

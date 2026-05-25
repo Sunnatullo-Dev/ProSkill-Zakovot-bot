@@ -10,6 +10,17 @@ const SUPER_ADMIN_ID = Number(process.env.ADMIN_ID || "0");
 const MINI_APP_URL = process.env.MINI_APP_URL || "";
 const BACKEND_URL = (process.env.BACKEND_URL || "").replace(/\/$/, "");
 
+// Backendning admin API'siga kirish uchun ALOHIDA server-internal kalit.
+// Telegram bot tokeni bilan ARALASHMASIN — bot tokeni Telegram bilan baham
+// ko'riladi, BOT_INTERNAL_API_KEY esa faqat bot va backend o'rtasida.
+const BOT_INTERNAL_API_KEY = process.env.BOT_INTERNAL_API_KEY || "";
+if (!BOT_INTERNAL_API_KEY) {
+  console.warn(
+    "[bot] BOT_INTERNAL_API_KEY o'rnatilmagan — admin API chaqiruvlari 401 qaytaradi. " +
+    "Backend env'iga ham, bot env'iga ham bir xil tasodifiy uzun string qo'ying."
+  );
+}
+
 if (MINI_APP_URL && !MINI_APP_URL.startsWith("https://"))
   throw new Error(`MINI_APP_URL HTTPS bo'lishi shart: ${MINI_APP_URL}`);
 
@@ -62,7 +73,10 @@ const setState = (id: number, s: State) => states.set(id, s);
 const clearState = (id: number) => states.set(id, { t: "idle" });
 
 // ─── API Client ───────────────────────────────────────────────────────────────
-const authHeader = () => ({ Authorization: `bot ${token}`, "Content-Type": "application/json" });
+const authHeader = () => ({
+  Authorization: `bot ${BOT_INTERNAL_API_KEY}`,
+  "Content-Type": "application/json"
+});
 
 async function apiGet(path: string): Promise<any> {
   const r = await fetch(`${BACKEND_URL}${path}`, { headers: authHeader() });

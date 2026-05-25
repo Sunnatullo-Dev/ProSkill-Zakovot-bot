@@ -7,11 +7,21 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
+import time
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import parse_qsl
 
 from django.conf import settings
+
+
+logger = logging.getLogger(__name__)
+
+# initData abadiy yaroqli bo'lmasin: 24 soatdan keyin yangilanishi shart.
+# Bu replay attack oynasini kichraytiradi — masalan, log'dan yoki proxy'dan
+# bir marta o'g'irlangan initData abadiy ishlatilmasin.
+INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
 @dataclass
@@ -55,6 +65,24 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
     if not hmac.compare_digest(expected_hash, received_hash):
         return None
 
+    # auth_date — initData yangiligini tekshiramiz. Eski blob replay attack
+    # qarshi yopiladi. Telegram unix timestamp yuboradi.
+    auth_date_raw = pairs.get("auth_date")
+    if auth_date_raw:
+        try:
+            auth_date = int(auth_date_raw)
+        except ValueError:
+            logger.warning("verify_init_data: auth_date raqam emas: %r", auth_date_raw)
+            return None
+        now_seconds = int(time.time())
+        age = now_seconds - auth_date
+        if age < -60:  # 60s kelajak tomonga clock skew uchun ruxsat
+            logger.warning("verify_init_data: auth_date kelajakda (%ss farq)", age)
+            return None
+        if age > INIT_DATA_MAX_AGE_SECONDS:
+            logger.info("verify_init_data: initData muddati o'tgan (%ss eski)", age)
+            return None
+
     user_json = pairs.get("user")
     if not user_json:
         return None
@@ -64,8 +92,23 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
     except json.JSONDecodeError:
         return None
 
+    # user.id ni xavfsiz aylantirib, salbiy/nol qiymatlarni rad qilamiz.
+    # Real Telegram foydalanuvchisining id'si har doim musbat int.
+    # 0 yoki manfiy bo'lsa — bu mehmon (telegram_id=0) bilan adashish xavfi
+    # yoki manipulatsiya urinishi.
+    raw_id = user.get("id")
+    try:
+        telegram_id = int(raw_id)
+    except (TypeError, ValueError):
+        logger.warning("verify_init_data: user.id raqam emas: %r", raw_id)
+        return None
+
+    if telegram_id <= 0:
+        logger.warning("verify_init_data: user.id musbat emas: %r", raw_id)
+        return None
+
     return TelegramUser(
-        telegram_id=int(user.get("id", 0)),
+        telegram_id=telegram_id,
         first_name=user.get("first_name"),
         last_name=user.get("last_name"),
         username=user.get("username"),
@@ -73,4 +116,8 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
 
 
 def is_admin(telegram_id: int) -> bool:
+    # Mehmon (telegram_id<=0) hech qachon admin bo'lolmaydi —
+    # config xatosidan kelib chiqadigan eskalatsiyalarni oldini olamiz.
+    if telegram_id <= 0:
+        return False
     return telegram_id in settings.ADMIN_TELEGRAM_IDS

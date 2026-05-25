@@ -4,7 +4,8 @@ Tiket = `questionId.issuedAtMs.jti.HMAC` (base64url).
 
 - `jti` (UUID) har biletga noyob — qaytadan ishlatib bo'lmaydi
 - Submit'da `jti` cache'ga "consumed" deb yoziladi; takror urinishlar 409
-- HMAC kalit `settings.TELEGRAM_BOT_TOKEN` bilan imzolanadi
+- HMAC kalit `settings.TICKET_HMAC_SECRET` bilan imzolanadi (alohida,
+  bot tokeni emas — rotatsiya va xavfsizlik domenlari ajratilgan)
 
 Replay attack himoyasi: bitta bilet bilan turli vaqtlarda bir nechta javob
 yuborish va ko'p ball ham olib bo'lmaydi.
@@ -80,7 +81,13 @@ def consume_answer_ticket(jti: str) -> bool:
 
 
 def _sign(body: str) -> str:
-    key = settings.TELEGRAM_BOT_TOKEN.encode("utf-8")
+    secret = getattr(settings, "TICKET_HMAC_SECRET", "") or ""
+    if not secret:
+        # Bo'sh kalit bilan imzolash zaif HMAC chiqaradi va ticket'larni
+        # forge qilish mumkin bo'lib qoladi. Settings allaqachon production'da
+        # ImproperlyConfigured raise qiladi; dev'da ham bu yerga tushmaslik kerak.
+        raise RuntimeError("TICKET_HMAC_SECRET o'rnatilmagan — ticket'lar imzolanmaydi")
+    key = secret.encode("utf-8")
     digest = hmac.new(key, body.encode("utf-8"), hashlib.sha256).hexdigest()
     return digest
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import random
+import secrets
 import string
 from typing import Any, Literal
 
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 
 from apps.core.exceptions import AppError
 from apps.users.models import User
@@ -32,7 +32,9 @@ def _map_team(team: Team) -> dict[str, Any]:
 
 
 def _generate_code() -> str:
-    return "".join(random.choice(CODE_CHARS) for _ in range(CODE_LENGTH))
+    # Crypto-grade RNG — Python random predictable; jamoa kodlari odamlar
+    # qo'lida (URL'larda baham ko'rinadi), shuning uchun guess'lab bo'lmasin.
+    return "".join(secrets.choice(CODE_CHARS) for _ in range(CODE_LENGTH))
 
 
 def find_membership(telegram_id: int) -> dict[str, Any] | None:
@@ -58,16 +60,14 @@ def create_team(name: str, owner_id: int) -> dict[str, Any]:
     if not code:
         raise AppError(500, "Yagona kod yaratib bo'lmadi, qaytadan urinib ko'ring")
 
+    # Team va birinchi a'zo — bitta atomic blok ichida. Jarayon o'rtada
+    # to'xtab qolsa orphan team qolmaydi, transaction butun rollback bo'ladi.
     try:
-        team = Team.objects.create(name=name, code=code, owner_id=owner_id)
+        with transaction.atomic():
+            team = Team.objects.create(name=name, code=code, owner_id=owner_id)
+            TeamMember.objects.create(team=team, telegram_id=owner_id)
     except IntegrityError:
         raise AppError(500, "Jamoa yaratish muvaffaqiyatsiz")
-
-    try:
-        TeamMember.objects.create(team=team, telegram_id=owner_id)
-    except IntegrityError:
-        team.delete()
-        raise AppError(500, "Egasini a'zo sifatida qo'shib bo'lmadi")
 
     return _map_team(team)
 
@@ -115,19 +115,28 @@ def get_team_by_telegram_id(telegram_id: int) -> dict[str, Any] | None:
 
 
 def join_team_by_code(code: str, telegram_id: int) -> dict[str, Any]:
-    normalized = code.strip().upper()
-    team = Team.objects.filter(code=normalized).first()
-    if not team:
-        raise AppError(404, "Bu kod bilan jamoa topilmadi")
-    if team.status != "open":
-        raise AppError(409, "Bu jamoa hozir o'yinda yoki yopiq")
+    """Jamoaga qo'shilish — TOCTOU race'siz.
 
-    member_count = TeamMember.objects.filter(team=team).count()
-    if member_count >= team.max_members:
-        raise AppError(409, "Jamoa to'lib qolgan")
+    Avval kod orqali team'ni topamiz (lock'siz), keyin atomic blok ichida
+    `select_for_update` bilan team qatorini bloklab member_count'ni tekshiramiz.
+    Ikki bir vaqtda qo'shilish urinish bir-birini ko'radi, faqat birinchisi
+    o'tadi (yoki to'lguncha qancha bo'lsa).
+    """
+    normalized = code.strip().upper()
+    team_row = Team.objects.filter(code=normalized).only("id").first()
+    if not team_row:
+        raise AppError(404, "Bu kod bilan jamoa topilmadi")
 
     try:
-        TeamMember.objects.create(team=team, telegram_id=telegram_id)
+        with transaction.atomic():
+            # Endi team qatorini bloklaymiz — boshqa join shu bilan kutib turadi.
+            team = Team.objects.select_for_update().get(id=team_row.id)
+            if team.status != "open":
+                raise AppError(409, "Bu jamoa hozir o'yinda yoki yopiq")
+            member_count = TeamMember.objects.filter(team=team).count()
+            if member_count >= team.max_members:
+                raise AppError(409, "Jamoa to'lib qolgan")
+            TeamMember.objects.create(team=team, telegram_id=telegram_id)
     except IntegrityError:
         raise AppError(409, "Siz allaqachon boshqa jamoadasiz")
 
@@ -155,11 +164,22 @@ def update_name(team_id: str, name: str) -> dict[str, Any]:
 
 
 def transfer_owner(team_id: str, new_owner_telegram_id: int) -> dict[str, Any]:
-    """Jamoa egaligini boshqa a'zoga o'tkazadi.
+    """Jamoa egaligini boshqa a'zoga o'tkazadi — atomic + member tekshiruvi.
 
-    Faqat repository qatlami — auth tekshiruvi view'da bajariladi.
+    Race: tekshiruvdan keyin yangi sardor jamoadan chiqib ketmasligi uchun
+    team va member qatorlarini lock qilamiz.
     """
-    Team.objects.filter(id=team_id).update(owner_id=new_owner_telegram_id)
+    with transaction.atomic():
+        team = Team.objects.select_for_update().filter(id=team_id).first()
+        if not team:
+            raise AppError(404, "Jamoa topilmadi")
+        # Yangi sardor a'zo bo'lib qolganini lock ostida qayta tasdiqlaymiz.
+        if not TeamMember.objects.select_for_update().filter(
+            team_id=team_id, telegram_id=new_owner_telegram_id
+        ).exists():
+            raise AppError(400, "Yangi sardor jamoaning a'zosi emas")
+        team.owner_id = new_owner_telegram_id
+        team.save(update_fields=["owner_id"])
     return get_team_with_members(team_id)
 
 
@@ -199,18 +219,39 @@ def _map_message(msg: "TeamChatMessage") -> dict[str, Any]:
 
 
 def leave_team(telegram_id: int) -> None:
-    member = TeamMember.objects.filter(telegram_id=telegram_id).first()
-    if not member:
-        return
+    """Jamoadan chiqish — atomic.
 
-    team = member.team
-    member.delete()
+    Race senariylari:
+      - Ikki a'zo bir vaqtda chiqsa, ikkalasi ham team.delete() ga yetolmasligi
+        kerak (yagona member qoladi).
+      - Sardor chiqsa, yangi sardor jamoadan chiqib ketmasdan tayinlansin.
+    """
+    with transaction.atomic():
+        member = (
+            TeamMember.objects.select_for_update()
+            .filter(telegram_id=telegram_id)
+            .first()
+        )
+        if not member:
+            return
 
-    remaining = TeamMember.objects.filter(team=team).order_by("joined_at").first()
-    if not remaining:
-        team.delete()
-        return
+        team = Team.objects.select_for_update().filter(id=member.team_id).first()
+        if not team:
+            member.delete()
+            return
 
-    if team.owner_id == telegram_id:
-        team.owner_id = remaining.telegram_id
-        team.save(update_fields=["owner_id"])
+        member.delete()
+
+        remaining = (
+            TeamMember.objects.select_for_update()
+            .filter(team=team)
+            .order_by("joined_at")
+            .first()
+        )
+        if not remaining:
+            team.delete()
+            return
+
+        if team.owner_id == telegram_id:
+            team.owner_id = remaining.telegram_id
+            team.save(update_fields=["owner_id"])

@@ -30,3 +30,6 @@ class QuestionReport(models.Model):
 
     class Meta:
         db_table = "question_reports"
+        # Bitta foydalanuvchi bitta savolni bir martadan ko'p marotaba
+        # belgilab spam qila olmasin.
+        unique_together = [("question", "reported_by")]

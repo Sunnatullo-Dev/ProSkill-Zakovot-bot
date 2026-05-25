@@ -48,8 +48,10 @@ class BattleAnswer(models.Model):
     round = models.ForeignKey(
         BattleRound, on_delete=models.CASCADE, related_name="answers"
     )
-    telegram_id = models.BigIntegerField()
-    team_id = models.UUIDField()
+    # `has_user_answered`, `get_answers_for_round` filter qiladi — index zarur.
+    telegram_id = models.BigIntegerField(db_index=True)
+    # `get_answers_for_battle` ko'p hisoblashlarda team bo'yicha filter qiladi.
+    team_id = models.UUIDField(db_index=True)
     answer = models.TextField()
     is_correct = models.BooleanField(default=False)
     answered_at = models.DateTimeField(auto_now_add=True)
@@ -58,3 +60,9 @@ class BattleAnswer(models.Model):
     class Meta:
         db_table = "battle_answers"
         unique_together = [("round", "telegram_id")]
+        indexes = [
+            # Hot path: round bo'yicha barcha javoblar yoki bitta foydalanuvchi
+            # tomonidan berilgan javobni qidirish.
+            models.Index(fields=["round", "telegram_id"]),
+            models.Index(fields=["battle", "team_id"]),
+        ]

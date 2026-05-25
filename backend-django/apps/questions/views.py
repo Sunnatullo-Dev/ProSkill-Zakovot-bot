@@ -1,13 +1,20 @@
 """Questions API endpointlari."""
 from __future__ import annotations
 
+import logging
+
+from django_ratelimit.decorators import ratelimit
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from apps.core.decorators import require_admin, require_auth
 from apps.core.exceptions import AppError
+from apps.core.ratelimit import user_or_ip
 
 from . import repositories
+
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_ROUND_COUNT = 10
@@ -37,9 +44,14 @@ def get_categories(request):
 
 @api_view(["POST"])
 @require_auth
+@ratelimit(key=user_or_ip, rate="10/h", block=True)
 def report_question(request, question_id: str):
     user = request.current_user
     repositories.report_question(question_id, user.telegram_id)
+    logger.info(
+        "question_reported",
+        extra={"event": "question_reported", "question_id": question_id, "by": user.telegram_id},
+    )
     return Response({"ok": True}, status=201)
 
 
@@ -53,6 +65,11 @@ def get_reported_questions(request):
 @require_admin
 def delete_question(request, question_id: str):
     repositories.delete_question(question_id)
+    user = request.current_user
+    logger.warning(
+        "question_deleted",
+        extra={"event": "question_deleted", "question_id": question_id, "by": getattr(user, "telegram_id", 0)},
+    )
     return Response({"ok": True})
 
 

@@ -38,7 +38,14 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 if not ALLOWED_HOSTS:
-    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "*"]
+    if IS_PRODUCTION:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "DJANGO_ALLOWED_HOSTS production'da o'rnatilishi shart "
+            "(masalan: 'zakovat.onrender.com'). Bo'sh qoldirilsa Host-header attack xavfi."
+        )
+    # Dev-only fallback: faqat localhost. "*" ishlatilmaydi — production buzilmasin uchun.
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -46,12 +53,45 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
 
+# Answer-ticket'larni imzolash uchun alohida sekret — TELEGRAM_BOT_TOKEN bilan
+# aralashtirib yuborilmasin (bot tokenni rotatsiya qilish ticket'larni buzmasin).
+# Production'da bo'sh bo'lsa fail-fast: zaif/bo'sh kalit bilan ishlash mumkin emas.
+TICKET_HMAC_SECRET = os.environ.get("TICKET_HMAC_SECRET", "")
+if not TICKET_HMAC_SECRET:
+    if IS_PRODUCTION:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "TICKET_HMAC_SECRET production'da o'rnatilishi shart "
+            "(masalan: `python -c 'import secrets; print(secrets.token_urlsafe(48))'`)."
+        )
+    # Dev'da deterministik fallback — runtime'da o'zgarib turmasin uchun
+    # SECRET_KEY ga bog'laymiz (har xil bo'lsa dev'da test ticket'lari mos kelmasdan ketadi).
+    TICKET_HMAC_SECRET = "dev-ticket-" + SECRET_KEY
+
+# Bot adminstrativ APIlarini chaqirish uchun alohida server-internal kalit —
+# Telegram bot tokeni bilan ARALASHMASIN. Bot tokeni Telegram bilan baham
+# ko'riladi va u har joyda log'larda paydo bo'lishi mumkin; admin huquqi
+# uni ko'rgan har qanday clientga berilmasligi kerak.
+BOT_INTERNAL_API_KEY = os.environ.get("BOT_INTERNAL_API_KEY", "")
+if not BOT_INTERNAL_API_KEY and IS_PRODUCTION:
+    # Production'da yo'q bo'lsa, "bot <token>" path'ini umuman o'chirib qo'yamiz.
+    # Lekin ishlatilayotgan bo'lsa, alohida kalit talab qilamiz.
+    pass  # middleware bu yo'qligini tekshirib path'ni rad etadi
+
 ADMIN_TELEGRAM_IDS: list[int] = []
 for raw in env_list("ADMIN_TELEGRAM_IDS"):
     try:
-        ADMIN_TELEGRAM_IDS.append(int(raw))
+        value = int(raw)
     except ValueError:
         print(f"[settings] WARNING: ADMIN_TELEGRAM_IDS ichida noto'g'ri qiymat: {raw}", file=sys.stderr)
+        continue
+    if value <= 0:
+        print(
+            f"[settings] WARNING: ADMIN_TELEGRAM_IDS musbat bo'lishi shart (qiymat rad etildi: {value})",
+            file=sys.stderr,
+        )
+        continue
+    ADMIN_TELEGRAM_IDS.append(value)
 
 INSTALLED_APPS = [
     "django.contrib.admin",

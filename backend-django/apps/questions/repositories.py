@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any
 
 from apps.core.exceptions import AppError
@@ -26,20 +25,23 @@ def _map_question_full(q: Question) -> dict[str, Any]:
 def get_round_questions(
     *, count: int, category: str | None, difficulty: str | None
 ) -> list[dict[str, Any]]:
+    """Random N ta savol qaytaradi.
+
+    Eski versiya `values_list` orqali butun jadval ID'larini Python xotirasiga
+    yuklaydigan edi — savollar soni ko'paysa lineer ko'tariladi. Endi DB tomonida
+    `ORDER BY RANDOM() LIMIT N` ishlatamiz: index'siz ham SQLite/Postgres uchun
+    bu N kichik bo'lganda samaraliroq.
+    """
+    if count <= 0:
+        return []
     qs = Question.objects.all()
     if category:
         qs = qs.filter(category=category)
     if difficulty:
         qs = qs.filter(difficulty=difficulty)
 
-    ids = list(qs.values_list("id", flat=True))
-    random.shuffle(ids)
-    ids = ids[:count]
-    if not ids:
-        return []
-
-    questions = list(Question.objects.filter(id__in=ids))
-    random.shuffle(questions)
+    # `order_by("?")` — Django'ning portable `RANDOM()` so'rovi.
+    questions = list(qs.order_by("?")[:count])
     return [_map_question_public(q) for q in questions]
 
 
@@ -59,10 +61,16 @@ def get_question_by_id(question_id: str) -> dict[str, Any] | None:
 
 
 def report_question(question_id: str, reported_by: int) -> None:
+    from django.db import IntegrityError
+
     q = Question.objects.filter(id=question_id).first()
     if not q:
         raise AppError(404, "Savol topilmadi")
-    QuestionReport.objects.create(question=q, reported_by=reported_by)
+    try:
+        QuestionReport.objects.create(question=q, reported_by=reported_by)
+    except IntegrityError:
+        # Duplicate report — silently OK (foydalanuvchi allaqachon belgilagan).
+        return
 
 
 def get_reported_questions() -> list[dict[str, Any]]:

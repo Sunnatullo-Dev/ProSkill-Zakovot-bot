@@ -5,6 +5,7 @@ orqali joriy foydalanuvchini oladi — eski Express `req.currentUser` bilan bir 
 """
 from __future__ import annotations
 
+import hmac
 from typing import Callable
 
 from django.conf import settings
@@ -26,18 +27,27 @@ class TelegramAuthMiddleware:
         if not header:
             return None
 
-        # Bot token auth: "bot <TELEGRAM_BOT_TOKEN>" — bot admin API uchun
+        # Server-internal admin auth: "bot <BOT_INTERNAL_API_KEY>" — Telegram boti
+        # serverdagi admin endpoint'larini chaqirishi uchun.
+        # MUHIM: bu kalit Telegram bot tokeni EMAS. Bot tokeni Telegram bilan baham
+        # ko'riladi va loglarda paydo bo'lishi mumkin; uni admin huquqi sifatida
+        # ishlatish — token sizib ketsa to'liq admin huquqlari ham ketadi degani.
+        # Shu uchun alohida `BOT_INTERNAL_API_KEY` ishlatamiz.
         if header.lower().startswith("bot "):
-            bot_token = header[4:].strip()
-            configured = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
-            if configured and bot_token == configured and settings.ADMIN_TELEGRAM_IDS:
-                return TelegramUser(
-                    telegram_id=settings.ADMIN_TELEGRAM_IDS[0],
-                    first_name="Bot",
-                    last_name=None,
-                    username=None,
-                )
-            return None
+            provided_key = header[4:].strip()
+            internal_key = getattr(settings, "BOT_INTERNAL_API_KEY", "") or ""
+            if not internal_key or not settings.ADMIN_TELEGRAM_IDS:
+                # Kalit sozlanmagan yoki admin yo'q — bu path butunlay o'chiq.
+                return None
+            # constant-time taqqoslash — timing attack qarshi
+            if not hmac.compare_digest(provided_key, internal_key):
+                return None
+            return TelegramUser(
+                telegram_id=settings.ADMIN_TELEGRAM_IDS[0],
+                first_name="Bot",
+                last_name=None,
+                username=None,
+            )
 
         prefix = "tma "
         if not header.lower().startswith(prefix):
