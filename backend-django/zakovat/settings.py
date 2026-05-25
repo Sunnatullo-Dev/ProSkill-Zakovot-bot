@@ -211,8 +211,29 @@ REST_FRAMEWORK = {
 }
 
 if IS_PRODUCTION:
-    CORS_ALLOWED_ORIGINS = [FRONTEND_URL] if FRONTEND_URL else []
+    # CORS allowed origins — FRONTEND_URL'dan boshlaymiz. Telegram WebView
+    # ham yetib kelishi mumkin (mini-app o'z domain'idan AJAX qiladi).
+    # CORS_ALLOWED_ORIGIN_REGEXES bilan Vercel/Netlify subdomain'larini ham
+    # qabul qilamiz — bu CORS_ALLOWED_ORIGINS o'rniga regex bilan moslashuvchan.
+    _cors_origins: list[str] = []
+    if FRONTEND_URL:
+        _cors_origins.append(FRONTEND_URL)
+    CORS_ALLOWED_ORIGINS = _cors_origins
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        # Vercel deployment'lari (Preview va Production)
+        r"^https://[\w-]+\.vercel\.app$",
+        # Netlify deployment'lari
+        r"^https://[\w-]+\.netlify\.app$",
+        # Render frontend (statik sayt)
+        r"^https://[\w-]+\.onrender\.com$",
+    ]
     CORS_ALLOW_CREDENTIALS = True
+    if not _cors_origins:
+        print(
+            "[settings] WARNING: FRONTEND_URL o'rnatilmagan. Faqat Vercel/"
+            "Netlify/Render subdomain'larining CORS regex'lari qabul qilinadi.",
+            file=sys.stderr,
+        )
 else:
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOW_CREDENTIALS = True
