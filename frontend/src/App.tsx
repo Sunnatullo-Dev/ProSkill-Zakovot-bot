@@ -355,17 +355,28 @@ export default function App() {
         setUser(response.user);
         setScore(response.user.score);
 
-        // Backend'dan kelgan til frontend localStorage'idan farq qilsa,
-        // foydalanuvchi boshqa qurilmada o'zgartirgan bo'lishi mumkin —
-        // shuni qabul qilamiz. Lekin onboarding davom etayotgan bo'lsa
-        // (hali tanlamagan), aralashmaymiz.
+        // Til sinxronlash: client (localStorage) va server (DB) o'rtasidagi
+        // farq bo'lganda:
+        //   - client default `uz-latn`, server boshqacha → server'dan pull
+        //     (boshqa qurilmada o'zgartirgan bo'lishi mumkin)
+        //   - client default'dan boshqa → client'dan server'ga push
+        //     (foydalanuvchi onboarding'da tanlagan, lekin login'gacha
+        //     saqlanmagan edi — endi push qilamiz)
         if (
           onboardingDone &&
           response.user.language &&
           (SUPPORTED_LANGS as string[]).includes(response.user.language) &&
           response.user.language !== lang
         ) {
-          setLang(response.user.language as Lang);
+          if (lang === "uz-latn") {
+            // Client default'da, server bilan sinxronlanmagan — pull
+            setLang(response.user.language as Lang);
+          } else {
+            // Client foydalanuvchi tanlagan til'da, server hali o'zgarmagan — push
+            void updateMyLanguage(lang).catch(() => {
+              /* offline yoki auth singan — localStorage ishonchli */
+            });
+          }
         }
 
         await loadTopUsers();
