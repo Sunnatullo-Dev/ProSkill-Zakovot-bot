@@ -172,13 +172,17 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         setFailureCount(0);
         setState(next);
 
-        if (next.currentRound) {
+        const newRoundId = next.currentRound?.roundId ?? null;
+        const isRoundChange = newRoundId !== lastRoundIdRef.current;
+
+        // `secondsLeft` ni FAQAT yangi round kelganda server qiymatidan
+        // sinxronlaymiz. Bir xil round davomida server qiymati har 2s da
+        // kelib, local 1s tick bilan to'qnashib jitter qildi (10→9→10→9).
+        if (isRoundChange && next.currentRound) {
           setSecondsLeft(Math.ceil(next.currentRound.timeRemainingMs / 1000));
         }
 
-        const newRoundId = next.currentRound?.roundId ?? null;
-
-        if (newRoundId !== lastRoundIdRef.current) {
+        if (isRoundChange) {
           lastRoundIdRef.current = newRoundId;
           setAnswer("");
           setFeedback(null);

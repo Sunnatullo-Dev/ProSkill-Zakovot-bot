@@ -877,10 +877,14 @@ function AchievementToast({
 }) {
   const totalBonus = unlocks.reduce((sum, item) => sum + item.bonus, 0);
 
+  // onClose har renderda yangi closure — `useRef` orqali stable saqlaymiz,
+  // dep [] bilan timeout faqat mount paytida o'rnatilsin.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
-    const id = window.setTimeout(onClose, 6500);
+    const id = window.setTimeout(() => onCloseRef.current(), 6500);
     return () => window.clearTimeout(id);
-  }, [onClose]);
+  }, []);
 
   return (
     <div

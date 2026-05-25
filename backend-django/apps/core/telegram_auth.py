@@ -140,4 +140,15 @@ def is_admin(telegram_id: int) -> bool:
     # config xatosidan kelib chiqadigan eskalatsiyalarni oldini olamiz.
     if telegram_id <= 0:
         return False
-    return telegram_id in settings.ADMIN_TELEGRAM_IDS
+    # 1) Env'da yozilgan super-admin'lar (har doim admin)
+    if telegram_id in settings.ADMIN_TELEGRAM_IDS:
+        return True
+    # 2) Bot orqali qo'shilgan adminlar (DB jadvali)
+    # Import inside function — settings.py top-level import'larni
+    # aylanma bog'liqlikdan saqlash uchun.
+    try:
+        from apps.users.models import BotAdmin
+        return BotAdmin.objects.filter(telegram_id=telegram_id).exists()
+    except Exception:  # noqa: BLE001
+        # Migratsiya hali ishlamagan bo'lsa table topilmaydi — env'ga qaytamiz
+        return False

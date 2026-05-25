@@ -143,6 +143,9 @@ export default function App() {
   // Backend tasdiqlagan admin holati — ADMIN_TELEGRAM_IDS env'iga
   // qo'shilgan foydalanuvchilar uchun BottomNav'da Admin tugmasi chiqadi.
   const [isAdminUser, setIsAdminUser] = useState(false);
+  // Bootstrap fakat bir martagina ishlasin — `lang` o'zgarganda qayta
+  // login qilib foydalanuvchini Profile'dan Home'ga otib yubormasin.
+  const bootstrapDoneRef = useRef(false);
   const submitAnswerRef = useRef<SubmitAnswerFn | null>(null);
   // Stale ticket fetch'lardan himoya — har savolning o'z ticket fetch
   // belgisi bor; eski fetch keyin kelsa, biz uni e'tibordan chiqaramiz.
@@ -299,6 +302,15 @@ export default function App() {
       return;
     }
 
+    // BIR MARTAGINA: bootstrap qaytarilmasin. Aks holda til o'zgarganda
+    // (lang dep array'da bo'lmasa-da, hozir ham xotira oldidan boshqa
+    // joydan triggerlanish ehtimoli bor) qayta login bo'lib screen'ni
+    // bosh sahifaga qaytaradi.
+    if (bootstrapDoneRef.current) {
+      return;
+    }
+    bootstrapDoneRef.current = true;
+
     async function bootstrap() {
       try {
         setScreen("loading");
@@ -397,7 +409,10 @@ export default function App() {
     }
 
     void bootstrap();
-  }, [initData, initDataMissing, isReady, lang, loadTopUsers, onboardingDone, setLang, startParam, telegramUser]);
+    // Dep array minimal — bootstrap faqat to'liq tayyor bo'lganda ishlasin.
+    // `lang` va `setLang` bo'lmaydi: aks holda til o'zgarganda foydalanuvchi
+    // Profile'dan Home'ga otib yuboriladi.
+  }, [initData, initDataMissing, isReady, loadTopUsers, onboardingDone, startParam, telegramUser]);
 
   // BackButton handler'ini stable saqlaymiz — useCallback bilan kafolatlanmasa,
   // har screen o'zgarishda yangi closure yaratilib, Telegram SDK'da off/on

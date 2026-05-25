@@ -98,7 +98,19 @@ async function apiPatch(path: string, body: object): Promise<any> {
 }
 async function apiDelete(path: string): Promise<any> {
   const r = await fetch(`${BACKEND_URL}${path}`, { method: "DELETE", headers: authHeader() });
-  return r.status === 200 ? { ok: true } : r.json();
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`DELETE ${path} → ${r.status}: ${t.slice(0, 200)}`);
+  }
+  // 204 No Content yoki bo'sh javob bo'lishi mumkin — JSON parse'da xato bo'lmasin.
+  if (r.status === 204) return { ok: true };
+  const txt = await r.text();
+  if (!txt) return { ok: true };
+  try {
+    return JSON.parse(txt);
+  } catch {
+    return { ok: true };
+  }
 }
 
 // ─── PDF Parser ───────────────────────────────────────────────────────────────
@@ -557,6 +569,12 @@ bot.on("message:text", async ctx => {
     return;
   }
   if (st.t === "add_answer") {
+    // /cancel allaqachon yuqorida tutiladi. /skip va boshqa slash-buyruqlarni
+    // javob sifatida saqlamaymiz — admin xatoga yo'l qo'ymasin uchun.
+    if (text.startsWith("/")) {
+      await ctx.reply("✏️ To'g'ri javob slash bilan boshlanmasin. Qaytadan kiriting:");
+      return;
+    }
     setState(uid, { t: "add_category", text: st.text, answer: text });
     await ctx.reply("📂 Kategoriyani kiriting:\n\n/skip — o'tkazib yuborish");
     return;

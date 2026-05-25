@@ -732,19 +732,61 @@ type EditFields = {
   correctAnswer: string;
   category: string;
   difficulty: "" | Difficulty;
+  /** A/B/C/D rejimi uchun 3 ta noto'g'ri variant (bo'sh bo'lsa — erkin matn). */
+  wrongA: string;
+  wrongB: string;
+  wrongC: string;
 };
 
 function emptyFields(): EditFields {
-  return { text: "", correctAnswer: "", category: "", difficulty: "" };
+  return {
+    text: "",
+    correctAnswer: "",
+    category: "",
+    difficulty: "",
+    wrongA: "",
+    wrongB: "",
+    wrongC: ""
+  };
 }
 
 function fromQuestion(question: AdminQuestion): EditFields {
+  const wrong = question.wrongAnswers ?? [];
   return {
     text: question.text,
     correctAnswer: question.correctAnswer,
     category: question.category ?? "",
-    difficulty: (question.difficulty as Difficulty | null) ?? ""
+    difficulty: (question.difficulty as Difficulty | null) ?? "",
+    wrongA: wrong[0] ?? "",
+    wrongB: wrong[1] ?? "",
+    wrongC: wrong[2] ?? ""
   };
+}
+
+/** EditFields'dan API uchun wrongAnswers tayyorlaydi.
+ *  - Hammasi bo'sh bo'lsa: [] (erkin matn rejimi)
+ *  - Hammasi to'la bo'lsa: 3 ta string
+ *  - Qisman to'la: xato (foydalanuvchi tushunsin)
+ */
+function collectWrongAnswers(fields: EditFields): { ok: true; value: string[] } | { ok: false; error: string } {
+  const items = [fields.wrongA.trim(), fields.wrongB.trim(), fields.wrongC.trim()];
+  const filled = items.filter((x) => x.length > 0);
+  if (filled.length === 0) {
+    return { ok: true, value: [] };
+  }
+  if (filled.length !== 3) {
+    return {
+      ok: false,
+      error: "A/B/C/D rejimi uchun 3 ta noto'g'ri variant to'liq kerak (yoki uchchalasini bo'sh qoldiring)"
+    };
+  }
+  if (new Set(filled.map((x) => x.toLowerCase())).size !== 3) {
+    return { ok: false, error: "Noto'g'ri variantlar takrorlanmasin" };
+  }
+  if (filled.map((x) => x.toLowerCase()).includes(fields.correctAnswer.trim().toLowerCase())) {
+    return { ok: false, error: "To'g'ri javob noto'g'ri variantlar orasida bo'lmasin" };
+  }
+  return { ok: true, value: items };
 }
 
 function DifficultyBadge({ value }: { value: string | null }) {
@@ -828,12 +870,19 @@ function QuestionsSection() {
       return;
     }
 
+    const wrongResult = collectWrongAnswers(createFields);
+    if (!wrongResult.ok) {
+      setCreateError(wrongResult.error);
+      return;
+    }
+
     setCreating(true);
     const result = await createAdminQuestion({
       text: createFields.text.trim(),
       correctAnswer: createFields.correctAnswer.trim(),
       category: createFields.category.trim() || null,
-      difficulty: createFields.difficulty || null
+      difficulty: createFields.difficulty || null,
+      wrongAnswers: wrongResult.value
     });
     setCreating(false);
 
@@ -856,12 +905,19 @@ function QuestionsSection() {
       return;
     }
 
+    const wrongResult = collectWrongAnswers(editFields);
+    if (!wrongResult.ok) {
+      setEditError(wrongResult.error);
+      return;
+    }
+
     setBusyId(id);
     const result = await updateAdminQuestion(id, {
       text: editFields.text.trim(),
       correctAnswer: editFields.correctAnswer.trim(),
       category: editFields.category.trim() || null,
-      difficulty: editFields.difficulty || null
+      difficulty: editFields.difficulty || null,
+      wrongAnswers: wrongResult.value
     });
     setBusyId(null);
 
@@ -1165,6 +1221,60 @@ function QuestionsSection() {
                 </select>
               )}
             </div>
+
+            {/* A/B/C/D rejimi uchun 3 ta noto'g'ri variant — ixtiyoriy.
+                Bo'sh qoldirilsa savol erkin matn rejimida (Gemini AI baholaydi).
+                Uchchalasini to'ldirilsa A/B/C/D test rejimida. */}
+            <div
+              style={{
+                marginTop: "4px",
+                padding: "10px 12px",
+                background: "rgba(77,166,255,0.06)",
+                border: "1px dashed var(--border)",
+                borderRadius: "10px"
+              }}
+            >
+              <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--muted)", marginBottom: "8px" }}>
+                A/B/C/D variantlari (ixtiyoriy — 3 ta noto'g'ri variant)
+              </div>
+              {renderField(
+                "Noto'g'ri variant 1",
+                <input
+                  placeholder="Birinchi noto'g'ri javob"
+                  style={inputStyle}
+                  type="text"
+                  value={createFields.wrongA}
+                  onChange={(event) =>
+                    setCreateFields((value) => ({ ...value, wrongA: event.target.value }))
+                  }
+                />
+              )}
+              {renderField(
+                "Noto'g'ri variant 2",
+                <input
+                  placeholder="Ikkinchi noto'g'ri javob"
+                  style={inputStyle}
+                  type="text"
+                  value={createFields.wrongB}
+                  onChange={(event) =>
+                    setCreateFields((value) => ({ ...value, wrongB: event.target.value }))
+                  }
+                />
+              )}
+              {renderField(
+                "Noto'g'ri variant 3",
+                <input
+                  placeholder="Uchinchi noto'g'ri javob"
+                  style={inputStyle}
+                  type="text"
+                  value={createFields.wrongC}
+                  onChange={(event) =>
+                    setCreateFields((value) => ({ ...value, wrongC: event.target.value }))
+                  }
+                />
+              )}
+            </div>
+
             {createError ? (
               <div style={{ fontSize: "12px", color: "var(--error)" }}>{createError}</div>
             ) : null}
@@ -1342,6 +1452,55 @@ function QuestionsSection() {
                       </select>
                     )}
                   </div>
+
+                  {/* A/B/C/D variantlari — tahrirlash uchun */}
+                  <div
+                    style={{
+                      marginTop: "4px",
+                      padding: "10px 12px",
+                      background: "rgba(77,166,255,0.06)",
+                      border: "1px dashed var(--border)",
+                      borderRadius: "10px"
+                    }}
+                  >
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--muted)", marginBottom: "8px" }}>
+                      A/B/C/D variantlari (ixtiyoriy — 3 ta noto'g'ri variant)
+                    </div>
+                    {renderField(
+                      "Noto'g'ri variant 1",
+                      <input
+                        style={inputStyle}
+                        type="text"
+                        value={editFields.wrongA}
+                        onChange={(event) =>
+                          setEditFields((value) => ({ ...value, wrongA: event.target.value }))
+                        }
+                      />
+                    )}
+                    {renderField(
+                      "Noto'g'ri variant 2",
+                      <input
+                        style={inputStyle}
+                        type="text"
+                        value={editFields.wrongB}
+                        onChange={(event) =>
+                          setEditFields((value) => ({ ...value, wrongB: event.target.value }))
+                        }
+                      />
+                    )}
+                    {renderField(
+                      "Noto'g'ri variant 3",
+                      <input
+                        style={inputStyle}
+                        type="text"
+                        value={editFields.wrongC}
+                        onChange={(event) =>
+                          setEditFields((value) => ({ ...value, wrongC: event.target.value }))
+                        }
+                      />
+                    )}
+                  </div>
+
                   {editError ? (
                     <div style={{ fontSize: "12px", color: "var(--error)" }}>{editError}</div>
                   ) : null}

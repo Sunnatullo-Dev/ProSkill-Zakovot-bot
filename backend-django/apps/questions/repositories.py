@@ -46,8 +46,20 @@ def _map_question_public(q: Question) -> dict[str, Any]:
 
 
 def _map_question_full(q: Question) -> dict[str, Any]:
+    """Admin view — barcha maydonlar (to'g'ri javob ham, wrongAnswers ham).
+
+    Bu faqat admin endpoint'lari uchun. Public endpoint'lar
+    `_map_question_public` ishlatadi (correctAnswer va wrongAnswers
+    yashirin — faqat shuffled `options` qaytariladi).
+    """
     base = _map_question_public(q)
     base["correctAnswer"] = q.correct_answer
+    # Admin tahrirlash uchun originalp wrong_answers — shuffle qilinmagan,
+    # 3 ta string ro'yxati. Bo'sh bo'lsa savol erkin matn rejimida.
+    raw_wrong = q.wrong_answers if isinstance(q.wrong_answers, list) else []
+    base["wrongAnswers"] = [
+        str(item) for item in raw_wrong if isinstance(item, str) and item.strip()
+    ]
     return base
 
 

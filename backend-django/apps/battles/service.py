@@ -191,15 +191,17 @@ def start_game_flow(battle_id: str) -> None:
             battle_repo.create_rounds(battle_id, items)
             update_team_status(challenge["challengerTeamId"], "in_battle")
             update_team_status(challenge["opponentTeamId"], "in_battle")
+            # mark_round_started ham ATOMIC ichida — agar bu xato qilsa
+            # butun setup rollback, "zombie round" (started_at=None bo'lib
+            # qolib ketgan round) hosil bo'lmaydi.
+            first_round = battle_repo.get_round_by_number(battle_id, 1)
+            if first_round:
+                battle_repo.mark_round_started(first_round["id"])
     except AppError:
         raise
     except Exception as error:  # noqa: BLE001
         logger.exception("start_game_flow setup failed: %s", error)
         raise AppError(500, "Bellashuvni boshlab bo'lmadi")
-
-    first_round = battle_repo.get_round_by_number(battle_id, 1)
-    if first_round:
-        battle_repo.mark_round_started(first_round["id"])
 
     _notify_battle_started(challenge["challengerTeamId"], challenge["opponentTeamId"])
 
@@ -289,7 +291,18 @@ def maybe_advance_round(battle_id: str) -> None:
     if not round_row or round_row["endedAt"]:
         return
 
-    started_at_ms = _parse_iso(round_row["startedAt"]) or _now_ms()
+    # `startedAt` `None` bo'lsa — round hali "boshlandi" deb belgilanmagan
+    # (mark_round_started ishlamagan). Bu hodisa start_game_flow atomic
+    # ichiga olib o'tilgandan keyin kamdan-kam uchrasada, defensive:
+    # `_now_ms()` ga fallback qilmaymiz (eskirgan bug), shu bilan birga
+    # round'ni hozir boshlandi deb belgilab davom etamiz.
+    started_at_iso = round_row["startedAt"]
+    started_at_ms = _parse_iso(started_at_iso)
+    if started_at_ms is None:
+        # Self-heal: round'ni hozir boshlandi deb yozamiz, keyingi polling'da
+        # to'g'ri ishlaydi. Bu safar advance qilmaymiz (timer endi boshlandi).
+        battle_repo.mark_round_started(round_row["id"])
+        return
     elapsed = _now_ms() - started_at_ms
     time_up = elapsed > round_row["timeLimitSeconds"] * 1000
 

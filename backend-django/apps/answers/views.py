@@ -80,14 +80,18 @@ def submit_answer(request):
 
     payload = verify_answer_ticket(ticket)
 
+    # Avval savol mavjudligini tekshiramiz — agar savol o'chirilgan bo'lsa
+    # (admin uni "noto'g'ri" deb belgilab o'chirgan), biletni "consumed"
+    # qilish o'rinli emas. Foydalanuvchi keyingi safar uringanda javob bera
+    # olishi mumkin (yangi ticket bilan).
+    question = get_question_by_id(payload.question_id)
+    if not question:
+        raise AppError(404, "Savol topilmadi")
+
     # Replay himoyasi: biletni ishlatilgan deb belgilashga urinamiz —
     # allaqachon ishlatilgan bo'lsa, takror jorayotgan bo'ladi.
     if not consume_answer_ticket(payload.jti):
         raise AppError(409, "Bu bilet allaqachon ishlatilgan")
-
-    question = get_question_by_id(payload.question_id)
-    if not question:
-        raise AppError(404, "Question not found")
 
     now_ms = int(time.time() * 1000)
     time_taken = max(0, now_ms - payload.issued_at_ms)

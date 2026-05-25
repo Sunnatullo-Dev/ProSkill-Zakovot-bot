@@ -488,6 +488,7 @@ export type AdminQuestion = {
   correctAnswer: string;
   category: string | null;
   difficulty: string | null;
+  wrongAnswers?: string[];
 };
 
 export type AdminQuestionsResponse = {
@@ -541,6 +542,8 @@ export async function createAdminQuestion(input: {
   correctAnswer: string;
   category?: string | null;
   difficulty?: "easy" | "medium" | "hard" | null;
+  /** Aniq 3 ta noto'g'ri variant — A/B/C/D rejimi uchun. Bo'sh array → erkin matn rejimi. */
+  wrongAnswers?: string[];
 }): Promise<ApiResult<{ ok: boolean }>> {
   return requestResult<{ ok: boolean }>("/admin/questions", {
     method: "POST",
@@ -554,6 +557,7 @@ export async function bulkCreateAdminQuestions(
     correctAnswer: string;
     category?: string | null;
     difficulty?: "easy" | "medium" | "hard" | null;
+    wrongAnswers?: string[];
   }>
 ): Promise<ApiResult<{ ok: boolean; inserted: number }>> {
   return requestResult<{ ok: boolean; inserted: number }>("/admin/questions/bulk", {
@@ -569,6 +573,7 @@ export async function updateAdminQuestion(
     correctAnswer?: string;
     category?: string | null;
     difficulty?: "easy" | "medium" | "hard" | null;
+    wrongAnswers?: string[];
   }
 ): Promise<ApiResult<{ ok: boolean }>> {
   return requestResult<{ ok: boolean }>(`/admin/questions/${id}`, {
