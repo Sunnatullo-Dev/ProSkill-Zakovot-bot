@@ -3,6 +3,18 @@
 from django.db import migrations, models
 
 
+def _deduplicate_question_reports(apps, schema_editor):
+    """Keep the earliest report per (question, reported_by) pair."""
+    QuestionReport = apps.get_model('questions', 'QuestionReport')
+    seen = set()
+    for report in QuestionReport.objects.order_by('id'):
+        key = (report.question_id, report.reported_by)
+        if key in seen:
+            report.delete()
+        else:
+            seen.add(key)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -15,6 +27,7 @@ class Migration(migrations.Migration):
             name='wrong_answers',
             field=models.JSONField(blank=True, default=list),
         ),
+        migrations.RunPython(_deduplicate_question_reports, migrations.RunPython.noop),
         migrations.AlterUniqueTogether(
             name='questionreport',
             unique_together={('question', 'reported_by')},
