@@ -242,6 +242,11 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
+# React frontend build output served from root URL by WhiteNoise.
+# Build command copies frontend/dist/ here during deploy.
+WHITENOISE_ROOT = BASE_DIR.parent / "frontend" / "dist"
+WHITENOISE_INDEX_FILE = "index.html"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 TIME_ZONE = "UTC"
