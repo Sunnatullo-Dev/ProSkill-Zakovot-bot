@@ -580,71 +580,154 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
 
       {round && !round.myAnswered ? (
         <div style={{ marginBottom: "16px" }}>
-          <input
-            placeholder="Javobingiz..."
-            style={{
-              width: "100%",
-              padding: "15px 16px",
-              background: "var(--card)",
-              border: "1.5px solid var(--border)",
-              borderRadius: "12px",
-              fontSize: "15px",
-              color: "var(--text)",
-              outline: "none",
-              marginBottom: "10px"
-            }}
-            type="text"
-            value={answer}
-            autoFocus
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            enterKeyHint="send"
-            inputMode="text"
-            ref={answerInputRef}
-            onChange={(event) => {
-              setAnswer(event.target.value);
-              setErrorMessage("");
-            }}
-            onFocus={() => {
-              // Klaviatura ochilguncha ~350ms — keyin tugmani ko'rinadigan
-              // joyga ko'taramiz.
-              window.setTimeout(() => {
-                submitButtonRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-              }, 350);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                void handleSubmit();
-              }
-            }}
-          />
-          {errorMessage ? (
-            <div style={{ fontSize: "12px", color: "var(--error)", marginBottom: "8px" }}>
-              {errorMessage}
+          {/* A/B/C/D rejimi: aniq 4 ta options bo'lsa tugmalar, aks holda input */}
+          {Array.isArray(round.options) && round.options.length === 4 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {round.options.map((option, index) => {
+                const letter = ["A", "B", "C", "D"][index] ?? "";
+                const isSelected = answer === option;
+                const disabled = submitting || Boolean(answer);
+                return (
+                  <button
+                    key={`${round.roundId}-${index}`}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) return;
+                      setAnswer(option);
+                      // Darrov submit — tap = javob
+                      window.setTimeout(() => {
+                        void (async () => {
+                          // handleSubmit answer state'idan o'qiydi, biz endi
+                          // setAnswer chaqirdik — yuborish to'g'ridan-to'g'ri:
+                          setSubmitting(true);
+                          try {
+                            const result = await submitBattleAnswer(battleId, round.roundId, option);
+                            if (result.ok) {
+                              setFeedback({
+                                isCorrect: result.data.isCorrect,
+                                correctAnswer: result.data.correctAnswer ?? ""
+                              });
+                            } else {
+                              setErrorMessage(result.error);
+                            }
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        })();
+                      }, 0);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      width: "100%",
+                      padding: "13px 14px",
+                      borderRadius: "12px",
+                      border: isSelected ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+                      background: isSelected ? "rgba(77,166,255,0.16)" : "var(--card)",
+                      color: "var(--text)",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      textAlign: "left",
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      opacity: disabled && !isSelected ? 0.55 : 1
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: "0 0 auto",
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "50%",
+                        background: isSelected ? "var(--accent)" : "rgba(255,255,255,0.05)",
+                        color: isSelected ? "white" : "var(--accent)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "13px",
+                        fontWeight: 900
+                      }}
+                    >
+                      {letter}
+                    </span>
+                    <span style={{ flex: 1, lineHeight: 1.4 }}>{option}</span>
+                  </button>
+                );
+              })}
+              {errorMessage ? (
+                <div style={{ fontSize: "12px", color: "var(--error)", marginTop: "4px" }}>
+                  {errorMessage}
+                </div>
+              ) : null}
             </div>
-          ) : null}
-          <button
-            ref={submitButtonRef}
-            disabled={!answer.trim() || submitting}
-            style={{
-              width: "100%",
-              padding: "14px",
-              background: !answer.trim() || submitting ? "var(--border)" : "var(--accent)",
-              border: "none",
-              borderRadius: "12px",
-              fontSize: "15px",
-              fontWeight: 800,
-              color: "white",
-              cursor: !answer.trim() || submitting ? "not-allowed" : "pointer",
-              opacity: !answer.trim() || submitting ? 0.6 : 1
-            }}
-            type="button"
-            onClick={() => void handleSubmit()}
-          >
-            {submitting ? "Yuborilmoqda..." : "Javob berish"}
-          </button>
+          ) : (
+            <>
+              <input
+                placeholder="Javobingiz..."
+                style={{
+                  width: "100%",
+                  padding: "15px 16px",
+                  background: "var(--card)",
+                  border: "1.5px solid var(--border)",
+                  borderRadius: "12px",
+                  fontSize: "15px",
+                  color: "var(--text)",
+                  outline: "none",
+                  marginBottom: "10px"
+                }}
+                type="text"
+                value={answer}
+                autoFocus
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                enterKeyHint="send"
+                inputMode="text"
+                ref={answerInputRef}
+                onChange={(event) => {
+                  setAnswer(event.target.value);
+                  setErrorMessage("");
+                }}
+                onFocus={() => {
+                  window.setTimeout(() => {
+                    submitButtonRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+                  }, 350);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    void handleSubmit();
+                  }
+                }}
+              />
+              {errorMessage ? (
+                <div style={{ fontSize: "12px", color: "var(--error)", marginBottom: "8px" }}>
+                  {errorMessage}
+                </div>
+              ) : null}
+              <button
+                ref={submitButtonRef}
+                disabled={!answer.trim() || submitting}
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  background: !answer.trim() || submitting ? "var(--border)" : "var(--accent)",
+                  border: "none",
+                  borderRadius: "12px",
+                  fontSize: "15px",
+                  fontWeight: 800,
+                  color: "white",
+                  cursor: !answer.trim() || submitting ? "not-allowed" : "pointer",
+                  opacity: !answer.trim() || submitting ? 0.6 : 1
+                }}
+                type="button"
+                onClick={() => void handleSubmit()}
+              >
+                {submitting ? "Yuborilmoqda..." : "Javob berish"}
+              </button>
+            </>
+          )}
         </div>
       ) : round && round.myAnswered ? (
         <div

@@ -61,6 +61,10 @@ type State =
   | { t: "add_answer"; text: string }
   | { t: "add_category"; text: string; answer: string }
   | { t: "add_difficulty"; text: string; answer: string; category: string | null }
+  // A/B/C/D rejimi uchun 3 ta noto'g'ri variant. /skip — erkin matn rejimi.
+  | { t: "add_wrong_a"; text: string; answer: string; category: string | null; difficulty: string | null }
+  | { t: "add_wrong_b"; text: string; answer: string; category: string | null; difficulty: string | null; wrongA: string }
+  | { t: "add_wrong_c"; text: string; answer: string; category: string | null; difficulty: string | null; wrongA: string; wrongB: string }
   | { t: "edit_text"; id: string }
   | { t: "edit_answer"; id: string; newText: string | null }
   | { t: "await_pdf" }
@@ -586,6 +590,98 @@ bot.on("message:text", async ctx => {
     return;
   }
 
+  // ── A/B/C/D variantlari (ixtiyoriy) ──
+  // /skip bossa, hozircha to'plangan variantlarsiz saqlanadi (erkin matn rejimi).
+  // Aks holda, foydalanuvchi 3 ta noto'g'ri variantni birma-bir kiritadi.
+  async function saveQuestion(payload: {
+    text: string; answer: string; category: string | null;
+    difficulty: string | null; wrongAnswers: string[];
+  }) {
+    try {
+      await apiPost("/api/admin/questions", {
+        text: payload.text,
+        correctAnswer: payload.answer,
+        category: payload.category,
+        difficulty: payload.difficulty,
+        wrongAnswers: payload.wrongAnswers,
+      });
+      clearState(uid);
+      const mode = payload.wrongAnswers.length === 3 ? "A/B/C/D rejimi" : "erkin matn rejimi";
+      await ctx.reply(`✅ Savol qo'shildi (${mode})!`, { reply_markup: ADMIN_KB });
+    } catch (e: any) {
+      clearState(uid);
+      await ctx.reply(`❌ Saqlashda xatolik: ${e?.message}`, { reply_markup: ADMIN_KB });
+    }
+  }
+
+  if (st.t === "add_wrong_a") {
+    if (text.startsWith("/")) {
+      // /skip — A/B/C/D rejimisiz saqlash
+      await saveQuestion({
+        text: st.text, answer: st.answer,
+        category: st.category, difficulty: st.difficulty,
+        wrongAnswers: [],
+      });
+      return;
+    }
+    setState(uid, {
+      t: "add_wrong_b",
+      text: st.text, answer: st.answer,
+      category: st.category, difficulty: st.difficulty,
+      wrongA: text,
+    });
+    await ctx.reply("2️⃣ Ikkinchi noto'g'ri variantni kiriting:\n/cancel — bekor qilish");
+    return;
+  }
+
+  if (st.t === "add_wrong_b") {
+    if (text.startsWith("/")) {
+      await ctx.reply("❗ Variant matni / bilan boshlanmasin. Qaytadan kiriting:");
+      return;
+    }
+    if (text.trim().toLowerCase() === st.wrongA.trim().toLowerCase()) {
+      await ctx.reply("❗ Variantlar takrorlanmasin. Boshqa variant kiriting:");
+      return;
+    }
+    if (text.trim().toLowerCase() === st.answer.trim().toLowerCase()) {
+      await ctx.reply("❗ Bu to'g'ri javob. Noto'g'ri variant kiriting:");
+      return;
+    }
+    setState(uid, {
+      t: "add_wrong_c",
+      text: st.text, answer: st.answer,
+      category: st.category, difficulty: st.difficulty,
+      wrongA: st.wrongA, wrongB: text,
+    });
+    await ctx.reply("3️⃣ Uchinchi noto'g'ri variantni kiriting:\n/cancel — bekor qilish");
+    return;
+  }
+
+  if (st.t === "add_wrong_c") {
+    if (text.startsWith("/")) {
+      await ctx.reply("❗ Variant matni / bilan boshlanmasin. Qaytadan kiriting:");
+      return;
+    }
+    const lower = text.trim().toLowerCase();
+    if (
+      lower === st.wrongA.trim().toLowerCase() ||
+      lower === st.wrongB.trim().toLowerCase()
+    ) {
+      await ctx.reply("❗ Variantlar takrorlanmasin. Boshqa variant kiriting:");
+      return;
+    }
+    if (lower === st.answer.trim().toLowerCase()) {
+      await ctx.reply("❗ Bu to'g'ri javob. Noto'g'ri variant kiriting:");
+      return;
+    }
+    await saveQuestion({
+      text: st.text, answer: st.answer,
+      category: st.category, difficulty: st.difficulty,
+      wrongAnswers: [st.wrongA, st.wrongB, text],
+    });
+    return;
+  }
+
   // ── Edit question ──
   if (st.t === "edit_text") {
     const newText = text.startsWith("/") ? null : text;
@@ -765,19 +861,26 @@ bot.on("callback_query:data", async ctx => {
     const difficulty = diff === "null" ? null : diff;
     const st = getState(uid);
     if (suffix === "add" && st.t === "add_difficulty") {
-      try {
-        await apiPost("/api/admin/questions", {
-          text: st.text, correctAnswer: st.answer, category: st.category || null, difficulty,
-        });
-        clearState(uid);
-        await ctx.answerCallbackQuery("✅ Saqlandi!");
-        await ctx.editMessageText("✅ Savol muvaffaqiyatli qo'shildi!");
-        await bot.api.sendMessage(uid, "Yana savol qo'shish yoki boshqa amal:", { reply_markup: ADMIN_KB });
-      } catch (e: any) {
-        clearState(uid);
-        await ctx.answerCallbackQuery("❌ Xatolik");
-        await ctx.editMessageText(`❌ Saqlashda xatolik: ${e?.message}`);
-      }
+      // Endi darrov saqlamaymiz — A/B/C/D rejimi uchun 3 ta noto'g'ri
+      // variant so'raymiz. /skip bilan bo'sh qoldirilsa erkin matn rejimida saqlanadi.
+      setState(uid, {
+        t: "add_wrong_a",
+        text: st.text,
+        answer: st.answer,
+        category: st.category,
+        difficulty,
+      });
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText(`✅ Qiyinlik: ${diff === "null" ? "yo'q" : diff}`);
+      await bot.api.sendMessage(
+        uid,
+        "🎯 *A/B/C/D rejimi*\n\n" +
+        "Endi 3 ta noto'g'ri variant kiriting (har birini alohida xabar bilan).\n" +
+        "Bu o'yinda foydalanuvchi 4 ta variantdan birini tanlaydi (tez, bepul, aniq).\n\n" +
+        "1️⃣ Birinchi noto'g'ri variantni kiriting:\n" +
+        "/skip — A/B/C/D rejimisiz saqlash (erkin matn javob)",
+        { parse_mode: "Markdown" }
+      );
     } else {
       await ctx.answerCallbackQuery();
     }
@@ -789,7 +892,10 @@ bot.on("callback_query:data", async ctx => {
     const st = getState(uid);
     if (st.t !== "confirm_pdf") { await ctx.answerCallbackQuery(); return; }
     try {
-      const result = await apiPost("/api/admin/questions/bulk", { questions: st.questions });
+      // Har bir savolga wrongAnswers: [] qo'shamiz (erkin matn rejimi).
+      // Bulk PDF importida foydalanuvchi alohida wrong variantlarni kiritmaydi.
+      const questionsWithWrong = st.questions.map((q) => ({ ...q, wrongAnswers: [] }));
+      const result = await apiPost("/api/admin/questions/bulk", { questions: questionsWithWrong });
       clearState(uid);
       await ctx.answerCallbackQuery("✅ Saqlandi!");
       await ctx.editMessageText(`✅ ${result.inserted ?? st.questions.length} ta savol saqlandi!`);

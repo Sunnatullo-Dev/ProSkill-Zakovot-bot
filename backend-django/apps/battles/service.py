@@ -256,7 +256,22 @@ def process_answer(
 
     trimmed = user_answer.strip()
     if trimmed:
-        grading = check_answer(question["text"], question["correctAnswer"], trimmed)
+        # A/B/C/D rejimi: savolda variantlar bo'lsa Gemini chaqirmaslik
+        # (tez, bepul, aniq). Solo o'yindagi kabi.
+        wrong_answers = question.get("wrongAnswers") or []
+        if wrong_answers:
+            all_options = [question["correctAnswer"], *wrong_answers]
+            normalized = {opt.strip().casefold() for opt in all_options if isinstance(opt, str)}
+            if trimmed.casefold() not in normalized:
+                from apps.answers.gemini import CheckAnswerResult
+                grading = CheckAnswerResult(status="incorrect", explanation="Noto'g'ri variant")
+            else:
+                from apps.answers.grading import exact_match_grade
+                gr = exact_match_grade(trimmed, question["correctAnswer"])
+                from apps.answers.gemini import CheckAnswerResult
+                grading = CheckAnswerResult(status=gr.status, explanation=gr.explanation)
+        else:
+            grading = check_answer(question["text"], question["correctAnswer"], trimmed)
     else:
         from apps.answers.gemini import CheckAnswerResult  # avoid circular at import time
         grading = CheckAnswerResult(status="incorrect", explanation="")
@@ -431,11 +446,16 @@ def get_battle_state(battle_id: str, telegram_id: int) -> dict[str, Any]:
                 ans.get("round_id") == round_row["id"] and ans.get("telegram_id") == telegram_id
                 for ans in answers
             )
+            # A/B/C/D rejimi: question.options shuffled 4 ta variant
+            # (backend `_map_question_public` orqali). Bo'sh bo'lsa
+            # erkin matn rejimi (eski).
+            question_options = (question or {}).get("options") or []
             current_round = {
                 "roundId": round_row["id"],
                 "roundNumber": round_row["roundNumber"],
                 "totalRounds": len(rounds) or TOTAL_ROUNDS,
                 "questionText": (question or {}).get("text", ""),
+                "options": question_options,
                 "timeLimitSeconds": round_row["timeLimitSeconds"],
                 "timeRemainingMs": int(remaining),
                 "myAnswered": my_answered,

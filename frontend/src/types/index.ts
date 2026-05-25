@@ -198,6 +198,11 @@ export type BattleRoundView = {
   roundNumber: number;
   totalRounds: number;
   questionText: string;
+  /**
+   * A/B/C/D rejimi variantlari (4 ta shuffled, to'g'ri javob ichida yashirin).
+   * Bo'sh massiv yoki 4'dan kam — erkin matn rejimi (Gemini AI).
+   */
+  options?: string[];
   timeLimitSeconds: number;
   timeRemainingMs: number;
   myAnswered: boolean;
