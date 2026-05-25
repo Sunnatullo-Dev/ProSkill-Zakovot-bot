@@ -7,12 +7,10 @@
     "start": "tsx src/bot.ts"
   },
   "dependencies": {
+    "@types/node": "latest",
     "dotenv": "latest",
     "grammy": "latest",
-    "pdf-parse": "^1.1.1"
-  },
-  "devDependencies": {
-    "@types/node": "latest",
+    "pdf-parse": "^1.1.1",
     "tsx": "latest",
     "typescript": "latest"
   }
