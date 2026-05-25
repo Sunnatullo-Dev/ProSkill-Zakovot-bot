@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { RevealInfo } from "../types";
 import { CloseIcon } from "./icons";
 
@@ -62,10 +62,38 @@ export default function QuestionCard({
     [isMultipleChoice, question.options]
   );
 
+  // Klaviatura ochilganda submit tugmasi ko'rinmay qolmasligi uchun ref:
+  // input fokus bo'lganda yoki VisualViewport o'zgarganda tugmani scroll qilamiz.
+  const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+
   useEffect(() => {
     setAnswer("");
     setSelectedOption(null);
   }, [question.id]);
+
+  // Klaviatura ochilganda VisualViewport viewport balandligi kichrayadi.
+  // Bu eventni tutib, submit tugmasini ko'rinadigan joyga scroll qilamiz.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      // Klaviatura ochilgan paytda — viewport sezilarli kichrayadi (10%+ kamayadi)
+      const isKeyboardOpen = vv.height < window.innerHeight - 100;
+      if (isKeyboardOpen && submitButtonRef.current) {
+        submitButtonRef.current.scrollIntoView({ block: "end", behavior: "smooth" });
+      }
+    };
+    vv.addEventListener("resize", handler);
+    return () => vv.removeEventListener("resize", handler);
+  }, []);
+
+  function handleInputFocus() {
+    // Telefonda klaviatura paydo bo'lguncha ~300ms vaqt ketadi.
+    // Shu tugagandan keyin submit tugmani ko'rinadigan joyga ko'taramiz.
+    window.setTimeout(() => {
+      submitButtonRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    }, 350);
+  }
 
   function handleSubmit() {
     const trimmedAnswer = answer.trim();
@@ -87,7 +115,13 @@ export default function QuestionCard({
     <div
       className="animate-fadeInUp"
       style={{
-        minHeight: "100vh",
+        // `100dvh` (dynamic viewport height) — klaviatura ochilganda viewport
+        // bilan birga kichrayadi, shuning uchun pastdagi tugma har doim
+        // ko'rinadigan joyda qoladi. Eski `100vh` qattiq qiymat edi, klaviatura
+        // ochilganda quyi qism ko'rinmay qolar edi.
+        minHeight: "100dvh",
+        // Pastki padding klaviatura/safe-area uchun marja qoldiradi.
+        paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
         display: "flex",
         flexDirection: "column",
         background: "var(--bg)",
@@ -408,6 +442,7 @@ export default function QuestionCard({
               onFocus={(event) => {
                 event.target.style.borderColor = "var(--accent)";
                 event.target.style.boxShadow = "0 0 0 3px rgba(77,166,255,0.12)";
+                handleInputFocus();
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && answer.trim()) {
@@ -416,6 +451,7 @@ export default function QuestionCard({
               }}
             />
             <button
+              ref={submitButtonRef}
               disabled={!answer.trim()}
               style={{
                 width: "100%",

@@ -130,6 +130,21 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   const [failureCount, setFailureCount] = useState(0);
   const lastRoundIdRef = useRef<string | null>(null);
   const answerInputRef = useRef<HTMLInputElement | null>(null);
+  const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Klaviatura ochilganda submit tugmasi ko'rinmay qolishini oldini olamiz.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      const isKeyboardOpen = vv.height < window.innerHeight - 100;
+      if (isKeyboardOpen && submitButtonRef.current) {
+        submitButtonRef.current.scrollIntoView({ block: "end", behavior: "smooth" });
+      }
+    };
+    vv.addEventListener("resize", handler);
+    return () => vv.removeEventListener("resize", handler);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -273,7 +288,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
     return (
       <div
         style={{
-          minHeight: "100vh",
+          minHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -328,7 +343,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
       <div
         className="animate-scaleIn"
         style={{
-          minHeight: "100vh",
+          minHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -411,7 +426,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
         background: "var(--bg)",
@@ -588,6 +603,13 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
               setAnswer(event.target.value);
               setErrorMessage("");
             }}
+            onFocus={() => {
+              // Klaviatura ochilguncha ~350ms — keyin tugmani ko'rinadigan
+              // joyga ko'taramiz.
+              window.setTimeout(() => {
+                submitButtonRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+              }, 350);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 void handleSubmit();
@@ -600,6 +622,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
             </div>
           ) : null}
           <button
+            ref={submitButtonRef}
             disabled={!answer.trim() || submitting}
             style={{
               width: "100%",
