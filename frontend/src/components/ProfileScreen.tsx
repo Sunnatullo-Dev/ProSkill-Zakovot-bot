@@ -5,9 +5,10 @@ import {
   getGameStats,
   getReferrals,
   updateMyDisplayName,
-  updateMyLanguage
+  updateMyLanguage,
+  whoami
 } from "../api/client";
-import type { AchievementUnlock } from "../api/client";
+import type { AchievementUnlock, WhoamiResponse } from "../api/client";
 import type { AppUser, GameStats } from "../types";
 import { computeAchievements } from "../utils/achievements";
 import { buildInviteShare } from "../utils/share";
@@ -15,6 +16,7 @@ import { hapticResult, hapticSelect, hapticTap } from "../utils/haptics";
 import { useLanguage } from "../i18n/LanguageContext";
 import { LANG_FLAGS, LANG_LABELS, LANG_SUBLABEL, SUPPORTED_LANGS } from "../i18n/strings";
 import type { Lang } from "../i18n/strings";
+import { useTelegram } from "../hooks/useTelegram";
 import { CheckCircleIcon, EditIcon, ShieldIcon, StarIcon, TeamIcon } from "./icons";
 import ShareSheet from "./ShareSheet";
 
@@ -158,7 +160,21 @@ export default function ProfileScreen({
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState("");
   const [unlocks, setUnlocks] = useState<AchievementUnlock[]>([]);
+  const [authStatus, setAuthStatus] = useState<WhoamiResponse | null>(null);
+  const { user: tgUser } = useTelegram();
   const checkedRef = useRef(false);
+
+  // Telegram SDK'dan keladigan haqiqiy ID va backend'ning ko'rishini
+  // yonma-yon ko'rsatish uchun whoami chaqiramiz. Bir martalik.
+  useEffect(() => {
+    let active = true;
+    void whoami().then((data) => {
+      if (active) setAuthStatus(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function handleLangChange(next: Lang) {
     if (next === lang) return;
@@ -280,6 +296,13 @@ export default function ProfileScreen({
   // Mehmonlar uchun ham ism tahrirlash mumkin — localStorage'ga saqlanadi.
   const canEdit = Boolean(user);
 
+  // Auth diagnostika: SDK haqiqiy ID berdi-yu, backend uni ko'rmadimi?
+  const tgSdkId = tgUser?.id ?? 0;
+  const backendId = authStatus?.telegramId ?? 0;
+  const authStateOk = authStatus !== null && tgSdkId > 0 && backendId === tgSdkId;
+  const authStateBroken = authStatus !== null && tgSdkId > 0 && backendId !== tgSdkId;
+  const authStateGuest = authStatus !== null && tgSdkId === 0;
+
   return (
     <div
       className="animate-fadeInUp"
@@ -291,6 +314,74 @@ export default function ProfileScreen({
         margin: "0 auto"
       }}
     >
+      {/* Auth diagnostika karta — Telegram SDK ID va backend ID ni
+          yonma-yon ko'rsatadi. Mos kelmasa qizil belgi. */}
+      {authStatus ? (
+        <div
+          style={{
+            marginBottom: "14px",
+            background: authStateBroken
+              ? "linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.06))"
+              : authStateOk
+              ? "linear-gradient(135deg, rgba(34,197,94,0.14), rgba(34,197,94,0.04))"
+              : "var(--card)",
+            border: authStateBroken
+              ? "1px solid rgba(239,68,68,0.4)"
+              : authStateOk
+              ? "1px solid rgba(34,197,94,0.35)"
+              : "1px solid var(--border)",
+            borderRadius: "14px",
+            padding: "12px 14px"
+          }}
+          role="status"
+          aria-live="polite"
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "18px" }} aria-hidden="true">
+                {authStateOk ? "✅" : authStateBroken ? "⚠️" : "🌐"}
+              </span>
+              <div>
+                <div style={{ fontSize: "12px", fontWeight: 800, color: "var(--text)" }}>
+                  {authStateOk
+                    ? "Telegram ulanish to'g'ri"
+                    : authStateBroken
+                    ? "Ulanish buzilgan"
+                    : authStateGuest
+                    ? "Mehmon rejim"
+                    : "Holat..."}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
+                  Telegram ID: <b style={{ color: "var(--text)" }}>{tgSdkId || "—"}</b>{" "}
+                  · Server ID: <b style={{ color: "var(--text)" }}>{backendId || "—"}</b>
+                </div>
+              </div>
+            </div>
+          </div>
+          {authStateBroken ? (
+            <div style={{ fontSize: "11px", color: "#FCA5A5", marginTop: "8px", lineHeight: 1.4 }}>
+              Telegram sizni aniqladi, lekin server tasdiqlay olmadi. Render env'da{" "}
+              <code>NODE_ENV=production</code> va <code>TELEGRAM_BOT_TOKEN</code> to'g'ri
+              o'rnatilganmi tekshiring.
+            </div>
+          ) : null}
+          {!authStatus.environment.isProduction ? (
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px", lineHeight: 1.4 }}>
+              <span style={{ color: "#F59E0B", fontWeight: 700 }}>Diqqat:</span>{" "}
+              Server dev rejimida (<code>NODE_ENV != production</code>) — mehmon yozuvi
+              hammaga baham ko'rinadi.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div
         style={{
           background: "linear-gradient(135deg, rgba(77,166,255,0.20), rgba(124,58,237,0.18))",

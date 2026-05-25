@@ -1,4 +1,8 @@
-"""POST /api/auth/login — Telegram initData ni tekshiradi va user'ni upsert qiladi."""
+"""Auth API:
+
+- POST /api/auth/login — initData'ni tekshiradi va foydalanuvchini upsert qiladi
+- GET  /api/auth/whoami — joriy auth holatini qaytaradi (diagnostika uchun)
+"""
 from __future__ import annotations
 
 from django.conf import settings
@@ -56,3 +60,37 @@ def login(request):
             set_referrer(telegram_user.telegram_id, referrer_id)
 
     return Response({"user": user, "isAdmin": is_admin(telegram_user.telegram_id)})
+
+
+@api_view(["GET"])
+def whoami(request):
+    """Diagnostika: backend sizni qanday ko'ryapti?
+
+    Middleware allaqachon `Authorization` header'ini o'qib `request.current_user`
+    ni o'rnatgan. Shu yerda uni qaytaramiz. Auth bo'lmasa null. Bu endpoint
+    sezgir ma'lumotlarni qaytarmaydi (faqat telegram_id va public bayroqlar) —
+    har qanday foydalanuvchi o'z auth holatini ko'rishi mumkin.
+
+    Foydalanish:
+      curl -H "Authorization: tma <initData>" https://backend/api/auth/whoami
+    """
+    user = getattr(request, "current_user", None)
+    has_token = bool(getattr(settings, "TELEGRAM_BOT_TOKEN", ""))
+    return Response(
+        {
+            "isAuthenticated": user is not None,
+            "telegramId": getattr(user, "telegram_id", 0) if user else 0,
+            "isAdmin": is_admin(user.telegram_id) if user else False,
+            "environment": {
+                "isProduction": bool(getattr(settings, "IS_PRODUCTION", False)),
+                "hasBotToken": has_token,
+                "allowedHosts": list(getattr(settings, "ALLOWED_HOSTS", [])),
+            },
+            "diagnostic": {
+                "guestPathEnabled": not bool(getattr(settings, "IS_PRODUCTION", False)),
+                "willAcceptGuest": (
+                    not bool(getattr(settings, "IS_PRODUCTION", False))
+                ),
+            },
+        }
+    )

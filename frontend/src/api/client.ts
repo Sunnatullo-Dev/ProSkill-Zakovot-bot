@@ -126,6 +126,30 @@ export async function updateMyLanguage(language: string): Promise<boolean> {
   return Boolean(result?.ok);
 }
 
+export type WhoamiResponse = {
+  isAuthenticated: boolean;
+  telegramId: number;
+  isAdmin: boolean;
+  environment: {
+    isProduction: boolean;
+    hasBotToken: boolean;
+    allowedHosts: string[];
+  };
+  diagnostic: {
+    guestPathEnabled: boolean;
+    willAcceptGuest: boolean;
+  };
+};
+
+/**
+ * Diagnostika: backend joriy auth header'ni qanday ko'rmoqda?
+ * Foydalanuvchi mini-app'dan ham, brauzerdan (manual curl bilan) ham
+ * chaqirib o'z holatini bilib oladi.
+ */
+export async function whoami(): Promise<WhoamiResponse | null> {
+  return await request<WhoamiResponse>("/auth/whoami");
+}
+
 export async function checkAchievements(): Promise<CheckAchievementsResponse | null> {
   try {
     const response = await request<CheckAchievementsResponse>("/users/me/check-achievements", {
