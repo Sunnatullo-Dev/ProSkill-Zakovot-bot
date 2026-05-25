@@ -7,7 +7,8 @@ import {
   reportQuestion,
   revealAnswer,
   saveGameResult,
-  submitAnswer
+  submitAnswer,
+  updateMyLanguage
 } from "./api/client";
 import { isCleanName } from "./utils/nameQuality";
 import TeamScreen from "./components/TeamScreen";
@@ -19,9 +20,13 @@ import ConfirmDialog from "./components/ConfirmDialog";
 import FinishScreen from "./components/FinishScreen";
 import HomeScreen from "./components/HomeScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
+import OnboardingScreen from "./components/OnboardingScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
+import { useLanguage } from "./i18n/LanguageContext";
+import { SUPPORTED_LANGS } from "./i18n/strings";
+import type { Lang } from "./i18n/strings";
 import { useTelegram } from "./hooks/useTelegram";
 import { useTimer } from "./hooks/useTimer";
 import { hapticResult, hapticSelect, hapticTap } from "./utils/haptics";
@@ -38,6 +43,23 @@ import type {
 } from "./types";
 
 const NAME_STORAGE_KEY = "zakovat:playerName";
+const ONBOARDING_STORAGE_KEY = "zakovat:onboardingDone";
+
+function readOnboardingDone(): boolean {
+  try {
+    return window.localStorage.getItem(ONBOARDING_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeOnboardingDone(): void {
+  try {
+    window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
 
 function pickDisplayName(user: AppUser | null, tgUser: TelegramUser | null): string {
   if (user?.displayName?.trim()) return user.displayName.trim();
@@ -92,6 +114,8 @@ const isAdminRoute = window.location.pathname.replace(/\/+$/, "").endsWith("/adm
 
 export default function App() {
   const { initData, isReady, startParam, user: telegramUser, initDataMissing } = useTelegram();
+  const { lang, setLang, t } = useLanguage();
+  const [onboardingDone, setOnboardingDone] = useState<boolean>(() => readOnboardingDone());
   const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<AppUser | null>(null);
   const [score, setScore] = useState(0);
@@ -261,6 +285,13 @@ export default function App() {
       return;
     }
 
+    // Onboarding tugamagan bo'lsa, login'ni keyinroqqa qoldiramiz —
+    // foydalanuvchi avval til tanlasin va xush kelibsiz ekranni ko'rsin.
+    // Onboarding tugagandan keyin shu effect qayta ishga tushadi.
+    if (!onboardingDone) {
+      return;
+    }
+
     async function bootstrap() {
       try {
         setScreen("loading");
@@ -275,6 +306,20 @@ export default function App() {
 
         setUser(response.user);
         setScore(response.user.score);
+
+        // Backend'dan kelgan til frontend localStorage'idan farq qilsa,
+        // foydalanuvchi boshqa qurilmada o'zgartirgan bo'lishi mumkin —
+        // shuni qabul qilamiz. Lekin onboarding davom etayotgan bo'lsa
+        // (hali tanlamagan), aralashmaymiz.
+        if (
+          onboardingDone &&
+          response.user.language &&
+          (SUPPORTED_LANGS as string[]).includes(response.user.language) &&
+          response.user.language !== lang
+        ) {
+          setLang(response.user.language as Lang);
+        }
+
         await loadTopUsers();
 
         if (isAdminRoute) {
@@ -330,7 +375,7 @@ export default function App() {
     }
 
     void bootstrap();
-  }, [initData, initDataMissing, isReady, loadTopUsers, startParam, telegramUser]);
+  }, [initData, initDataMissing, isReady, lang, loadTopUsers, onboardingDone, setLang, startParam, telegramUser]);
 
   // BackButton handler'ini stable saqlaymiz — useCallback bilan kafolatlanmasa,
   // har screen o'zgarishda yangi closure yaratilib, Telegram SDK'da off/on
@@ -519,6 +564,24 @@ export default function App() {
 
   // Telegram ichida ochilgan, lekin initData topib bo'lmadi — auth ishlamaydi.
   // Foydalanuvchini "guest" sifatida o'tkazib yuborish o'rniga aniq xato ko'rsatamiz.
+  // Onboarding birinchi kirgan foydalanuvchiga ko'rsatiladi: til tanlash + tutorial.
+  // initDataMissing ekrani onboarding'dan keyin ko'rinmasligi uchun bunday tartib.
+  if (isReady && !initDataMissing && !onboardingDone) {
+    return (
+      <OnboardingScreen
+        onDone={(chosen) => {
+          writeOnboardingDone();
+          setOnboardingDone(true);
+          // Tanlangan tilni backend bilan sinxron qilamiz (fire-and-forget;
+          // mehmon bo'lsa backend 200 OK qaytaradi-yu DB'ga yozmaydi).
+          void updateMyLanguage(chosen).catch(() => {
+            /* offline yoki auth muammosi — localStorage'ga ishonamiz */
+          });
+        }}
+      />
+    );
+  }
+
   if (isReady && initDataMissing) {
     return (
       <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
@@ -527,11 +590,9 @@ export default function App() {
             <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[var(--card)] text-4xl">
               {"⚠️"}
             </div>
-            <h1 className="text-xl font-black">Telegram ulanmadi</h1>
+            <h1 className="text-xl font-black">{t("telegram_required_title")}</h1>
             <p className="text-sm font-semibold text-[var(--muted)]">
-              Mini-app ochildi, ammo Telegram identifikatsiya ma'lumotlarini
-              uzata olmadi. Iltimos, mini-app oynasini yopib, botning menyu
-              tugmasi orqali qayta oching.
+              {t("telegram_required_text")}
             </p>
             <div className="flex flex-col items-center gap-3">
               <button
@@ -539,7 +600,7 @@ export default function App() {
                 onClick={() => window.location.reload()}
                 className="w-full rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-black text-[var(--bg)]"
               >
-                Qayta urinish
+                {t("retry")}
               </button>
               <button
                 type="button"
@@ -552,7 +613,7 @@ export default function App() {
                 }}
                 className="w-full rounded-2xl border border-[var(--card-border)] px-6 py-3 text-sm font-black text-[var(--text)]"
               >
-                Mini-app'ni yopish
+                {t("close")}
               </button>
             </div>
           </div>
@@ -570,8 +631,8 @@ export default function App() {
               <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[var(--card)] text-3xl">
                 {"\u{1F9E0}"}
               </span>
-              <p className="mt-4 text-lg font-black text-[var(--text)]">Zakovat</p>
-              <p className="mt-2 text-sm font-semibold text-[var(--muted)]">Yuklanmoqda...</p>
+              <p className="mt-4 text-lg font-black text-[var(--text)]">{t("app_name")}</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--muted)]">{t("loading_dots")}</p>
             </div>
           </div>
         ) : null}

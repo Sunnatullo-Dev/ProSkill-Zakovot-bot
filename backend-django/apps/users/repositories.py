@@ -24,6 +24,7 @@ def _map_user(user: User) -> dict[str, Any]:
         "username": user.username,
         "displayName": user.display_name,
         "score": user.score,
+        "language": user.language,
     }
 
 
@@ -61,6 +62,17 @@ def update_display_name(telegram_id: int, display_name: str | None) -> dict[str,
         raise AppError(404, "Foydalanuvchi topilmadi")
     user = User.objects.get(telegram_id=telegram_id)
     return _map_user(user)
+
+
+def update_language(telegram_id: int, language: str) -> None:
+    """User.language maydonini yangilaydi. Auth bo'lmasa hech narsa qilmaydi."""
+    User.objects.filter(telegram_id=telegram_id).update(language=language)
+
+
+def get_language(telegram_id: int) -> str | None:
+    """Saqlangan til kodini qaytaradi, foydalanuvchi yo'q bo'lsa None."""
+    user = User.objects.filter(telegram_id=telegram_id).only("language").first()
+    return user.language if user else None
 
 
 def get_unlocked_achievements(telegram_id: int) -> list[str]:

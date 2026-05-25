@@ -112,6 +112,19 @@ export async function updateMyDisplayName(
   });
 }
 
+/**
+ * Foydalanuvchining UI tilini backend bilan sinxron qiladi.
+ * Mehmon (telegram_id=0) uchun backend 200 OK qaytaradi lekin DB'ga yozmaydi —
+ * frontend localStorage'ga tayanadi.
+ */
+export async function updateMyLanguage(language: string): Promise<boolean> {
+  const result = await request<{ ok: boolean }>("/users/me/language", {
+    method: "PATCH",
+    body: { language }
+  });
+  return Boolean(result?.ok);
+}
+
 export async function checkAchievements(): Promise<CheckAchievementsResponse | null> {
   try {
     const response = await request<CheckAchievementsResponse>("/users/me/check-achievements", {

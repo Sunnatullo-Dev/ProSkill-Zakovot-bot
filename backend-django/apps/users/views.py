@@ -1,6 +1,8 @@
 """Users API endpointlari — eski /api/users/* yo'llari bilan bir xil."""
 from __future__ import annotations
 
+import logging
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -10,6 +12,13 @@ from apps.game_results.repositories import get_stats as get_game_stats
 
 from . import repositories
 from .achievements import find_newly_unlocked
+
+
+logger = logging.getLogger(__name__)
+
+# Frontend i18n bilan mos kelishi shart — qiymatlar shu yerda
+# bog'lab qo'yilgan (single source of truth).
+SUPPORTED_LANGUAGES = {"uz-latn", "uz-cyrl", "ru"}
 
 
 @api_view(["GET"])
@@ -69,6 +78,35 @@ def update_me(request):
 
     updated = repositories.update_display_name(user.telegram_id, display_name)
     return Response({"user": updated})
+
+
+@api_view(["PATCH"])
+@require_auth
+def update_language(request):
+    """Foydalanuvchining UI tilini saqlaydi.
+
+    Body: {"language": "uz-latn" | "uz-cyrl" | "ru"}
+    """
+    user = request.current_user
+
+    # Mehmon yozuvi (telegram_id=0) — barcha mehmonlar bilan bo'linadi, shuning
+    # uchun unga til yozsak hamma mehmonga ta'sir qiladi. Frontend
+    # localStorage'ni ishlatsin.
+    if user.telegram_id <= 0:
+        # 200 OK qaytaramiz (frontend xato deb hisoblamasin), lekin DB'ga yozmaymiz.
+        return Response({"ok": True, "language": None, "stored": False})
+
+    body = request.data if isinstance(request.data, dict) else {}
+    raw = body.get("language")
+    if not isinstance(raw, str) or raw not in SUPPORTED_LANGUAGES:
+        raise AppError(400, "Til kodi noto'g'ri")
+
+    repositories.update_language(user.telegram_id, raw)
+    logger.info(
+        "user_language_changed",
+        extra={"event": "user_language_changed", "by": user.telegram_id, "lang": raw},
+    )
+    return Response({"ok": True, "language": raw, "stored": True})
 
 
 @api_view(["POST"])

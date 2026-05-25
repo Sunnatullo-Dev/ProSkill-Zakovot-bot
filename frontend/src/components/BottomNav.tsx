@@ -1,6 +1,8 @@
 import type { ComponentType } from "react";
 import type { NavTab } from "../types";
 import type { IconProps } from "./icons";
+import { useT } from "../i18n/LanguageContext";
+import type { StringKey } from "../i18n/strings";
 import { HomeIcon, ShieldIcon, TeamIcon, TrophyIcon, UserIcon } from "./icons";
 
 type BottomNavProps = {
@@ -11,20 +13,23 @@ type BottomNavProps = {
 
 type NavItem = {
   tab: NavTab;
-  label: string;
+  /** i18n kalit — Til o'zgarsa label avtomatik yangilanadi. */
+  labelKey: StringKey;
   Icon: ComponentType<IconProps>;
 };
 
 const BASE_ITEMS: NavItem[] = [
-  { tab: "home", label: "Asosiy", Icon: HomeIcon },
-  { tab: "leaderboard", label: "Reyting", Icon: TrophyIcon },
-  { tab: "team", label: "Jamoa", Icon: TeamIcon },
-  { tab: "profile", label: "Profil", Icon: UserIcon }
+  { tab: "home", labelKey: "nav_home", Icon: HomeIcon },
+  { tab: "leaderboard", labelKey: "nav_leaderboard", Icon: TrophyIcon },
+  { tab: "team", labelKey: "nav_team", Icon: TeamIcon },
+  { tab: "profile", labelKey: "nav_profile", Icon: UserIcon }
 ];
 
-const ADMIN_ITEM: NavItem = { tab: "admin", label: "Admin", Icon: ShieldIcon };
+const ADMIN_ITEM: NavItem = { tab: "admin", labelKey: "nav_home", Icon: ShieldIcon };
+// Admin uchun alohida kalit yo'q (har doim "Admin" deb yoziladi).
 
 export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavProps) {
+  const t = useT();
   const items = showAdmin ? [...BASE_ITEMS, ADMIN_ITEM] : BASE_ITEMS;
 
   return (
@@ -46,6 +51,7 @@ export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavPr
       {items.map((item) => {
         const isActive = item.tab === active;
         const Icon = item.Icon;
+        const label = item.tab === "admin" ? "Admin" : t(item.labelKey);
 
         return (
           <button
@@ -76,7 +82,7 @@ export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavPr
                 whiteSpace: "nowrap"
               }}
             >
-              {item.label}
+              {label}
             </span>
           </button>
         );

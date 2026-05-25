@@ -3,6 +3,8 @@ export type TelegramUser = {
   first_name?: string;
   last_name?: string;
   username?: string;
+  /** ISO-639 til kodi (Telegram interfeysi tili): "ru", "uz", "en" va h.k. */
+  language_code?: string;
 };
 
 export type TelegramHapticFeedback = {
@@ -53,6 +55,7 @@ export type AppUser = {
   username: string | null;
   displayName: string | null;
   score: number;
+  language?: string | null;
 };
 
 export type AuthResponse = {

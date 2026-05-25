@@ -12,6 +12,10 @@ class User(models.Model):
     score = models.IntegerField(default=0, db_index=True)
     unlocked_achievements = models.JSONField(default=list)
     referred_by = models.BigIntegerField(null=True, blank=True, db_index=True)
+    # UI tili: 'uz-latn', 'uz-cyrl', 'ru'. Frontend localStorage'ga ham
+    # yozadi (offline'da ishlashi uchun), ammo qurilmalararo sinxron uchun
+    # ushbu maydon manba haqiqat hisoblanadi.
+    language = models.CharField(max_length=10, default="uz-latn")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

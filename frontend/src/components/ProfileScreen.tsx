@@ -4,13 +4,17 @@ import {
   checkAchievements,
   getGameStats,
   getReferrals,
-  updateMyDisplayName
+  updateMyDisplayName,
+  updateMyLanguage
 } from "../api/client";
 import type { AchievementUnlock } from "../api/client";
 import type { AppUser, GameStats } from "../types";
 import { computeAchievements } from "../utils/achievements";
 import { buildInviteShare } from "../utils/share";
-import { hapticResult, hapticTap } from "../utils/haptics";
+import { hapticResult, hapticSelect, hapticTap } from "../utils/haptics";
+import { useLanguage } from "../i18n/LanguageContext";
+import { LANG_FLAGS, LANG_LABELS, LANG_SUBLABEL, SUPPORTED_LANGS } from "../i18n/strings";
+import type { Lang } from "../i18n/strings";
 import { CheckCircleIcon, EditIcon, ShieldIcon, StarIcon, TeamIcon } from "./icons";
 import ShareSheet from "./ShareSheet";
 
@@ -144,6 +148,7 @@ export default function ProfileScreen({
   onUserUpdate,
   onScoreBonus
 }: ProfileScreenProps) {
+  const { lang, setLang, t } = useLanguage();
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
   const [referralCount, setReferralCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -153,7 +158,18 @@ export default function ProfileScreen({
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState("");
   const [unlocks, setUnlocks] = useState<AchievementUnlock[]>([]);
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
   const checkedRef = useRef(false);
+
+  function handleLangChange(next: Lang) {
+    hapticSelect();
+    setLang(next);
+    setLangPickerOpen(false);
+    // Fire-and-forget — mehmon bo'lsa backend baribir 200 OK qaytaradi.
+    void updateMyLanguage(next).catch(() => {
+      /* offline yoki auth singan — localStorage ishlaydi */
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -627,6 +643,105 @@ export default function ProfileScreen({
         >
           Ulashish
         </button>
+      </div>
+
+      {/* Til tanlash bo'limi */}
+      <div
+        style={{
+          marginTop: "12px",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "16px",
+          padding: "14px"
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            hapticTap();
+            setLangPickerOpen((open) => !open);
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: "100%",
+            background: "transparent",
+            border: "none",
+            color: "var(--text)",
+            cursor: "pointer",
+            padding: 0
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "12px",
+                background: "rgba(167,139,250,0.16)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "20px",
+                flex: "0 0 auto"
+              }}
+              aria-hidden="true"
+            >
+              {LANG_FLAGS[lang]}
+            </div>
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+                {t("profile_language")}
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                {LANG_LABELS[lang]} {LANG_SUBLABEL[lang]}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: "18px", color: "var(--muted)", transform: langPickerOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+            ⌄
+          </div>
+        </button>
+        {langPickerOpen ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "10px" }}>
+            {SUPPORTED_LANGS.map((code) => {
+              const active = lang === code;
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => handleLangChange(code)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    padding: "11px 14px",
+                    borderRadius: "12px",
+                    border: active ? "1.5px solid var(--accent)" : "1px solid var(--border)",
+                    background: active ? "rgba(77,166,255,0.12)" : "transparent",
+                    color: "var(--text)",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  <span>
+                    <span style={{ marginRight: "10px", fontSize: "18px" }}>{LANG_FLAGS[code]}</span>
+                    {LANG_LABELS[code]}
+                    {LANG_SUBLABEL[code] ? (
+                      <span style={{ color: "var(--muted)", marginLeft: "6px", fontWeight: 500 }}>
+                        {LANG_SUBLABEL[code]}
+                      </span>
+                    ) : null}
+                  </span>
+                  {active ? <span style={{ color: "var(--accent)" }}>✓</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
 
       {shareOpen ? (
