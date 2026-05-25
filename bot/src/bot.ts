@@ -266,12 +266,38 @@ bot.command("start", async ctx => {
   }
 });
 
-// 🔧 Admin panel
+// 🔧 Admin panel — /admin slash buyrug'i va "🔧 Admin panel" tugmasi orqali
+bot.command("admin", async ctx => {
+  const uid = ctx.from!.id;
+  if (!isAdmin(uid)) {
+    await ctx.reply(
+      "⛔ Sizda admin huquqi yo'q.\n\n" +
+      `Sizning Telegram ID: \`${uid}\`\n` +
+      "Admin bo'lish uchun shu ID Render env'idagi " +
+      "`ADMIN_TELEGRAM_IDS` ro'yxatiga qo'shilishi kerak.",
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+  clearState(uid);
+  await ctx.reply("👨‍💼 Admin panel:", { reply_markup: ADMIN_KB });
+});
+
 bot.hears("🔧 Admin panel", async ctx => {
   const uid = ctx.from!.id;
   if (!isAdmin(uid)) return;
   clearState(uid);
   await ctx.reply("👨‍💼 Admin panel:", { reply_markup: ADMIN_KB });
+});
+
+// /myid — foydalanuvchi o'z Telegram ID'sini ko'rish uchun (admin bo'lish uchun)
+bot.command("myid", async ctx => {
+  const uid = ctx.from!.id;
+  const adminStatus = isAdmin(uid) ? "✅ Siz adminsiz" : "👤 Oddiy foydalanuvchi";
+  await ctx.reply(
+    `🆔 *Sizning Telegram ID*: \`${uid}\`\n\n${adminStatus}`,
+    { parse_mode: "Markdown" }
+  );
 });
 
 // 🏠 Asosiy menyu
