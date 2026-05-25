@@ -46,7 +46,10 @@ export default function ChallengeModal({ onClose, onChallenged }: ChallengeModal
         justifyContent: "center",
         padding: "24px"
       }}
-      onClick={onClose}
+      onClick={() => {
+        // Tasodifan backdrop'ga tegib kiritilgan kod yo'qolib qolmasin.
+        if (code.trim().length === 0) onClose();
+      }}
     >
       <div
         className="animate-scaleIn"

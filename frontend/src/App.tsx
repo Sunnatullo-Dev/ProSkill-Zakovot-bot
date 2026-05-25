@@ -28,7 +28,6 @@ import { hapticResult, hapticSelect, hapticTap } from "./utils/haptics";
 import type {
   AnswerResult,
   AppUser,
-  AuthResponse,
   LeaderboardUser,
   NavTab,
   Question,
@@ -71,7 +70,6 @@ const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "leaderboard
 
 const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
-const BOOTSTRAP_TIMEOUT_MS = 1000;
 const RESULT_AUTO_DELAY_MS = 3000;
 const PARTIAL_RESULT_AUTO_DELAY_MS = 3500;
 const DEFAULT_FILTER: RoundFilter = { category: null, difficulty: null };
@@ -115,6 +113,9 @@ export default function App() {
   const [isStarting, setIsStarting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const submitAnswerRef = useRef<SubmitAnswerFn | null>(null);
+  // Stale ticket fetch'lardan himoya — har savolning o'z ticket fetch
+  // belgisi bor; eski fetch keyin kelsa, biz uni e'tibordan chiqaramiz.
+  const ticketRequestKeyRef = useRef<string | null>(null);
   const handleTimerExpire = useCallback(() => {
     void submitAnswerRef.current?.("", ANSWER_TIMEOUT_MS + 1);
   }, []);
@@ -123,6 +124,18 @@ export default function App() {
 
   const currentQuestion = roundQuestions[questionIndex] ?? null;
   const totalQuestions = roundQuestions.length;
+
+  const fetchTicketFor = useCallback((questionId: string) => {
+    // Har bir fetch'ga noyob belgi qo'yamiz. Faqat aktual belgi qaytgan
+    // ticket'ni qabul qilamiz — boshqalarni tashlab yuboramiz.
+    const key = `${questionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    ticketRequestKeyRef.current = key;
+    void getAnswerTicket(questionId).then((ticket) => {
+      if (ticketRequestKeyRef.current === key) {
+        setCurrentTicket(ticket);
+      }
+    });
+  }, []);
 
   const loadTopUsers = useCallback(async () => {
     try {
@@ -172,7 +185,14 @@ export default function App() {
         setScreen("result");
       } catch (error) {
         console.error("Answer submit failed", error);
-        start();
+        const message =
+          error instanceof Error && error.message
+            ? `Javobni yuborib bo'lmadi: ${error.message}`
+            : "Javobni yuborib bo'lmadi. Qayta urinib ko'ring.";
+        setErrorMessage(message);
+        // Taymerni qaytadan boshlamaymiz — foydalanuvchi xatoni o'qib,
+        // tugmani qayta bossin. Aks holda timer tugashi bilan bo'sh javob
+        // ketib, infinite loop'ga tushib qolish xavfi bor.
       } finally {
         setIsSubmitting(false);
       }
@@ -210,11 +230,10 @@ export default function App() {
     start();
 
     const nextQuestion = roundQuestions[nextIndex];
-
     if (nextQuestion) {
-      void getAnswerTicket(nextQuestion.id).then(setCurrentTicket);
+      fetchTicketFor(nextQuestion.id);
     }
-  }, [correctAnswers, loadTopUsers, questionIndex, reset, roundQuestions, roundScore, start]);
+  }, [correctAnswers, fetchTicketFor, loadTopUsers, questionIndex, reset, roundQuestions, roundScore, start]);
 
   useEffect(() => {
     if (screen !== "result" || !lastResult) {
@@ -249,17 +268,10 @@ export default function App() {
         const effectiveInitData = initData || "guest";
         const referrerId = /^\d+$/.test(startParam) ? Number(startParam) : undefined;
 
-        const response = await withTimeout(login(effectiveInitData, referrerId), {
-          isAdmin: false,
-          user: telegramUser
-            ? {
-                ...DEFAULT_APP_USER,
-                firstName: telegramUser.first_name ?? DEFAULT_APP_USER.firstName,
-                lastName: telegramUser.last_name ?? null,
-                username: telegramUser.username ?? DEFAULT_APP_USER.username
-              }
-            : DEFAULT_APP_USER
-        });
+        // Login natijasini to'liq kutamiz — sekin tarmoqda foydalanuvchi
+        // "mehmon" sifatida tezda kirib qolib, keyin haqiqiy javob keldikida
+        // o'zgarmay qolmasligi uchun. Loading state shu vaqt davomida ko'rinadi.
+        const response = await login(effectiveInitData, referrerId);
 
         setUser(response.user);
         setScore(response.user.score);
@@ -320,35 +332,29 @@ export default function App() {
     void bootstrap();
   }, [initData, initDataMissing, isReady, loadTopUsers, startParam, telegramUser]);
 
+  // BackButton handler'ini stable saqlaymiz — useCallback bilan kafolatlanmasa,
+  // har screen o'zgarishda yangi closure yaratilib, Telegram SDK'da off/on
+  // takror chaqirilganda handler'lar stack'lashishi mumkin.
+  const handleBack = useCallback(() => {
+    setErrorMessage("");
+    setScreen("home");
+  }, []);
+
   useEffect(() => {
     const backButton = window.Telegram?.WebApp?.BackButton;
+    if (!backButton) return;
 
-    if (!backButton) {
-      return;
-    }
-
-    const handleBack = () => {
-      setErrorMessage("");
-      setScreen("home");
-    };
-
-    if (
-      screen === "team" ||
-      screen === "profile" ||
-      screen === "admin" ||
-      screen === "finish" ||
-      screen === "leaderboard"
-    ) {
+    const showOn: Screen[] = ["team", "profile", "admin", "finish", "leaderboard"];
+    if (showOn.includes(screen)) {
       backButton.onClick(handleBack);
       backButton.show();
-    } else {
-      backButton.hide();
+      return () => {
+        backButton.offClick(handleBack);
+      };
     }
-
-    return () => {
-      backButton.offClick(handleBack);
-    };
-  }, [screen]);
+    backButton.hide();
+    return undefined;
+  }, [handleBack, screen]);
 
   const startGame = useCallback(
     async (filter: RoundFilter) => {
@@ -378,7 +384,7 @@ export default function App() {
         setScreen("question");
         reset();
         start();
-        void getAnswerTicket(questions[0].id).then(setCurrentTicket);
+        fetchTicketFor(questions[0].id);
       } catch (error) {
         console.error("Start game failed", error);
         setScreen("home");
@@ -386,7 +392,7 @@ export default function App() {
         setIsStarting(false);
       }
     },
-    [reset, start]
+    [fetchTicketFor, reset, start]
   );
 
   async function handleQuestionSubmit(answer: string) {
@@ -710,11 +716,3 @@ export default function App() {
   );
 }
 
-function withTimeout(promise: Promise<AuthResponse>, fallback: AuthResponse): Promise<AuthResponse> {
-  return Promise.race([
-    promise,
-    new Promise<AuthResponse>((resolve) => {
-      window.setTimeout(() => resolve(fallback), BOOTSTRAP_TIMEOUT_MS);
-    })
-  ]);
-}

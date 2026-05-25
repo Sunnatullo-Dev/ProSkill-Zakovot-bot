@@ -292,6 +292,13 @@ export default function QuestionCard({
               }}
               type="text"
               value={answer}
+              autoFocus
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              enterKeyHint="send"
+              inputMode="text"
               onBlur={(event) => {
                 event.target.style.borderColor = "var(--border)";
                 event.target.style.boxShadow = "none";

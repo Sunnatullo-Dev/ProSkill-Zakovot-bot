@@ -88,7 +88,12 @@ export default function CreateTeamModal({ onClose, onCreated }: CreateTeamModalP
         justifyContent: "center",
         padding: "24px"
       }}
-      onClick={code ? undefined : onClose}
+      onClick={() => {
+        // Backdrop tap'i — input bo'sh bo'lsa darrov yopamiz, to'lgan bo'lsa
+        // tasodifiy tegmasdan saqlash uchun yopmaymiz.
+        if (code) return; // muvaffaqiyatli yaratilgan ekran — Done bilan yoping
+        if (name.trim().length === 0) onClose();
+      }}
     >
       <div
         className="animate-scaleIn"

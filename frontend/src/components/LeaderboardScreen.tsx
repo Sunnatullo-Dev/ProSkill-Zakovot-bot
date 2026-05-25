@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getLeaderboard, getReferrals } from "../api/client";
+import { isCleanName } from "../utils/nameQuality";
 import type { LeaderboardData, LeaderboardUser, ReferralData } from "../types";
 
 type LeaderboardScreenProps = {
@@ -15,9 +16,14 @@ const EMPTY_LEADERBOARD: LeaderboardData = { users: [], rank: 0 };
 const EMPTY_REFERRALS: ReferralData = { referrers: [], myCount: 0 };
 
 function displayName(user: LeaderboardUser): string {
-  // Telegram first_name + last_name (agar last_name DB'da bo'lsa) → username → placeholder.
-  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
-  return fullName || user.username || "Foydalanuvchi";
+  // Telegram first_name + last_name → username → placeholder.
+  // Lekin ism "iflos" (emoji, faqat nuqta, juda qisqa) bo'lsa username'ga
+  // tushamiz — leaderboard'da emoji va belgi-only ismlar ko'rinishi noqulay.
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  if (fullName && isCleanName(fullName)) return fullName;
+  if (user.username && user.username.trim()) return `@${user.username.trim()}`;
+  if (fullName) return fullName; // toza emas, lekin username ham yo'q — bori shu
+  return "Foydalanuvchi";
 }
 
 export default function LeaderboardScreen({ currentUserId, playerName, score }: LeaderboardScreenProps) {

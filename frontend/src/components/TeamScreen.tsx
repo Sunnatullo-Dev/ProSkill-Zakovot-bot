@@ -23,6 +23,7 @@ type Props = {
 };
 
 const POLL_MS = 3000;
+const POLL_MAX_MS = 30_000;
 
 function memberLabel(m: TeamMember): string {
   return m.firstName || (m.username ? `@${m.username}` : `#${m.telegramId}`);
@@ -92,11 +93,21 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
     setRenameOpen(false);
   }
 
+  // Polling backoff — ketma-ket xato bo'lsa interval ikki barobarga
+  // o'sadi (max POLL_MAX_MS). Tarmoq tushib qolsa server'ga DDoS qilmaymiz.
+  const failureCountRef = useRef(0);
+
   const refresh = useCallback(async () => {
-    const [t, p] = await Promise.all([getMyTeam(), getPendingBattles()]);
-    if (!mountedRef.current) return;
-    setTeam(t);
-    setPending(p);
+    try {
+      const [t, p] = await Promise.all([getMyTeam(), getPendingBattles()]);
+      if (!mountedRef.current) return;
+      setTeam(t);
+      setPending(p);
+      failureCountRef.current = 0;
+    } catch (err) {
+      failureCountRef.current += 1;
+      console.warn("TeamScreen refresh failed", err);
+    }
   }, []);
 
   useEffect(() => {
@@ -106,9 +117,19 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
       if (mountedRef.current) setLoading(false);
     });
 
-    const pollId = window.setInterval(() => {
-      if (!document.hidden) void refresh();
-    }, POLL_MS);
+    let timeoutId: number | undefined;
+    const schedule = () => {
+      const delay = Math.min(POLL_MAX_MS, POLL_MS * Math.pow(2, failureCountRef.current));
+      timeoutId = window.setTimeout(async () => {
+        if (typeof document !== "undefined" && document.hidden) {
+          schedule();
+          return;
+        }
+        await refresh();
+        if (mountedRef.current) schedule();
+      }, delay);
+    };
+    schedule();
 
     function handleVisibility() {
       if (!document.hidden) void refresh();
@@ -117,7 +138,7 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
 
     return () => {
       mountedRef.current = false;
-      window.clearInterval(pollId);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [refresh]);
@@ -487,6 +508,7 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
           message={`Sardorlikni "${transferTarget.firstName || transferTarget.username || `#${transferTarget.telegramId}`}" ga o'tkazasizmi? Buni qaytarib bo'lmaydi.`}
           confirmLabel="Ha, o'tkazaman"
           cancelLabel="Yo'q"
+          variant="primary"
           onConfirm={() => void handleTransferOwner()}
           onCancel={() => setTransferTarget(null)}
         />

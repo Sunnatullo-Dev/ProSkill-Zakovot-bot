@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { getTeamChat, postTeamChat } from "../api/client";
 import type { TeamChatMessage } from "../api/client";
@@ -11,6 +11,7 @@ type TeamChatPanelProps = {
 };
 
 const POLL_INTERVAL_MS = 4000;
+const POLL_MAX_INTERVAL_MS = 30_000;
 const MAX_MESSAGES = 100;
 
 const containerStyle: CSSProperties = {
@@ -84,32 +85,55 @@ export default function TeamChatPanel({ currentUserId, members, canSend }: TeamC
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const mountedRef = useRef(true);
+  // Exponential backoff: ketma-ket xato bo'lsa interval ikki barobarga oshadi,
+  // muvaffaqiyatda qaytadan dastlabki POLL_INTERVAL_MS'ga tushadi.
+  const failureCountRef = useRef(0);
 
-  const memberMap = new Map<number, TeamMember>(members.map((m) => [m.telegramId, m]));
+  // memberMap renderdan render'gacha o'zgarmasligi uchun memoize qilamiz —
+  // ko'p a'zoli jamoada keystroke'da qayta yaratilishi tejaladi.
+  const memberMap = useMemo(
+    () => new Map<number, TeamMember>(members.map((m) => [m.telegramId, m])),
+    [members]
+  );
 
   const refresh = useCallback(async () => {
-    const next = await getTeamChat();
-    if (!mountedRef.current) return;
-    // Tarmoq xatosida getTeamChat bo'sh massiv qaytaradi — mavjud xabarlar
-    // birdaniga yo'qolib qolmasligi uchun faqat haqiqiy javobni yozamiz.
-    // Birinchi marta yuklanganda esa bo'sh massivni qabul qilamiz (allaqachon bo'sh).
-    if (next.length === 0) {
-      setMessages((prev) => (prev.length === 0 ? [] : prev));
-      return;
+    try {
+      const next = await getTeamChat();
+      if (!mountedRef.current) return;
+      // Tarmoq xatosida getTeamChat bo'sh massiv qaytaradi — mavjud xabarlar
+      // birdaniga yo'qolib qolmasligi uchun faqat haqiqiy javobni yozamiz.
+      if (next.length === 0) {
+        setMessages((prev) => (prev.length === 0 ? [] : prev));
+      } else {
+        setMessages(next.slice(-MAX_MESSAGES));
+      }
+      failureCountRef.current = 0;
+    } catch (err) {
+      failureCountRef.current += 1;
+      console.warn("TeamChat refresh failed", err);
     }
-    setMessages(next.slice(-MAX_MESSAGES));
   }, []);
 
   useEffect(() => {
     mountedRef.current = true;
     void refresh();
 
-    const id = window.setInterval(() => {
-      // Brauzer tab orqada bo'lsa polling'ni o'tkazib yuboramiz —
-      // batareya va server resurslarini tejaymiz.
-      if (typeof document !== "undefined" && document.hidden) return;
-      void refresh();
-    }, POLL_INTERVAL_MS);
+    let timeoutId: number | undefined;
+    const schedule = () => {
+      const delay = Math.min(
+        POLL_MAX_INTERVAL_MS,
+        POLL_INTERVAL_MS * Math.pow(2, failureCountRef.current)
+      );
+      timeoutId = window.setTimeout(async () => {
+        if (typeof document !== "undefined" && document.hidden) {
+          schedule();
+          return;
+        }
+        await refresh();
+        if (mountedRef.current) schedule();
+      }, delay);
+    };
+    schedule();
 
     function handleVisibilityChange() {
       if (!document.hidden) void refresh();
@@ -118,7 +142,7 @@ export default function TeamChatPanel({ currentUserId, members, canSend }: TeamC
 
     return () => {
       mountedRef.current = false;
-      window.clearInterval(id);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refresh]);

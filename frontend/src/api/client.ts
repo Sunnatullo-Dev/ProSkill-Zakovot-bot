@@ -18,7 +18,20 @@ import type {
   TeamWithMembers
 } from "../types";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+// Production build'da vite.config.ts VITE_API_URL'siz fail qiladi —
+// shu yerga kelguncha env mavjudligiga ishonamiz. Dev'da bo'lmasa
+// loud warning + localhost fallback.
+const API_URL = (() => {
+  const raw = import.meta.env.VITE_API_URL;
+  if (raw && typeof raw === "string") return raw;
+  if (import.meta.env.DEV) {
+    console.warn("[zakovat] VITE_API_URL o'rnatilmagan, localhost:3000 ishlatilmoqda");
+    return "http://localhost:3000";
+  }
+  // Production'da hech qachon bu yerga tushmaslik kerak (vite.config build'da
+  // xato chiqaradi), lekin xavfsizlik uchun aniq xato chiqaramiz.
+  throw new Error("VITE_API_URL o'rnatilmagan");
+})();
 const API_BASE_URL = `${API_URL.replace(/\/$/, "")}/api`;
 const DEFAULT_ROUND_COUNT = 10;
 const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
@@ -246,7 +259,20 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
 }
 
 export async function saveGameResult(input: SaveGameResultInput): Promise<void> {
-  await request("/game-results", { method: "POST", body: input });
+  // `keepalive: true` brauzer mini-app oynasi yopilsa ham requestni tark
+  // etmaydi — natija backend'ga yetib boradi. fetch fire-and-forget'i
+  // window.close()'dan keyin uzilib qoladi; keepalive shu darani yopadi.
+  try {
+    await fetch(`${API_BASE_URL}/game-results`, {
+      method: "POST",
+      headers: buildHeaders(),
+      body: JSON.stringify(input),
+      keepalive: true
+    });
+  } catch (error) {
+    // Network error — game result yo'qoladi. Bu critical emas (faqat statistika).
+    console.warn("saveGameResult failed", error);
+  }
 }
 
 export async function getGameStats(): Promise<GameStats> {

@@ -129,6 +129,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   // qaytib kela olmasa, "Chiqish" tugmasini ko'rsatamiz.
   const [failureCount, setFailureCount] = useState(0);
   const lastRoundIdRef = useRef<string | null>(null);
+  const answerInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -167,6 +168,11 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
           setAnswer("");
           setFeedback(null);
           setErrorMessage("");
+          // Yangi round kelganda input avtomatik focus — mobil'da qimmatli
+          // sekundlarni tejaymiz, foydalanuvchi qo'l bilan tegma kerakmas.
+          window.setTimeout(() => {
+            answerInputRef.current?.focus();
+          }, 0);
         }
 
         // Bellashuv tugagan bo'lsa endi qayta-qayta tekshirib o'tirishimiz shart emas.
@@ -570,6 +576,14 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
             }}
             type="text"
             value={answer}
+            autoFocus
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            enterKeyHint="send"
+            inputMode="text"
+            ref={answerInputRef}
             onChange={(event) => {
               setAnswer(event.target.value);
               setErrorMessage("");
