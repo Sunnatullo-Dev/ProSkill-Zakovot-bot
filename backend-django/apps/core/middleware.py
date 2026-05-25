@@ -37,13 +37,16 @@ class TelegramAuthMiddleware:
         # Server-internal admin auth: "bot <key>" — Telegram boti serverdagi
         # admin endpoint'larini chaqirishi uchun.
         #
-        # Tartibi:
-        #   1) `BOT_INTERNAL_API_KEY` — afzal (alohida server-internal kalit;
+        # Backward compat: ikki kalit ham qabul qilinadi (qaysi tekshiruv
+        # mos kelsa). Bu foydalanuvchining bot va backend Render env'larida
+        # qaysi kalit sozlangan bo'lsa ham ishlashini ta'minlaydi:
+        #
+        #   1) BOT_INTERNAL_API_KEY — afzal (alohida server-internal kalit;
         #      Telegram bot tokeni emas, log'larda ko'rinmaydi)
-        #   2) Backward compat: `TELEGRAM_BOT_TOKEN` — eski sozlamada bot
-        #      shu tokenni admin auth uchun ham yuboradi. Bu mumkin, lekin
-        #      xavfsiz emas (token sizib ketsa to'liq admin huquqi). Birinchi
-        #      ishlatilganda warning log chiqaramiz.
+        #   2) TELEGRAM_BOT_TOKEN — fallback (eski sozlama yoki migratsiyada)
+        #
+        # Backend ikkalasini ham sinaydi. Bot tokenga qaytganda warning
+        # log yoziladi (xavfsizlik uchun BOT_INTERNAL_API_KEY tavsiya).
         if header.lower().startswith("bot "):
             provided_key = header[4:].strip()
             if not provided_key or not settings.ADMIN_TELEGRAM_IDS:
@@ -52,15 +55,14 @@ class TelegramAuthMiddleware:
             internal_key = getattr(settings, "BOT_INTERNAL_API_KEY", "") or ""
             bot_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "") or ""
 
-            # Birinchi urinish: alohida internal API kalit (afzal yo'l)
+            # 1) Internal kalitni sinash — afzal yo'l
             if internal_key and hmac.compare_digest(provided_key, internal_key):
                 return _bot_admin_user()
 
-            # Backward compat: bot tokeni bilan ham qabul qilamiz, ammo agar
-            # ham internal_key, ham bot_token ikkalasi sozlangan bo'lsa,
-            # to'g'ri kalitni internal_key dan kutish kerak — bot tokenga
-            # qaytish faqat internal_key umuman sozlanmagan vaqtda ishlaydi.
-            if not internal_key and bot_token and hmac.compare_digest(provided_key, bot_token):
+            # 2) Bot tokenga qaytish — DOIM sinaymiz (internal_key sozlangan
+            # bo'lsa-yu bot eski tokeni yubo'rsa ham ishlasin). Bu xavfsizroq
+            # konfiguratsiyaga uzlasiz migratsiya imkonini beradi.
+            if bot_token and hmac.compare_digest(provided_key, bot_token):
                 global _bot_token_fallback_warned
                 if not _bot_token_fallback_warned:
                     logger.warning(
