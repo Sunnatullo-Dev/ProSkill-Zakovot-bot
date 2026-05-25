@@ -32,20 +32,19 @@ DEBUG = env_bool("DJANGO_DEBUG", default=False)
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
     if IS_PRODUCTION:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured("DJANGO_SECRET_KEY production'da o'rnatilishi shart")
-    SECRET_KEY = "dev-only-not-for-production-" + os.urandom(8).hex()
-
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
-if not ALLOWED_HOSTS:
-    if IS_PRODUCTION:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            "DJANGO_ALLOWED_HOSTS production'da o'rnatilishi shart "
-            "(masalan: 'zakovat.onrender.com'). Bo'sh qoldirilsa Host-header attack xavfi."
+        # Production'da yo'q bo'lsa crash qilmaymiz — server qaytib
+        # ko'tarila olmaydi va admin paneli umuman ochilmaydi.
+        # O'rniga `os.urandom`'dan derived hosil qilamiz. Process restart
+        # qilinsa o'zgaradi — session/CSRF buziladi, lekin ish davom etadi.
+        SECRET_KEY = "auto-" + os.urandom(32).hex()
+        print(
+            "[settings] WARNING: DJANGO_SECRET_KEY o'rnatilmagan — "
+            "tasodifiy auto-generated key ishlatildi. Bu restart paytida o'zgaradi "
+            "(session/CSRF buziladi). Render env'ga aniq qiymat qo'ying.",
+            file=sys.stderr,
         )
-    # Dev-only fallback: faqat localhost. "*" ishlatilmaydi — production buzilmasin uchun.
-    ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+    else:
+        SECRET_KEY = "dev-only-not-for-production-" + os.urandom(8).hex()
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -53,20 +52,48 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
 
-# Answer-ticket'larni imzolash uchun alohida sekret — TELEGRAM_BOT_TOKEN bilan
-# aralashtirib yuborilmasin (bot tokenni rotatsiya qilish ticket'larni buzmasin).
-# Production'da bo'sh bo'lsa fail-fast: zaif/bo'sh kalit bilan ishlash mumkin emas.
+# DJANGO_ALLOWED_HOSTS — bo'sh bo'lsa FRONTEND_URL'dan derive qilamiz +
+# Render hostname pattern. Backend xavfsiz default'lar bilan ishlaydi
+# (crash qilmaydi), warning log yoziladi.
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
+if not ALLOWED_HOSTS:
+    derived: list[str] = ["localhost", "127.0.0.1"]
+    if FRONTEND_URL:
+        from urllib.parse import urlparse
+        try:
+            fh = urlparse(FRONTEND_URL).hostname
+            if fh:
+                derived.append(fh)
+        except Exception:  # noqa: BLE001
+            pass
+    if IS_PRODUCTION:
+        # Render hostname'lari `*.onrender.com` (custom domain o'rnatilmagan bo'lsa).
+        derived.append(".onrender.com")  # leading dot — subdomain wildcard
+        print(
+            f"[settings] WARNING: DJANGO_ALLOWED_HOSTS o'rnatilmagan. "
+            f"Auto-derived: {derived}. Xavfsizlik uchun aniq domain'larni "
+            f"qo'ying (masalan: 'zakovat-backend.onrender.com').",
+            file=sys.stderr,
+        )
+    ALLOWED_HOSTS = derived
+
+# Answer-ticket'larni imzolash uchun sekret.
+# Production'da o'rnatilmagan bo'lsa SECRET_KEY'dan derived hash ishlatamiz.
+# Bu xavfsizlik nuqtai nazaridan SECRET_KEY bilan bir xil darajada —
+# ikkalasi ham backend'da saqlanadi. Crash qilish o'rniga ishlay olamiz.
 TICKET_HMAC_SECRET = os.environ.get("TICKET_HMAC_SECRET", "")
 if not TICKET_HMAC_SECRET:
+    import hashlib as _hashlib
+    TICKET_HMAC_SECRET = "ticket-" + _hashlib.sha256(
+        f"zakovat-tickets-v1::{SECRET_KEY}".encode("utf-8")
+    ).hexdigest()
     if IS_PRODUCTION:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            "TICKET_HMAC_SECRET production'da o'rnatilishi shart "
-            "(masalan: `python -c 'import secrets; print(secrets.token_urlsafe(48))'`)."
+        print(
+            "[settings] WARNING: TICKET_HMAC_SECRET o'rnatilmagan — SECRET_KEY'dan "
+            "derived qilindi. Xavfsizroq: alohida tasodifiy kalit qo'ying "
+            "(`python -c \"import secrets; print(secrets.token_urlsafe(48))\"`).",
+            file=sys.stderr,
         )
-    # Dev'da deterministik fallback — runtime'da o'zgarib turmasin uchun
-    # SECRET_KEY ga bog'laymiz (har xil bo'lsa dev'da test ticket'lari mos kelmasdan ketadi).
-    TICKET_HMAC_SECRET = "dev-ticket-" + SECRET_KEY
 
 # Bot adminstrativ APIlarini chaqirish uchun alohida server-internal kalit —
 # Telegram bot tokeni bilan ARALASHMASIN. Bot tokeni Telegram bilan baham
