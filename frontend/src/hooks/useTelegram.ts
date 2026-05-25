@@ -24,10 +24,25 @@ type TelegramState = {
   initDataMissing: boolean;
 };
 
-function isRealTelegramPlatform(platform?: string): boolean {
-  if (!platform) return false;
-  const p = platform.toLowerCase();
-  return p !== "unknown" && p !== "";
+// Telegram WebApp ob'ekti bo'lsa-yu, biz haqiqatdan ham Telegram klientida ekanligimizni
+// bildiradigan belgi bormi? `platform === "unknown"` browser-mode (TWA SDK localda),
+// boshqa qiymatlar haqiqiy Telegram klientida.
+function isRealTelegramPlatform(webApp: TelegramWebApp | null | undefined): boolean {
+  if (!webApp) return false;
+  const platform = (webApp.platform ?? "").toLowerCase();
+  if (!platform || platform === "unknown") return false;
+  return true;
+}
+
+// Telegram klientida ekanligimizning ikkinchi belgisi — initDataUnsafe.user
+// va boshqa metadata. Ba'zi versiyalar platform'ni bermasligi mumkin, lekin
+// initDataUnsafe.user'ni beradi.
+function hasTelegramSignals(webApp: TelegramWebApp | null | undefined): boolean {
+  if (!webApp) return false;
+  if (isRealTelegramPlatform(webApp)) return true;
+  // Telegram bizga foydalanuvchi ma'lumotini bergan, lekin imzolangan initData bermagan —
+  // bu ham "Telegramda lekin auth singan" holat.
+  return Boolean(webApp.initDataUnsafe?.user?.id);
 }
 
 export function useTelegram(): TelegramState {
@@ -45,6 +60,7 @@ export function useTelegram(): TelegramState {
   useEffect(() => {
     const webApp = window.Telegram?.WebApp ?? tg;
 
+    // Web App SDK umuman yuklanmagan — sof browser rejimi (lokal dev, screenshot, va h.k.).
     if (!webApp?.ready || !webApp?.expand) {
       setState({
         initData: "guest",
@@ -65,22 +81,26 @@ export function useTelegram(): TelegramState {
       webApp.setHeaderColor?.("#080f1e");
       webApp.setBackgroundColor?.("#080f1e");
 
-      const realPlatform = isRealTelegramPlatform(webApp.platform);
+      const realPlatform = isRealTelegramPlatform(webApp);
+      const telegramSignals = hasTelegramSignals(webApp);
       const rawInitData = webApp.initData ?? "";
       const hasInitData = rawInitData.length > 0;
 
+      // Agar Telegram klientidamiz (platform haqiqiy yoki initDataUnsafe.user mavjud),
+      // ammo signed initData yo'q bo'lsa — bu "guest" emas, bu BUZILGAN auth holati.
+      // Foydalanuvchini "guest" sifatida xizmat qilish noto'g'ri (jamoa leak/spam) va
+      // backend'ga "guest" token yuborish ham noto'g'ri.
+      const isBrokenAuth = telegramSignals && !hasInitData;
+
       setState({
-        // Telegram ichida bo'lib initData bo'sh bo'lsa "guest" qaytarmaymiz —
-        // backend mehmon deb noto'g'ri belgilab qo'yadi. Bo'sh string qaytaramiz
-        // va App.tsx yuqorida xato ekran ko'rsatadi.
-        initData: hasInitData ? rawInitData : (realPlatform ? "" : "guest"),
+        initData: hasInitData ? rawInitData : (telegramSignals ? "" : "guest"),
         isReady: true,
         user: normalizeTelegramUser(webApp.initDataUnsafe?.user) ?? BROWSER_USER,
         startParam: webApp.initDataUnsafe?.start_param ?? "",
         error: "",
         tg: webApp,
-        inTelegram: realPlatform,
-        initDataMissing: realPlatform && !hasInitData
+        inTelegram: realPlatform || telegramSignals,
+        initDataMissing: isBrokenAuth
       });
     } catch (error) {
       console.error("Telegram WebApp init failed", error);

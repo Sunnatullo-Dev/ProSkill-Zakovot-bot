@@ -93,7 +93,7 @@ type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 const isAdminRoute = window.location.pathname.replace(/\/+$/, "").endsWith("/admin");
 
 export default function App() {
-  const { initData, isReady, startParam, user: telegramUser, inTelegram, initDataMissing } = useTelegram();
+  const { initData, isReady, startParam, user: telegramUser, initDataMissing } = useTelegram();
   const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<AppUser | null>(null);
   const [score, setScore] = useState(0);
@@ -527,19 +527,28 @@ export default function App() {
               uzata olmadi. Iltimos, mini-app oynasini yopib, botning menyu
               tugmasi orqali qayta oching.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  window.Telegram?.WebApp?.close?.();
-                } catch {
-                  /* ignore */
-                }
-              }}
-              className="rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-black text-[var(--bg)]"
-            >
-              Yopish
-            </button>
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="w-full rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-black text-[var(--bg)]"
+              >
+                Qayta urinish
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    window.Telegram?.WebApp?.close?.();
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="w-full rounded-2xl border border-[var(--card-border)] px-6 py-3 text-sm font-black text-[var(--text)]"
+              >
+                Mini-app'ni yopish
+              </button>
+            </div>
           </div>
         </section>
       </main>

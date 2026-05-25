@@ -17,9 +17,14 @@ def create_team(request):
 
     # Mehmon foydalanuvchi (telegram_id=0) jamoa yarata olmaydi — chunki
     # u barcha mehmonlar bilan baham ko'rinadi va shu jamoa hammasiga
-    # ko'rinib qoladi (shared-guest leak).
+    # ko'rinib qoladi (shared-guest leak). Bu yerga tushish — auth singan
+    # belgi (frontend "guest" yuborgan), shuning uchun xato xabari amaliy bo'lsin.
     if user.telegram_id <= 0:
-        raise AppError(403, "Jamoa yaratish uchun Telegram orqali kiring")
+        raise AppError(
+            403,
+            "Telegram bilan ulanish muvaffaqiyatsiz. Mini-app oynasini yopib, "
+            "bot menyusi orqali qayta oching."
+        )
 
     body = request.data if isinstance(request.data, dict) else {}
     name = (body.get("name") or "").strip()
@@ -44,7 +49,11 @@ def join_team(request):
     # Mehmon (shared row) jamoaga qo'shila olmaydi — boshqalarni ham
     # avtomatik ham shu jamoaga qo'shgan bo'lar edi.
     if user.telegram_id <= 0:
-        raise AppError(403, "Jamoaga qo'shilish uchun Telegram orqali kiring")
+        raise AppError(
+            403,
+            "Telegram bilan ulanish muvaffaqiyatsiz. Mini-app oynasini yopib, "
+            "bot menyusi orqali qayta oching."
+        )
 
     body = request.data if isinstance(request.data, dict) else {}
     code = (body.get("code") or "").strip()
