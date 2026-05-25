@@ -1566,6 +1566,48 @@ function QuestionsSection() {
                 <CheckCircleIcon size={13} />
                 <strong>{question.correctAnswer}</strong>
               </div>
+              {/* A/B/C/D rejimi belgisi */}
+              {question.wrongAnswers && question.wrongAnswers.length === 3 ? (
+                <div
+                  style={{
+                    marginTop: "6px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "3px 8px",
+                    borderRadius: "999px",
+                    background: "linear-gradient(135deg, rgba(77,166,255,0.18), rgba(124,91,255,0.14))",
+                    border: "1px solid rgba(77,166,255,0.3)",
+                    fontSize: "10px",
+                    fontWeight: 800,
+                    color: "var(--accent)",
+                    letterSpacing: "0.04em"
+                  }}
+                  title={`Variantlar: ${question.wrongAnswers.join(", ")}`}
+                >
+                  A/B/C/D rejimi
+                </div>
+              ) : (
+                <div
+                  style={{
+                    marginTop: "6px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "3px 8px",
+                    borderRadius: "999px",
+                    background: "rgba(245,200,66,0.10)",
+                    border: "1px solid rgba(245,200,66,0.25)",
+                    fontSize: "10px",
+                    fontWeight: 800,
+                    color: "var(--gold)",
+                    letterSpacing: "0.04em"
+                  }}
+                  title="Foydalanuvchi javobni o'zi yozadi, AI baholaydi"
+                >
+                  Erkin matn (AI)
+                </div>
+              )}
               <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
                 <button
                   style={iconButton("#4DA6FF")}
