@@ -140,6 +140,9 @@ export default function App() {
   // qilyapti — bu HMAC nomos kelishi yoki NODE_ENV != production belgisi.
   // Bunday holatda app'ga davom etmaymiz, aniq xato ekran ko'rsatamiz.
   const [authBroken, setAuthBroken] = useState(false);
+  // Backend tasdiqlagan admin holati — ADMIN_TELEGRAM_IDS env'iga
+  // qo'shilgan foydalanuvchilar uchun BottomNav'da Admin tugmasi chiqadi.
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const submitAnswerRef = useRef<SubmitAnswerFn | null>(null);
   // Stale ticket fetch'lardan himoya — har savolning o'z ticket fetch
   // belgisi bor; eski fetch keyin kelsa, biz uni e'tibordan chiqaramiz.
@@ -324,6 +327,7 @@ export default function App() {
           return;
         }
         setAuthBroken(false);
+        setIsAdminUser(Boolean(response.isAdmin));
 
         setUser(response.user);
         setScore(response.user.score);
@@ -818,7 +822,7 @@ export default function App() {
 
         {screen === "profile" ? (
           <ProfileScreen
-            isAdmin={isAdminRoute}
+            isAdmin={isAdminRoute || isAdminUser}
             playerName={playerName}
             record={recordScore}
             score={score}
@@ -833,12 +837,16 @@ export default function App() {
           />
         ) : null}
 
-        {screen === "admin" && isAdminRoute ? (
+        {screen === "admin" && (isAdminRoute || isAdminUser) ? (
           <AdminPanel onExitToUser={() => setScreen("home")} />
         ) : null}
 
         {showBottomNav ? (
-          <BottomNav active={navActive} showAdmin={isAdminRoute} onNavigate={handleNavigate} />
+          <BottomNav
+            active={navActive}
+            showAdmin={isAdminRoute || isAdminUser}
+            onNavigate={handleNavigate}
+          />
         ) : null}
 
         {exitConfirmOpen ? (
