@@ -54,6 +54,8 @@ export default function TeamScreen({ currentUserId, autoJoinCode, onEnterBattle 
   const mountedRef = useRef(true);
 
   const [transferTarget, setTransferTarget] = useState<TeamMember | null>(null);
+  const [autoJoining, setAutoJoining] = useState(false);
+  const [autoJoinError, setAutoJoinError] = useState("");
 
   async function handleTransferOwner() {
     if (!transferTarget) return;
@@ -165,15 +167,21 @@ export default function TeamScreen({ currentUserId, autoJoinCode, onEnterBattle 
   // Deep-link: join_CODE → avtomatik jamoaga qo'shilish
   const autoJoinRef = useRef(false);
   useEffect(() => {
-    if (!autoJoinCode || autoJoinRef.current) return;
+    // loading tugaguncha kutamiz — team hali null bo'lishi mumkin
+    if (!autoJoinCode || autoJoinRef.current || loading) return;
     autoJoinRef.current = true;
-    // Foydalanuvchi allaqachon jamoada bo'lsa — hech narsa qilmaymiz
     if (team) return;
+    setAutoJoining(true);
     void (async () => {
       const result = await joinTeamByCode(autoJoinCode.toUpperCase());
-      if (result.ok) void refresh();
+      setAutoJoining(false);
+      if (result.ok) {
+        void refresh();
+      } else {
+        setAutoJoinError(result.error ?? "Jamoaga qo'shilishda xatolik yuz berdi");
+      }
     })();
-  }, [autoJoinCode, team, refresh]);
+  }, [autoJoinCode, team, loading, refresh]);
 
   async function handleAccept(battleId: string) {
     setActionId(battleId);
@@ -468,10 +476,34 @@ export default function TeamScreen({ currentUserId, autoJoinCode, onEnterBattle 
       ) : null}
 
       {/* Main content */}
-      {loading ? (
+      {loading || autoJoining ? (
         <div style={{ padding: "48px 0", textAlign: "center" }}>
-          <div style={{ fontSize: "13px", color: "var(--muted)" }}>Yuklanmoqda...</div>
+          <div style={{ fontSize: "13px", color: "var(--muted)" }}>
+            {autoJoining ? "Jamoaga qo'shilmoqda..." : "Yuklanmoqda..."}
+          </div>
         </div>
+      ) : autoJoinError ? (
+        <>
+          <div
+            style={{
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid var(--error)",
+              borderRadius: "14px",
+              padding: "14px 16px",
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--error)",
+              fontWeight: 600,
+              textAlign: "center"
+            }}
+          >
+            {autoJoinError}
+          </div>
+          <NoTeamView
+            onCreate={() => setCreateOpen(true)}
+            onJoin={() => setJoinOpen(true)}
+          />
+        </>
       ) : !team ? (
         <NoTeamView
           onCreate={() => setCreateOpen(true)}
