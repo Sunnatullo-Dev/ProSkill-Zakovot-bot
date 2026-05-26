@@ -347,16 +347,12 @@ export default function App() {
         if (tgRealId > 0 && response.user.telegramId === 0) {
           console.warn(
             "Auth desync: Telegram SDK id=%d, backend telegramId=0. " +
-              "Backend HMAC failed yoki NODE_ENV != production.",
+              "Backend HMAC failed yoki initData eskirgan (>7 kun).",
             tgRealId
           );
-          // Invite link orqali kelgan bo'lsa — team sahifasiga yo'naltir va
-          // u yerda qo'shilishga urinib ko'ramiz. Bloklash o'rniga aniqroq xato.
-          if (joinCode) {
-            setAutoJoinCode(joinCode);
-            setScreen("team");
-            return;
-          }
+          // Auth singan bo'lsa team endpoint'lari ham 401 beradi —
+          // team screen'ga o'tishdan foyda yo'q. authBroken ekranda
+          // "Botni to'g'ridan-to'g'ri oching, qayta urinib ko'ring" deymiz.
           setAuthBroken(true);
           return;
         }
