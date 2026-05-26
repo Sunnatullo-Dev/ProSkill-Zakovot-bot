@@ -153,7 +153,11 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   const [isLoadingTTS, setIsLoadingTTS] = useState(false);
   const [isPlayingTTS, setIsPlayingTTS] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
+  // TTS tugagandan keyin taymerni ishga tushiramiz
+  const [timerActive, setTimerActive] = useState(false);
   const lastRoundIdRef = useRef<string | null>(null);
+  // Polling har 2s da timeRemainingMs ni yangilaydi — TTS tugaganda shu ref'dan sinxronlaymiz
+  const latestTimeRemainingMsRef = useRef<number>(0);
   const answerInputRef = useRef<HTMLInputElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -184,7 +188,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
     };
   }, []);
 
-  const playBuffer = useCallback(() => {
+  const playBuffer = useCallback((onEnded?: () => void) => {
     const ctx = audioCtxRef.current;
     const buffer = audioBufferRef.current;
     if (!ctx || !buffer) return;
@@ -199,24 +203,35 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
-      source.onended = () => setIsPlayingTTS(false);
+      source.onended = () => {
+        setIsPlayingTTS(false);
+        onEnded?.();
+      };
       activeSourceRef.current = source;
       setIsPlayingTTS(true);
       source.start(0);
     };
 
     if (ctx.state === "suspended") {
-      ctx.resume().then(doPlay).catch(() => setIsPlayingTTS(false));
+      ctx.resume().then(doPlay).catch(() => { setIsPlayingTTS(false); onEnded?.(); });
     } else {
       doPlay();
     }
   }, []);
 
-  // Yangi round kelganda savolni TTS orqali o'qib beramiz.
+  // Yangi round kelganda savolni TTS orqali o'qib beramiz,
+  // TTS tugaguncha taymer muzlatiladi.
   const currentRoundId = state?.currentRound?.roundId ?? null;
   const currentRoundText = state?.currentRound?.questionText ?? "";
   useEffect(() => {
-    if (!currentRoundId || !currentRoundText) return;
+    // Yangi round = taymer to'xtadi
+    setTimerActive(false);
+
+    if (!currentRoundId || !currentRoundText) {
+      // Savol yo'q — taymerni darhol boshlash
+      setTimerActive(true);
+      return;
+    }
 
     if (activeSourceRef.current) {
       try { activeSourceRef.current.stop(); } catch { /* ignore */ }
@@ -228,23 +243,32 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
     setHasAudio(false);
     setIsLoadingTTS(true);
 
+    // TTS tugaganda server vaqti bilan sinxronlab taymerni ishga tushiramiz
+    const startTimer = () => {
+      const ms = latestTimeRemainingMsRef.current;
+      if (ms > 0) setSecondsLeft(Math.ceil(ms / 1000));
+      setTimerActive(true);
+    };
+
     let cancelled = false;
     fetchTTS(currentRoundText).then(async (result) => {
       if (cancelled) { setIsLoadingTTS(false); return; }
-      if (!result) { setIsLoadingTTS(false); return; }
+      if (!result) { setIsLoadingTTS(false); startTimer(); return; }
       try {
         const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0));
         const arrayBuf = addWavHeaderIfNeeded(bytes);
         const ctx = audioCtxRef.current;
-        if (!ctx) { setIsLoadingTTS(false); return; }
+        if (!ctx) { setIsLoadingTTS(false); startTimer(); return; }
         const decoded = await ctx.decodeAudioData(arrayBuf);
         if (cancelled) return;
         audioBufferRef.current = decoded;
         setHasAudio(true);
         setIsLoadingTTS(false);
-        playBuffer();
+        // Auto-o'qish — tugaganda taymer boshlanadi
+        playBuffer(startTimer);
       } catch {
         setIsLoadingTTS(false);
+        if (!cancelled) startTimer();
       }
     });
 
@@ -283,6 +307,9 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         // `secondsLeft` ni FAQAT yangi round kelganda server qiymatidan
         // sinxronlaymiz. Bir xil round davomida server qiymati har 2s da
         // kelib, local 1s tick bilan to'qnashib jitter qildi (10→9→10→9).
+        if (next.currentRound) {
+          latestTimeRemainingMsRef.current = next.currentRound.timeRemainingMs;
+        }
         if (isRoundChange && next.currentRound) {
           setSecondsLeft(Math.ceil(next.currentRound.timeRemainingMs / 1000));
         }
@@ -343,7 +370,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   }, [battleId]);
 
   useEffect(() => {
-    if (!state?.currentRound || state.finished) {
+    if (!state?.currentRound || state.finished || !timerActive) {
       return;
     }
 
@@ -354,7 +381,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
     return () => {
       window.clearInterval(id);
     };
-  }, [state?.currentRound?.roundId, state?.finished]);
+  }, [state?.currentRound?.roundId, state?.finished, timerActive]);
 
   async function handleForfeit() {
     setForfeiting(true);
@@ -632,15 +659,31 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
           Bellashuv {round ? `· Round ${round.roundNumber}/${round.totalRounds}` : ""}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span
-            style={{
-              fontSize: "16px",
-              fontWeight: 800,
-              color: secondsLeft <= 5 ? "var(--error)" : secondsLeft <= 10 ? "var(--warning)" : "var(--accent)"
-            }}
-          >
-            ⏱ {secondsLeft}s
-          </span>
+          {isLoadingTTS || isPlayingTTS ? (
+            <span
+              style={{
+                fontSize: "14px",
+                fontWeight: 800,
+                color: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px"
+              }}
+            >
+              <SpeakerIcon size={15} />
+              {isLoadingTTS ? "..." : "O'qilmoqda"}
+            </span>
+          ) : (
+            <span
+              style={{
+                fontSize: "16px",
+                fontWeight: 800,
+                color: secondsLeft <= 5 ? "var(--error)" : secondsLeft <= 10 ? "var(--gold)" : "var(--accent)"
+              }}
+            >
+              ⏱ {secondsLeft}s
+            </span>
+          )}
           <button
             style={{
               background: "rgba(239,68,68,0.15)",
