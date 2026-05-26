@@ -29,6 +29,29 @@ type QuestionCardProps = {
 
 const OPTION_LETTERS = ["A", "B", "C", "D"];
 
+// Gemini ba'zan WAV header'siz raw L16 PCM qaytaradi.
+// Agar RIFF imzosi yo'q bo'lsa — 24kHz/16-bit/mono WAV header qo'shamiz.
+function addWavHeaderIfNeeded(bytes: Uint8Array): ArrayBuffer {
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
+  const sampleRate = 24000;
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const dataSize = bytes.byteLength;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  const s = (o: number, t: string) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  s(0, "RIFF"); v.setUint32(4, 36 + dataSize, true); s(8, "WAVE");
+  s(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, numChannels, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+  v.setUint16(32, numChannels * bitsPerSample / 8, true); v.setUint16(34, bitsPerSample, true);
+  s(36, "data"); v.setUint32(40, dataSize, true);
+  new Uint8Array(buf, 44).set(bytes);
+  return buf;
+}
+
 export default function QuestionCard({
   question,
   questionNumber,
@@ -45,10 +68,12 @@ export default function QuestionCard({
 }: QuestionCardProps) {
   const [answer, setAnswer] = useState("");
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoadingTTS, setIsLoadingTTS] = useState(false);
   const [isPlayingTTS, setIsPlayingTTS] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [hasAudio, setHasAudio] = useState(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const timerColor = timeLeft > 10 ? "var(--accent)" : timeLeft > 5 ? "var(--warning)" : "var(--error)";
   const progress = timeLeft / 15;
   const circumference = 2 * Math.PI * 34;
@@ -71,17 +96,43 @@ export default function QuestionCard({
   // input fokus bo'lganda yoki VisualViewport o'zgarganda tugmani scroll qilamiz.
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const playAudio = useCallback((url: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+  // AudioContext — foydalanuvchi "O'yinni boshlash" bosgan paytda mount bo'ladi,
+  // shuning uchun resume() muvaffaqiyatli ishlaydi va autoplay bloklanmaydi.
+  useEffect(() => {
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    ctx.resume().catch(() => {});
+    return () => {
+      ctx.close().catch(() => {});
+    };
+  }, []);
+
+  const playBuffer = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    const buffer = audioBufferRef.current;
+    if (!ctx || !buffer) return;
+
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+      activeSourceRef.current.disconnect();
+      activeSourceRef.current = null;
     }
-    setIsPlayingTTS(true);
-    const audio = new Audio(url);
-    audioRef.current = audio;
-    audio.onended = () => setIsPlayingTTS(false);
-    audio.onerror = () => setIsPlayingTTS(false);
-    audio.play().catch(() => setIsPlayingTTS(false));
+
+    const doPlay = () => {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.onended = () => setIsPlayingTTS(false);
+      activeSourceRef.current = source;
+      setIsPlayingTTS(true);
+      source.start(0);
+    };
+
+    if (ctx.state === "suspended") {
+      ctx.resume().then(doPlay).catch(() => setIsPlayingTTS(false));
+    } else {
+      doPlay();
+    }
   }, []);
 
   useEffect(() => {
@@ -91,34 +142,39 @@ export default function QuestionCard({
 
   // Yangi savol kelganda TTS yuklab auto-play qilamiz
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+      activeSourceRef.current.disconnect();
+      activeSourceRef.current = null;
     }
+    audioBufferRef.current = null;
     setIsPlayingTTS(false);
-    setAudioUrl(null);
+    setHasAudio(false);
     setIsLoadingTTS(true);
 
     let cancelled = false;
-    fetchTTS(question.text).then((result) => {
-      if (cancelled) return;
-      setIsLoadingTTS(false);
-      if (!result) return;
-      const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0));
-      const blob = new Blob([bytes], { type: result.mimeType });
-      const url = URL.createObjectURL(blob);
-      setAudioUrl(url);
-      playAudio(url);
+    fetchTTS(question.text).then(async (result) => {
+      if (cancelled) { setIsLoadingTTS(false); return; }
+      if (!result) { setIsLoadingTTS(false); return; }
+      try {
+        const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0));
+        const arrayBuf = addWavHeaderIfNeeded(bytes);
+        const ctx = audioCtxRef.current;
+        if (!ctx) { setIsLoadingTTS(false); return; }
+        const decoded = await ctx.decodeAudioData(arrayBuf);
+        if (cancelled) return;
+        audioBufferRef.current = decoded;
+        setHasAudio(true);
+        setIsLoadingTTS(false);
+        playBuffer();
+      } catch (err) {
+        console.error("[TTS] decode error:", err);
+        setIsLoadingTTS(false);
+      }
     });
 
-    return () => {
-      cancelled = true;
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, [question.id, question.text, playAudio]);
+    return () => { cancelled = true; };
+  }, [question.id, question.text, playBuffer]);
 
   // Klaviatura ochilganda VisualViewport viewport balandligi kichrayadi.
   // Bu eventni tutib, submit tugmasini ko'rinadigan joyga scroll qilamiz.
@@ -298,20 +354,20 @@ export default function QuestionCard({
             <button
               type="button"
               title="Savolni qayta eshitish"
-              disabled={isLoadingTTS || (!audioUrl && !isLoadingTTS)}
-              onClick={() => audioUrl && playAudio(audioUrl)}
+              disabled={isLoadingTTS || !hasAudio}
+              onClick={playBuffer}
               style={{
                 width: "36px",
                 height: "36px",
                 borderRadius: "50%",
                 border: `1.5px solid ${isPlayingTTS ? "var(--accent)" : "var(--border)"}`,
                 background: isPlayingTTS ? "rgba(77,166,255,0.15)" : "var(--bg)",
-                color: isPlayingTTS ? "var(--accent)" : isLoadingTTS ? "var(--muted)" : "var(--muted)",
-                cursor: audioUrl && !isLoadingTTS ? "pointer" : "default",
+                color: isPlayingTTS ? "var(--accent)" : "var(--muted)",
+                cursor: hasAudio && !isLoadingTTS ? "pointer" : "default",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                opacity: !audioUrl && !isLoadingTTS ? 0.35 : 1,
+                opacity: !hasAudio && !isLoadingTTS ? 0.35 : 1,
                 transition: "all 0.2s",
                 flexShrink: 0
               }}
