@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchTTS } from "../api/client";
 import type { RevealInfo } from "../types";
-import { CloseIcon } from "./icons";
+import { CloseIcon, SpeakerIcon } from "./icons";
 
 type QuestionCardProps = {
   question: {
@@ -44,6 +45,10 @@ export default function QuestionCard({
 }: QuestionCardProps) {
   const [answer, setAnswer] = useState("");
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isLoadingTTS, setIsLoadingTTS] = useState(false);
+  const [isPlayingTTS, setIsPlayingTTS] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const timerColor = timeLeft > 10 ? "var(--accent)" : timeLeft > 5 ? "var(--warning)" : "var(--error)";
   const progress = timeLeft / 15;
   const circumference = 2 * Math.PI * 34;
@@ -66,10 +71,54 @@ export default function QuestionCard({
   // input fokus bo'lganda yoki VisualViewport o'zgarganda tugmani scroll qilamiz.
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
 
+  const playAudio = useCallback((url: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsPlayingTTS(true);
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onended = () => setIsPlayingTTS(false);
+    audio.onerror = () => setIsPlayingTTS(false);
+    audio.play().catch(() => setIsPlayingTTS(false));
+  }, []);
+
   useEffect(() => {
     setAnswer("");
     setSelectedOption(null);
   }, [question.id]);
+
+  // Yangi savol kelganda TTS yuklab auto-play qilamiz
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsPlayingTTS(false);
+    setAudioUrl(null);
+    setIsLoadingTTS(true);
+
+    let cancelled = false;
+    fetchTTS(question.text).then((result) => {
+      if (cancelled) return;
+      setIsLoadingTTS(false);
+      if (!result) return;
+      const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: result.mimeType });
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+      playAudio(url);
+    });
+
+    return () => {
+      cancelled = true;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [question.id, question.text, playAudio]);
 
   // Klaviatura ochilganda VisualViewport viewport balandligi kichrayadi.
   // Bu eventni tutib, submit tugmasini ko'rinadigan joyga scroll qilamiz.
@@ -232,7 +281,7 @@ export default function QuestionCard({
             background: "var(--card)",
             border: "1px solid var(--border)",
             borderRadius: "20px",
-            padding: "28px 24px",
+            padding: "28px 24px 16px",
             fontSize: "20px",
             fontWeight: 600,
             color: "var(--text)",
@@ -240,10 +289,53 @@ export default function QuestionCard({
             lineHeight: 1.6,
             userSelect: "none",
             WebkitUserSelect: "none",
-            marginBottom: "24px"
+            marginBottom: "24px",
+            position: "relative"
           }}
         >
           {question.text}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "14px" }}>
+            <button
+              type="button"
+              title="Savolni qayta eshitish"
+              disabled={isLoadingTTS || (!audioUrl && !isLoadingTTS)}
+              onClick={() => audioUrl && playAudio(audioUrl)}
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "50%",
+                border: `1.5px solid ${isPlayingTTS ? "var(--accent)" : "var(--border)"}`,
+                background: isPlayingTTS ? "rgba(77,166,255,0.15)" : "var(--bg)",
+                color: isPlayingTTS ? "var(--accent)" : isLoadingTTS ? "var(--muted)" : "var(--muted)",
+                cursor: audioUrl && !isLoadingTTS ? "pointer" : "default",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: !audioUrl && !isLoadingTTS ? 0.35 : 1,
+                transition: "all 0.2s",
+                flexShrink: 0
+              }}
+            >
+              {isLoadingTTS ? (
+                <svg
+                  fill="none"
+                  height="15"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  width="15"
+                  style={{
+                    animation: "spin 1s linear infinite"
+                  }}
+                >
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+              ) : (
+                <SpeakerIcon size={15} />
+              )}
+            </button>
+          </div>
         </div>
 
         <svg height="80" style={{ marginBottom: "24px" }} viewBox="0 0 80 80" width="80">

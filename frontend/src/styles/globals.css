@@ -99,3 +99,9 @@ button {
 .result-overlay {
   animation: resultFade 400ms ease both;
 }
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

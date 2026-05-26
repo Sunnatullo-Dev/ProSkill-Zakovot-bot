@@ -22,7 +22,7 @@ from apps.core.exceptions import AppError
 from apps.questions.repositories import get_question_by_id
 from apps.users.repositories import add_score
 
-from .gemini import check_answer, explain_question
+from .gemini import check_answer, explain_question, generate_tts
 from .grading import GradingResult, exact_match_grade
 from .scoring import ScoreInput, calculate_answer_score
 from .tickets import consume_answer_ticket, issue_answer_ticket, verify_answer_ticket
@@ -158,6 +158,24 @@ def submit_answer(request):
             "streak": score.streak_after,
         }
     )
+
+
+@api_view(["POST"])
+@require_auth
+@ratelimit(key=_rate_key, rate="30/m", block=True)
+def tts(request):
+    import base64
+
+    body = request.data if isinstance(request.data, dict) else {}
+    text = body.get("text", "")
+    if not isinstance(text, str) or not text.strip():
+        raise AppError(400, "text talab qilinadi")
+
+    audio_bytes = generate_tts(text.strip()[:600])
+    if audio_bytes is None:
+        raise AppError(503, "TTS vaqtincha mavjud emas")
+
+    return Response({"audio": base64.b64encode(audio_bytes).decode(), "mimeType": "audio/wav"})
 
 
 @api_view(["POST"])

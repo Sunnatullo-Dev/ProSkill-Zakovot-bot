@@ -43,6 +43,38 @@ def check_answer(question: str, correct_answer: str, user_answer: str) -> CheckA
     return _local_check(correct_answer, user_answer)
 
 
+def generate_tts(text: str) -> Optional[bytes]:
+    """Gemini 2.5 Flash TTS orqali WAV audio yaratadi. Xato bo'lsa None."""
+    if not settings.GEMINI_API_KEY:
+        return None
+
+    import base64
+    import requests as _http
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.5-flash-preview-tts:generateContent?key={settings.GEMINI_API_KEY}"
+    )
+    payload = {
+        "contents": [{"parts": [{"text": text}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Kore"}}
+            },
+        },
+    }
+    try:
+        resp = _http.post(url, json=payload, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+        return base64.b64decode(b64)
+    except Exception as error:
+        logger.warning("Gemini TTS failed: %s", error)
+        return None
+
+
 def explain_question(question: str, correct_answer: str) -> str:
     """Savol mavzusi haqida 2-3 jumlali ma'lumot. Xato bo'lsa bo'sh string."""
     prompt = (

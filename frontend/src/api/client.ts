@@ -196,6 +196,15 @@ export async function getRound(
   return (response?.questions ?? []).map(normalizeQuestion);
 }
 
+export async function fetchTTS(
+  text: string
+): Promise<{ audio: string; mimeType: string } | null> {
+  return request<{ audio: string; mimeType: string }>("/answer/tts", {
+    method: "POST",
+    body: { text }
+  });
+}
+
 export async function getAnswerTicket(questionId: string): Promise<string | null> {
   const response = await request<{ ticket: string }>("/answer/ticket", {
     method: "POST",
