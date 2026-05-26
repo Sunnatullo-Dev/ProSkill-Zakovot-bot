@@ -143,6 +143,7 @@ export default function App() {
   const [isRevealing, setIsRevealing] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
+  const [autoJoinCode, setAutoJoinCode] = useState("");
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -327,7 +328,10 @@ export default function App() {
         setScreen("loading");
         setErrorMessage("");
         const effectiveInitData = initData || "guest";
-        const referrerId = /^\d+$/.test(startParam) ? Number(startParam) : undefined;
+        // join_CODE — jamoaga taklif havolasi
+        const joinMatch = /^join_([A-Z0-9]{4,8})$/i.exec(startParam);
+        const joinCode = joinMatch ? joinMatch[1].toUpperCase() : "";
+        const referrerId = !joinCode && /^\d+$/.test(startParam) ? Number(startParam) : undefined;
 
         // Login natijasini to'liq kutamiz — sekin tarmoqda foydalanuvchi
         // "mehmon" sifatida tezda kirib qolib, keyin haqiqiy javob keldikida
@@ -421,7 +425,12 @@ export default function App() {
           needsName = !cachedName;
         }
 
-        setScreen(needsName ? "name" : "home");
+        if (joinCode) {
+          setAutoJoinCode(joinCode);
+          setScreen("team");
+        } else {
+          setScreen(needsName ? "name" : "home");
+        }
       } catch (error) {
         console.error("Login failed", error);
         // Bootstrap fail bo'ldi — keyingi safar (foydalanuvchi qaytadan
@@ -848,6 +857,7 @@ export default function App() {
         {screen === "team" ? (
           <TeamScreen
             currentUserId={user?.telegramId ?? 0}
+            autoJoinCode={autoJoinCode}
             onEnterBattle={handleEnterBattle}
           />
         ) : null}

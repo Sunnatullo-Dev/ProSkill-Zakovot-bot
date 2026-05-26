@@ -1,7 +1,29 @@
-import { useEffect, useRef, useState } from "react";
-import { forfeitBattle, getBattleState, submitBattleAnswer } from "../api/client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchTTS, forfeitBattle, getBattleState, submitBattleAnswer } from "../api/client";
 import type { BattleState, BattleTeamView } from "../types";
 import { hapticResult } from "../utils/haptics";
+import { SpeakerIcon } from "./icons";
+
+function addWavHeaderIfNeeded(bytes: Uint8Array): ArrayBuffer {
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
+  const sampleRate = 24000;
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const dataSize = bytes.byteLength;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  const s = (o: number, t: string) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  s(0, "RIFF"); v.setUint32(4, 36 + dataSize, true); s(8, "WAVE");
+  s(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, numChannels, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+  v.setUint16(32, numChannels * bitsPerSample / 8, true); v.setUint16(34, bitsPerSample, true);
+  s(36, "data"); v.setUint32(40, dataSize, true);
+  new Uint8Array(buf, 44).set(bytes);
+  return buf;
+}
 
 type BattlePageProps = {
   battleId: string;
@@ -128,9 +150,15 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   // Ketma-ket muvaffaqiyatsiz polling sonini hisoblaymiz — agar 5+ marta
   // qaytib kela olmasa, "Chiqish" tugmasini ko'rsatamiz.
   const [failureCount, setFailureCount] = useState(0);
+  const [isLoadingTTS, setIsLoadingTTS] = useState(false);
+  const [isPlayingTTS, setIsPlayingTTS] = useState(false);
+  const [hasAudio, setHasAudio] = useState(false);
   const lastRoundIdRef = useRef<string | null>(null);
   const answerInputRef = useRef<HTMLInputElement | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   // Klaviatura ochilganda submit tugmasi ko'rinmay qolishini oldini olamiz.
   useEffect(() => {
@@ -145,6 +173,83 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
     vv.addEventListener("resize", handler);
     return () => vv.removeEventListener("resize", handler);
   }, []);
+
+  // AudioContext — komponent mount bo'lganda yaratamiz.
+  useEffect(() => {
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    ctx.resume().catch(() => {});
+    return () => {
+      ctx.close().catch(() => {});
+    };
+  }, []);
+
+  const playBuffer = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    const buffer = audioBufferRef.current;
+    if (!ctx || !buffer) return;
+
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+      activeSourceRef.current.disconnect();
+      activeSourceRef.current = null;
+    }
+
+    const doPlay = () => {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.onended = () => setIsPlayingTTS(false);
+      activeSourceRef.current = source;
+      setIsPlayingTTS(true);
+      source.start(0);
+    };
+
+    if (ctx.state === "suspended") {
+      ctx.resume().then(doPlay).catch(() => setIsPlayingTTS(false));
+    } else {
+      doPlay();
+    }
+  }, []);
+
+  // Yangi round kelganda savolni TTS orqali o'qib beramiz.
+  const currentRoundId = state?.currentRound?.roundId ?? null;
+  const currentRoundText = state?.currentRound?.questionText ?? "";
+  useEffect(() => {
+    if (!currentRoundId || !currentRoundText) return;
+
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+      activeSourceRef.current.disconnect();
+      activeSourceRef.current = null;
+    }
+    audioBufferRef.current = null;
+    setIsPlayingTTS(false);
+    setHasAudio(false);
+    setIsLoadingTTS(true);
+
+    let cancelled = false;
+    fetchTTS(currentRoundText).then(async (result) => {
+      if (cancelled) { setIsLoadingTTS(false); return; }
+      if (!result) { setIsLoadingTTS(false); return; }
+      try {
+        const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0));
+        const arrayBuf = addWavHeaderIfNeeded(bytes);
+        const ctx = audioCtxRef.current;
+        if (!ctx) { setIsLoadingTTS(false); return; }
+        const decoded = await ctx.decodeAudioData(arrayBuf);
+        if (cancelled) return;
+        audioBufferRef.current = decoded;
+        setHasAudio(true);
+        setIsLoadingTTS(false);
+        playBuffer();
+      } catch {
+        setIsLoadingTTS(false);
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [currentRoundId, currentRoundText, playBuffer]);
 
   useEffect(() => {
     let active = true;
@@ -566,7 +671,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
             background: "var(--card)",
             border: "1px solid var(--border)",
             borderRadius: "20px",
-            padding: "24px 18px",
+            padding: "24px 18px 14px",
             fontSize: "17px",
             fontWeight: 700,
             color: "var(--text)",
@@ -577,6 +682,46 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
           }}
         >
           {round.questionText || "Savol yuklanmoqda..."}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
+            <button
+              type="button"
+              title="Savolni qayta eshitish"
+              disabled={isLoadingTTS || !hasAudio}
+              onClick={playBuffer}
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                border: `1.5px solid ${isPlayingTTS ? "var(--accent)" : "var(--border)"}`,
+                background: isPlayingTTS ? "rgba(77,166,255,0.15)" : "var(--bg)",
+                color: isPlayingTTS ? "var(--accent)" : "var(--muted)",
+                cursor: hasAudio && !isLoadingTTS ? "pointer" : "default",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: !hasAudio && !isLoadingTTS ? 0.35 : 1,
+                transition: "all 0.2s",
+                flexShrink: 0
+              }}
+            >
+              {isLoadingTTS ? (
+                <svg
+                  fill="none"
+                  height="14"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  width="14"
+                  style={{ animation: "spin 1s linear infinite" }}
+                >
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+              ) : (
+                <SpeakerIcon size={14} />
+              )}
+            </button>
+          </div>
         </div>
       ) : null}
 

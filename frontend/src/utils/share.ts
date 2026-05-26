@@ -11,6 +11,24 @@ function botLink(startParam?: number): string {
   return startParam ? `${base}?startapp=${startParam}` : base;
 }
 
+function botStartLink(startParam: string): string {
+  return `https://t.me/${BOT_USERNAME}?startapp=${encodeURIComponent(startParam)}`;
+}
+
+export function buildTeamInviteShare(teamCode: string, teamName: string): ShareContent {
+  return {
+    url: botStartLink(`join_${teamCode}`),
+    text: `⚔️ "${teamName}" jamoasiga qo'shil va Zakovat bilim o'yinida birga o'yna! Havola orqali avtomatik qo'shilasiz:`
+  };
+}
+
+export function buildBattleInviteShare(myTeamName: string, opponentTeamName: string): ShareContent {
+  return {
+    url: botStartLink("team"),
+    text: `⚔️ "${myTeamName}" jamoasi "${opponentTeamName}" jamoasini bellashuvga chaqirdi! Zakovat o'yiniga kiring va jamoangiz sahifasida qabul qiling:`
+  };
+}
+
 export function buildRoundShare(
   roundPoints: number,
   correctCount: number,

@@ -5,11 +5,13 @@ import {
   declineBattle,
   getMyTeam,
   getPendingBattles,
+  joinTeamByCode,
   leaveTeam,
   renameMyTeam,
   transferTeamOwner
 } from "../api/client";
 import type { PendingChallenge, TeamMember, TeamWithMembers } from "../types";
+import { buildBattleInviteShare, buildTeamInviteShare, shareToTelegram } from "../utils/share";
 import ChallengeModal from "./ChallengeModal";
 import ConfirmDialog from "./ConfirmDialog";
 import CreateTeamModal from "./CreateTeamModal";
@@ -19,6 +21,7 @@ import { EditIcon, TeamIcon } from "./icons";
 
 type Props = {
   currentUserId: number;
+  autoJoinCode?: string;
   onEnterBattle: (battleId: string) => void;
 };
 
@@ -34,7 +37,7 @@ function memberInitial(m: TeamMember): string {
   return n[0]?.toUpperCase() ?? "?";
 }
 
-export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
+export default function TeamScreen({ currentUserId, autoJoinCode, onEnterBattle }: Props) {
   const [team, setTeam] = useState<TeamWithMembers | null>(null);
   const [pending, setPending] = useState<PendingChallenge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +45,6 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
   const [joinOpen, setJoinOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
-  const [codeCopied, setCodeCopied] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const [renameOpen, setRenameOpen] = useState(false);
@@ -151,21 +153,27 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
     void refresh();
   }
 
-  async function handleCopyCode() {
+  function handleShareCode() {
     if (!team) return;
-    try {
-      await navigator.clipboard.writeText(team.code);
-    } catch {
-      const el = document.createElement("textarea");
-      el.value = team.code;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand("copy");
-      document.body.removeChild(el);
-    }
-    setCodeCopied(true);
-    window.setTimeout(() => setCodeCopied(false), 2000);
+    shareToTelegram(buildTeamInviteShare(team.code, team.name));
   }
+
+  function handleShareBattle(ch: PendingChallenge) {
+    shareToTelegram(buildBattleInviteShare(ch.challengerTeam.name, ch.opponentTeam.name));
+  }
+
+  // Deep-link: join_CODE → avtomatik jamoaga qo'shilish
+  const autoJoinRef = useRef(false);
+  useEffect(() => {
+    if (!autoJoinCode || autoJoinRef.current) return;
+    autoJoinRef.current = true;
+    // Foydalanuvchi allaqachon jamoada bo'lsa — hech narsa qilmaymiz
+    if (team) return;
+    void (async () => {
+      const result = await joinTeamByCode(autoJoinCode.toUpperCase());
+      if (result.ok) void refresh();
+    })();
+  }, [autoJoinCode, team, refresh]);
 
   async function handleAccept(battleId: string) {
     setActionId(battleId);
@@ -395,32 +403,52 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
               style={{
                 fontSize: "13px",
                 color: "var(--muted)",
-                marginBottom: canCancel ? "10px" : 0
+                marginBottom: "10px"
               }}
             >
               ⏳ "{ch.opponentTeam.name}" jamoasidan javob kutilmoqda...
             </div>
-            {canCancel ? (
+            <div style={{ display: "flex", gap: "8px" }}>
+              {/* Raqib jamoaga taklif xabarini Telegram orqali yuborish */}
               <button
-                disabled={busy}
                 style={{
-                  width: "100%",
+                  flex: 1,
                   padding: "9px",
-                  background: "transparent",
-                  border: "1px solid var(--error)",
+                  background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+                  border: "none",
                   borderRadius: "10px",
                   fontSize: "12px",
                   fontWeight: 700,
-                  color: "var(--error)",
-                  cursor: busy ? "not-allowed" : "pointer",
-                  opacity: busy ? 0.6 : 1
+                  color: "white",
+                  cursor: "pointer"
                 }}
                 type="button"
-                onClick={() => void handleCancel(ch.battleId)}
+                onClick={() => handleShareBattle(ch)}
               >
-                Taklifni bekor qilish
+                📨 Taklif yuborish
               </button>
-            ) : null}
+              {canCancel ? (
+                <button
+                  disabled={busy}
+                  style={{
+                    flex: 1,
+                    padding: "9px",
+                    background: "transparent",
+                    border: "1px solid var(--error)",
+                    borderRadius: "10px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "var(--error)",
+                    cursor: busy ? "not-allowed" : "pointer",
+                    opacity: busy ? 0.6 : 1
+                  }}
+                  type="button"
+                  onClick={() => void handleCancel(ch.battleId)}
+                >
+                  Bekor qilish
+                </button>
+              ) : null}
+            </div>
           </div>
         );
       })}
@@ -454,10 +482,11 @@ export default function TeamScreen({ currentUserId, onEnterBattle }: Props) {
           team={team}
           currentUserId={currentUserId}
           isOwner={isOwner}
-          codeCopied={codeCopied}
           hasOutgoing={outgoing.length > 0}
+          outgoingChallenges={outgoing}
           activeBattle={activeBattle}
-          onCopyCode={() => void handleCopyCode()}
+          onShareCode={handleShareCode}
+          onShareBattle={handleShareBattle}
           onChallenge={() => setChallengeOpen(true)}
           onLeave={() => setLeaveOpen(true)}
           onRename={() => {
@@ -750,10 +779,11 @@ function HasTeamView({
   team,
   currentUserId,
   isOwner,
-  codeCopied,
   hasOutgoing,
+  outgoingChallenges,
   activeBattle,
-  onCopyCode,
+  onShareCode,
+  onShareBattle,
   onChallenge,
   onLeave,
   onRename,
@@ -762,10 +792,11 @@ function HasTeamView({
   team: TeamWithMembers;
   currentUserId: number;
   isOwner: boolean;
-  codeCopied: boolean;
   hasOutgoing: boolean;
+  outgoingChallenges: PendingChallenge[];
   activeBattle: PendingChallenge | undefined;
-  onCopyCode: () => void;
+  onShareCode: () => void;
+  onShareBattle: (ch: PendingChallenge) => void;
   onChallenge: () => void;
   onLeave: () => void;
   onRename: () => void;
@@ -934,21 +965,21 @@ function HasTeamView({
           </div>
           <button
             style={{
-              padding: "9px 14px",
+              padding: "9px 16px",
               borderRadius: "10px",
-              border: `1px solid ${codeCopied ? "rgba(34,197,94,0.4)" : "var(--border)"}`,
-              background: codeCopied ? "rgba(34,197,94,0.12)" : "var(--surface)",
-              color: codeCopied ? "var(--success)" : "var(--accent)",
-              fontSize: "12px",
+              border: "none",
+              background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
+              color: "white",
+              fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
-              transition: "all 0.15s",
-              whiteSpace: "nowrap"
+              whiteSpace: "nowrap",
+              boxShadow: "0 4px 12px rgba(77,166,255,0.3)"
             }}
             type="button"
-            onClick={onCopyCode}
+            onClick={onShareCode}
           >
-            {codeCopied ? "✓ Nusxalandi" : "Nusxa"}
+            📨 Ulashish
           </button>
         </div>
 
