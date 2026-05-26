@@ -4,103 +4,62 @@ type DiffDisplayProps = {
 };
 
 export default function DiffDisplay({ correctAnswer, userAnswer }: DiffDisplayProps) {
-  const userClean = userAnswer.trim();
-  const correctClean = correctAnswer.trim();
-  const maxLen = Math.max(userClean.length, correctClean.length);
+  const user = userAnswer.trim();
+  const correct = correctAnswer.trim();
+
+  // Foydalanuvchi javobi to'g'ri javob bilan bir xil yoki ichida bo'lsa —
+  // faqat "Siz yozdingiz" ko'rsatamiz, qiyoslash keraksiz.
+  const isExactOrContains =
+    user.toLowerCase() === correct.toLowerCase() ||
+    correct.toLowerCase().includes(user.toLowerCase()) ||
+    user.toLowerCase().includes(correct.toLowerCase());
 
   return (
     <div style={{ width: "100%" }}>
-      <div
-        style={{
-          fontSize: "12px",
-          color: "var(--muted)",
-          marginBottom: "8px"
-        }}
-      >
+      {/* Foydalanuvchi javobi */}
+      <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "6px" }}>
         Siz yozdingiz:
       </div>
       <div
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "4px",
-          marginBottom: "16px"
+          fontSize: "18px",
+          fontWeight: 700,
+          color: "var(--success)",
+          background: "rgba(34,197,94,0.08)",
+          border: "1px solid rgba(34,197,94,0.2)",
+          borderRadius: "12px",
+          padding: "10px 14px",
+          marginBottom: isExactOrContains ? 0 : "14px",
+          lineHeight: 1.4,
+          wordBreak: "break-word"
         }}
       >
-        {Array.from({ length: maxLen }).map((_, index) => {
-          const char = userClean[index];
-          const isMatch = Boolean(char) && char.toLowerCase() === correctClean[index]?.toLowerCase();
-          const isMissing = !char;
-
-          return (
-            <div
-              key={index}
-              style={{
-                width: "32px",
-                height: "36px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "8px",
-                fontSize: "15px",
-                fontFamily: "monospace",
-                fontWeight: 600,
-                background: isMissing ? "var(--surface)" : isMatch ? "#0A2010" : "#200508",
-                color: isMissing ? "var(--border)" : isMatch ? "var(--success)" : "var(--error)",
-                border: `1px solid ${
-                  isMissing ? "var(--border)" : isMatch ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"
-                }`,
-                textDecoration: !isMissing && !isMatch ? "line-through" : "none"
-              }}
-            >
-              {char ?? ""}
-            </div>
-          );
-        })}
+        {user}
       </div>
 
-      <div
-        style={{
-          fontSize: "12px",
-          color: "var(--muted)",
-          marginBottom: "8px"
-        }}
-      >
-        To'g'ri yozilishi:
-      </div>
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "4px"
-        }}
-      >
-        {Array.from(correctClean).map((char, index) => {
-          const isMatch = char.toLowerCase() === userClean[index]?.toLowerCase();
-
-          return (
-            <div
-              key={`${char}-${index}`}
-              style={{
-                width: "32px",
-                height: "36px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "8px",
-                fontSize: "15px",
-                fontFamily: "monospace",
-                fontWeight: 600,
-                background: isMatch ? "#0A2010" : "#0D0203",
-                color: isMatch ? "var(--success)" : "var(--error)",
-                border: `1px solid ${isMatch ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`
-              }}
-            >
-              {char}
-            </div>
-          );
-        })}
-      </div>
+      {/* To'g'ri javob — faqat farq bo'lsa ko'rsatamiz */}
+      {!isExactOrContains && (
+        <>
+          <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "6px" }}>
+            To'g'ri javob:
+          </div>
+          <div
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "var(--warning)",
+              background: "rgba(245,158,11,0.08)",
+              border: "1px solid rgba(245,158,11,0.2)",
+              borderRadius: "12px",
+              padding: "10px 14px",
+              lineHeight: 1.4,
+              wordBreak: "break-word"
+            }}
+          >
+            {correct}
+          </div>
+        </>
+      )}
     </div>
   );
 }

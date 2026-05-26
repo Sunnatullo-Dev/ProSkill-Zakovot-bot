@@ -232,7 +232,7 @@ export async function submitAnswer(
     };
   }
 
-  const response = await request<SubmitAnswerApiResponse>("/answer", {
+  const response = await request<SubmitAnswerApiResponse>("/answer/", {
     method: "POST",
     body: { ticket, userAnswer, streak: streakBefore }
   });
@@ -313,7 +313,7 @@ export async function saveGameResult(input: SaveGameResultInput): Promise<void> 
   // etmaydi — natija backend'ga yetib boradi. fetch fire-and-forget'i
   // window.close()'dan keyin uzilib qoladi; keepalive shu darani yopadi.
   try {
-    await fetch(`${API_BASE_URL}/game-results`, {
+    await fetch(`${API_BASE_URL}/game-results/`, {
       method: "POST",
       headers: buildHeaders(),
       body: JSON.stringify(input),
