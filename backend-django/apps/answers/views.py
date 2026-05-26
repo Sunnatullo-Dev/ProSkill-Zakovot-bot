@@ -9,6 +9,7 @@ Replay attack himoyasi: har biletda noyob `jti` bor, submit'da
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 
@@ -23,6 +24,7 @@ from apps.questions.repositories import get_question_by_id
 from apps.users.repositories import add_score
 
 from .gemini import check_answer, explain_question, generate_tts
+from .models import TtsCache
 from .grading import GradingResult, exact_match_grade
 from .scoring import ScoreInput, calculate_answer_score
 from .tickets import consume_answer_ticket, issue_answer_ticket, verify_answer_ticket
@@ -171,11 +173,23 @@ def tts(request):
     if not isinstance(text, str) or not text.strip():
         raise AppError(400, "text talab qilinadi")
 
-    audio_bytes = generate_tts(text.strip()[:600])
+    text = text.strip()[:600]
+    text_hash = hashlib.sha256(text.encode()).hexdigest()
+
+    # Keshdan olish — bir xil savol uchun Gemini API qayta chaqirilmaydi
+    cached = TtsCache.objects.filter(text_hash=text_hash).first()
+    if cached:
+        return Response({"audio": cached.audio_b64, "mimeType": "audio/wav"})
+
+    audio_bytes = generate_tts(text)
     if audio_bytes is None:
         raise AppError(503, "TTS vaqtincha mavjud emas")
 
-    return Response({"audio": base64.b64encode(audio_bytes).decode(), "mimeType": "audio/wav"})
+    audio_b64 = base64.b64encode(audio_bytes).decode()
+    # Race condition xavfsiz: bir vaqtda ikki request kelsa, biri yutadi
+    TtsCache.objects.get_or_create(text_hash=text_hash, defaults={"audio_b64": audio_b64})
+
+    return Response({"audio": audio_b64, "mimeType": "audio/wav"})
 
 
 @api_view(["POST"])
