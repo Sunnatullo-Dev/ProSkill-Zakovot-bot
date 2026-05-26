@@ -1,5 +1,5 @@
 // Admin Panel uchun bulk savol fayl parseri.
-// Qo'llab-quvvatlanadigan fayl turlari: .json, .csv, .tsv, .txt, .xls, .xlsx
+// Qo'llab-quvvatlanadigan fayl turlari: .json, .csv, .tsv, .txt, .xls, .xlsx, .pdf
 // Har bitta savol uchun kerakli maydonlar: text, correctAnswer.
 // Ixtiyoriy: category, difficulty (easy|medium|hard).
 
@@ -72,6 +72,10 @@ export async function parseQuestionsFile(file: File): Promise<ParseResult> {
 
   if (ext === "xls" || ext === "xlsx") {
     return parseSpreadsheet(file);
+  }
+
+  if (ext === "pdf") {
+    return parsePdf(file);
   }
 
   // Tanilmagan kengaytma — matn deb urinib ko'ramiz.
@@ -319,6 +323,91 @@ function parseText(text: string): ParseResult {
   });
 
   return result;
+}
+
+async function parsePdf(file: File): Promise<ParseResult> {
+  const result: ParseResult = { format: "PDF", valid: [], invalid: [] };
+
+  // pdfjs-dist ni dinamik yuklash (bundle hajmini kamaytirish uchun)
+  let pdfjs: typeof import("pdfjs-dist");
+  try {
+    pdfjs = await import("pdfjs-dist");
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url
+    ).href;
+  } catch {
+    result.invalid.push({ row: 0, reason: "PDF kutubxonasini yuklab bo'lmadi" });
+    return result;
+  }
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const doc = await pdfjs.getDocument({ data: buffer }).promise;
+    let fullText = "";
+
+    for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+      const page = await doc.getPage(pageNum);
+      const content = await page.getTextContent();
+
+      // Y koordinatasi asosida yangi qatorlarni aniqlash
+      let lastY: number | null = null;
+      let lineText = "";
+
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        const { str, transform } = item as { str: string; transform: number[] };
+        const y = Math.round(transform[5]);
+
+        if (lastY !== null && Math.abs(y - lastY) > 1) {
+          fullText += lineText.trim() + "\n";
+          lineText = "";
+        }
+        lineText += str;
+        lastY = y;
+      }
+      if (lineText.trim()) fullText += lineText.trim() + "\n";
+      fullText += "\n";
+    }
+
+    return parseSavolJavob(fullText, result);
+  } catch {
+    result.invalid.push({ row: 0, reason: "PDF o'qib bo'lmadi yoki fayl buzilgan" });
+    return result;
+  }
+}
+
+// SAVOL: ... \n JAVOB: ... formatini parse qiladi.
+// Shuningdek "1. Savol | Javob" va oddiy matn formatini ham qo'llab-quvvatlaydi.
+function parseSavolJavob(text: string, result: ParseResult): ParseResult {
+  const savolJavobRe = /SAVOL\s*:\s*([\s\S]*?)JAVOB\s*:\s*([\s\S]*?)(?=SAVOL\s*:|$)/gi;
+  let match: RegExpExecArray | null;
+  let idx = 0;
+
+  while ((match = savolJavobRe.exec(text)) !== null) {
+    idx++;
+    const questionText = match[1].trim().replace(/\s+/g, " ");
+    const answerText = match[2].trim().replace(/\s+/g, " ");
+
+    const built = buildQuestion({
+      text: questionText,
+      answer: answerText,
+      category: "",
+      difficulty: ""
+    });
+
+    if (built.ok) {
+      result.valid.push(built.value);
+    } else {
+      result.invalid.push({ row: idx, reason: built.reason });
+    }
+  }
+
+  if (idx > 0) return result;
+
+  // SAVOL:/JAVOB: topilmasa — matn formatini sinab ko'ramiz
+  const fallback = parseText(text);
+  return { ...fallback, format: "PDF" };
 }
 
 async function parseSpreadsheet(file: File): Promise<ParseResult> {

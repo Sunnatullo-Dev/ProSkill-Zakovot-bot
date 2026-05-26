@@ -1036,7 +1036,7 @@ function QuestionsSection() {
     <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
       <input
         ref={fileInputRef}
-        accept=".json,.csv,.tsv,.txt,.xls,.xlsx"
+        accept=".json,.csv,.tsv,.txt,.xls,.xlsx,.pdf"
         style={{ display: "none" }}
         type="file"
         onChange={(event) => void handleFileChange(event)}
