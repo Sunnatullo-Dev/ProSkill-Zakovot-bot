@@ -350,6 +350,13 @@ export default function App() {
               "Backend HMAC failed yoki NODE_ENV != production.",
             tgRealId
           );
+          // Invite link orqali kelgan bo'lsa — team sahifasiga yo'naltir va
+          // u yerda qo'shilishga urinib ko'ramiz. Bloklash o'rniga aniqroq xato.
+          if (joinCode) {
+            setAutoJoinCode(joinCode);
+            setScreen("team");
+            return;
+          }
           setAuthBroken(true);
           return;
         }
@@ -706,10 +713,13 @@ export default function App() {
             <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[var(--card)] text-4xl">
               {"🔌"}
             </div>
-            <h1 className="text-xl font-black">Server bilan auth muvaffaqiyatsiz</h1>
+            <h1 className="text-xl font-black">Autentifikatsiya xatosi</h1>
             <p className="text-sm font-semibold text-[var(--muted)]">
-              Telegram sizni aniqladi (ID: {tgId}), lekin server tasdiqlay olmadi.
-              Bu Render serveridagi sozlama xatosi — quyidagilarni tekshiring:
+              Telegram sizni aniqladi (ID: {tgId}), lekin server tasdiqlayolmadi.
+              Ko'pincha sabab: initData eskirgan yoki Render env to'g'ri sozlanmagan.
+            </p>
+            <p className="text-xs text-[var(--muted)]">
+              Agar siz taklif havolasi orqali keldingiz — botni to'g'ridan-to'g'ri oching, keyin qayta urinib ko'ring.
             </p>
             <div
               className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 text-left text-xs font-mono"

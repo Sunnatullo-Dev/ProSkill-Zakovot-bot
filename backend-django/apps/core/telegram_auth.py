@@ -18,10 +18,10 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# initData abadiy yaroqli bo'lmasin: 24 soatdan keyin yangilanishi shart.
-# Bu replay attack oynasini kichraytiradi — masalan, log'dan yoki proxy'dan
-# bir marta o'g'irlangan initData abadiy ishlatilmasin.
-INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60
+# initData muddati: Telegram ba'zan invite link orqali ochilganda eski
+# cached initData yuboradi. 24 soat haddan tashqari qisqa — 7 kun ishlatamiz.
+# HMAC imzosi replay attack'dan himoyalaydi; auth_date faqat qo'shimcha himoya.
+INIT_DATA_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 
 
 @dataclass
@@ -100,7 +100,11 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
             logger.warning("verify_init_data: auth_date kelajakda (%ss farq)", age)
             return None
         if age > INIT_DATA_MAX_AGE_SECONDS:
-            logger.info("verify_init_data: initData muddati o'tgan (%ss eski)", age)
+            logger.warning(
+                "verify_init_data: initData muddati o'tgan (%ss = %.1f kun eski). "
+                "Telegram cached initData yuborishi mumkin. MAX_AGE: %ss",
+                age, age / 86400, INIT_DATA_MAX_AGE_SECONDS,
+            )
             return None
 
     user_json = pairs.get("user")
