@@ -139,6 +139,11 @@ export default function App() {
   const [roundScore, setRoundScore] = useState(0);
   const [lastFilter, setLastFilter] = useState<RoundFilter>(DEFAULT_FILTER);
   const [currentTicket, setCurrentTicket] = useState<string | null>(null);
+  // Ticket ref — handleSubmitAnswer closure stale state ushlashidan saqlanish uchun.
+  // A/B/C/D rejimida foydalanuvchi tugmani juda tez tap qiladi va useState
+  // hali yangilanmasdan oldin handleSubmitAnswer eski null ticket bilan
+  // chaqirilib qolar edi.
+  const currentTicketRef = useRef<string | null>(null);
   const [revealInfo, setRevealInfo] = useState<RevealInfo | null>(null);
   const [isRevealing, setIsRevealing] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
@@ -184,8 +189,10 @@ export default function App() {
     // ticket'ni qabul qilamiz — boshqalarni tashlab yuboramiz.
     const key = `${questionId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
     ticketRequestKeyRef.current = key;
+    currentTicketRef.current = null;
     void getAnswerTicket(questionId).then((ticket) => {
       if (ticketRequestKeyRef.current === key) {
+        currentTicketRef.current = ticket;
         setCurrentTicket(ticket);
       }
     });
@@ -220,7 +227,19 @@ export default function App() {
         stop();
 
         const submittedAnswer = userAnswer.trim();
-        const result = await submitAnswer(question, submittedAnswer, timeTaken, streak, currentTicket);
+
+        // Ticket'ni ref'dan o'qiymiz (state stale bo'lishi mumkin).
+        // Agar ticket hali kelmagan bo'lsa, 5 sekundgacha kutamiz.
+        let ticket = currentTicketRef.current;
+        if (!ticket) {
+          const start = Date.now();
+          while (!ticket && Date.now() - start < 5000) {
+            await new Promise((r) => setTimeout(r, 80));
+            ticket = currentTicketRef.current;
+          }
+        }
+
+        const result = await submitAnswer(question, submittedAnswer, timeTaken, streak, ticket);
 
         hapticResult(result.status);
 
@@ -277,6 +296,7 @@ export default function App() {
     setLastResult(null);
     setLastUserAnswer("");
     setQuestionIndex(nextIndex);
+    currentTicketRef.current = null;
     setCurrentTicket(null);
     setRevealInfo(null);
     setScreen("question");
@@ -506,6 +526,7 @@ export default function App() {
         setLastResult(null);
         setLastUserAnswer("");
         setLastFilter(filter);
+        currentTicketRef.current = null;
         setCurrentTicket(null);
         setRevealInfo(null);
         setScreen("question");
@@ -577,6 +598,7 @@ export default function App() {
     hapticTap();
     setExitConfirmOpen(false);
     setRevealInfo(null);
+    currentTicketRef.current = null;
     setCurrentTicket(null);
     reset();
     setScreen("home");
