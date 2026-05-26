@@ -176,18 +176,23 @@ def tts(request):
     text = text.strip()[:600]
     text_hash = hashlib.sha256(text.encode()).hexdigest()
 
-    # Keshdan olish — bir xil savol uchun Gemini API qayta chaqirilmaydi
-    cached = TtsCache.objects.filter(text_hash=text_hash).first()
-    if cached:
-        return Response({"audio": cached.audio_b64, "mimeType": "audio/wav"})
+    # Keshdan olish — jadval hali yaratilmagan bo'lsa (migration kutilmoqda) o'tkazib yuboramiz
+    try:
+        cached = TtsCache.objects.filter(text_hash=text_hash).first()
+        if cached:
+            return Response({"audio": cached.audio_b64, "mimeType": "audio/wav"})
+    except Exception:
+        pass
 
     audio_bytes = generate_tts(text)
     if audio_bytes is None:
         raise AppError(503, "TTS vaqtincha mavjud emas")
 
     audio_b64 = base64.b64encode(audio_bytes).decode()
-    # Race condition xavfsiz: bir vaqtda ikki request kelsa, biri yutadi
-    TtsCache.objects.get_or_create(text_hash=text_hash, defaults={"audio_b64": audio_b64})
+    try:
+        TtsCache.objects.get_or_create(text_hash=text_hash, defaults={"audio_b64": audio_b64})
+    except Exception:
+        pass  # Kesh saqlanmasa ham audio qaytariladi
 
     return Response({"audio": audio_b64, "mimeType": "audio/wav"})
 
