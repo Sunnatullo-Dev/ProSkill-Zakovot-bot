@@ -21,7 +21,29 @@ type TelegramState = {
   inTelegram: boolean;
   // Telegram ichida bo'lib, initData topib bo'lmadimi? (broken auth situation)
   initDataMissing: boolean;
+  // Debug diagnostika maydonlari — Profile diagnostic kartasi uchun.
+  debug: {
+    hasTelegram: boolean;
+    hasWebApp: boolean;
+    platform: string;
+    version: string;
+    hasInitData: boolean;
+    hasInitDataUnsafe: boolean;
+    rawUserId: number;
+  };
 };
+
+function emptyDebug() {
+  return {
+    hasTelegram: false,
+    hasWebApp: false,
+    platform: "",
+    version: "",
+    hasInitData: false,
+    hasInitDataUnsafe: false,
+    rawUserId: 0,
+  };
+}
 
 // Telegram WebApp ob'ekti bo'lsa-yu, biz haqiqatdan ham Telegram klientida ekanligimizni
 // bildiradigan belgi bormi? `platform === "unknown"` browser-mode (TWA SDK localda),
@@ -53,11 +75,14 @@ export function useTelegram(): TelegramState {
     error: "",
     tg,
     inTelegram: false,
-    initDataMissing: false
+    initDataMissing: false,
+    debug: emptyDebug()
   });
 
   useEffect(() => {
+    const hasTelegram = typeof window !== "undefined" && Boolean(window.Telegram);
     const webApp = window.Telegram?.WebApp ?? tg;
+    const hasWebApp = Boolean(webApp);
 
     // Web App SDK umuman yuklanmagan — sof browser rejimi (lokal dev, screenshot, va h.k.).
     if (!webApp?.ready || !webApp?.expand) {
@@ -69,7 +94,8 @@ export function useTelegram(): TelegramState {
         error: "",
         tg: null,
         inTelegram: false,
-        initDataMissing: false
+        initDataMissing: false,
+        debug: { ...emptyDebug(), hasTelegram, hasWebApp }
       });
       return;
     }
@@ -84,6 +110,8 @@ export function useTelegram(): TelegramState {
       const telegramSignals = hasTelegramSignals(webApp);
       const rawInitData = webApp.initData ?? "";
       const hasInitData = rawInitData.length > 0;
+      const unsafeUser = webApp.initDataUnsafe?.user;
+      const rawUserId = Number(unsafeUser?.id ?? 0);
 
       // Agar Telegram klientidamiz (platform haqiqiy yoki initDataUnsafe.user mavjud),
       // ammo signed initData yo'q bo'lsa — bu "guest" emas, bu BUZILGAN auth holati.
@@ -94,12 +122,21 @@ export function useTelegram(): TelegramState {
       setState({
         initData: hasInitData ? rawInitData : (telegramSignals ? "" : "guest"),
         isReady: true,
-        user: normalizeTelegramUser(webApp.initDataUnsafe?.user) ?? BROWSER_USER,
+        user: normalizeTelegramUser(unsafeUser) ?? BROWSER_USER,
         startParam: webApp.initDataUnsafe?.start_param ?? "",
         error: "",
         tg: webApp,
         inTelegram: realPlatform || telegramSignals,
-        initDataMissing: isBrokenAuth
+        initDataMissing: isBrokenAuth,
+        debug: {
+          hasTelegram,
+          hasWebApp: true,
+          platform: webApp.platform ?? "",
+          version: webApp.version ?? "",
+          hasInitData,
+          hasInitDataUnsafe: Boolean(webApp.initDataUnsafe),
+          rawUserId
+        }
       });
     } catch (error) {
       console.error("Telegram WebApp init failed", error);
@@ -111,7 +148,8 @@ export function useTelegram(): TelegramState {
         error: "",
         tg: null,
         inTelegram: false,
-        initDataMissing: false
+        initDataMissing: false,
+        debug: { ...emptyDebug(), hasTelegram, hasWebApp }
       });
     }
   }, []);

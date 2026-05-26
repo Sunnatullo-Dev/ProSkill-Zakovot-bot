@@ -161,7 +161,7 @@ export default function ProfileScreen({
   const [nameError, setNameError] = useState("");
   const [unlocks, setUnlocks] = useState<AchievementUnlock[]>([]);
   const [authStatus, setAuthStatus] = useState<WhoamiResponse | null>(null);
-  const { user: tgUser } = useTelegram();
+  const { user: tgUser, debug: tgDebug } = useTelegram();
   const checkedRef = useRef(false);
 
   // Telegram SDK'dan keladigan haqiqiy ID va backend'ning ko'rishini
@@ -372,6 +372,45 @@ export default function ProfileScreen({
               o'rnatilganmi tekshiring.
             </div>
           ) : null}
+
+          {/* Mehmon rejim — aniq sababini tekshiramiz. */}
+          {authStateGuest ? (
+            <div style={{ fontSize: "11px", color: "#FCD34D", marginTop: "8px", lineHeight: 1.5 }}>
+              <strong style={{ color: "#FCA5A5" }}>Telegram'dan foydalanuvchi ID kelmadi.</strong>
+              <div style={{ marginTop: "6px", padding: "6px 8px", background: "rgba(0,0,0,0.25)", borderRadius: "6px" }}>
+                {!tgDebug.hasTelegram ? (
+                  <span>
+                    ❌ <code>window.Telegram</code> mavjud emas.
+                    <br />→ Brauzerda emas, <b>Telegram ichida</b> oching: bot'da
+                    "🚀 Zakovat O'yinini Ochish" tugmasini bosing.
+                  </span>
+                ) : !tgDebug.hasWebApp ? (
+                  <span>
+                    ❌ <code>window.Telegram.WebApp</code> obyekti yo'q.
+                    <br />→ Telegram klientini yangilang yoki qayta o'rnating.
+                  </span>
+                ) : !tgDebug.hasInitDataUnsafe ? (
+                  <span>
+                    ❌ <code>initDataUnsafe</code> yo'q.
+                    <br />→ Mini-app linkdan ochildi. Bot menyu tugmasi orqali oching.
+                  </span>
+                ) : tgDebug.rawUserId === 0 ? (
+                  <span>
+                    ❌ Telegram foydalanuvchi ma'lumotlarini yubormadi.
+                    <br />→ Mini-app oddiy link orqali ochilgan. Bot'ning
+                    "🚀 Zakovat O'yinini Ochish" tugmasini bosib oching.
+                  </span>
+                ) : (
+                  <span>
+                    ⚠️ Platform: <code>{tgDebug.platform || "?"}</code>, version:{" "}
+                    <code>{tgDebug.version || "?"}</code>, initData:{" "}
+                    <code>{tgDebug.hasInitData ? "bor" : "yo'q"}</code>
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : null}
+
           {!authStatus.environment.isProduction ? (
             <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px", lineHeight: 1.4 }}>
               <span style={{ color: "#F59E0B", fontWeight: 700 }}>Diqqat:</span>{" "}
