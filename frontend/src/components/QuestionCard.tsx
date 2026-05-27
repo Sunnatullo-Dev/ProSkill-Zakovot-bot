@@ -25,6 +25,8 @@ type QuestionCardProps = {
   onGiveUp: () => void;
   onContinue: () => void;
   onExit: () => void;
+  /** TTS o'qib bo'lgandan keyin chaqiriladi — shu paytda taymer boshlanadi */
+  onTimerStart?: () => void;
 };
 
 const OPTION_LETTERS = ["A", "B", "C", "D"];
@@ -64,7 +66,8 @@ export default function QuestionCard({
   onSubmit,
   onGiveUp,
   onContinue,
-  onExit
+  onExit,
+  onTimerStart
 }: QuestionCardProps) {
   const [answer, setAnswer] = useState("");
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -107,7 +110,7 @@ export default function QuestionCard({
     };
   }, []);
 
-  const playBuffer = useCallback(() => {
+  const playBuffer = useCallback((onEnded?: () => void) => {
     const ctx = audioCtxRef.current;
     const buffer = audioBufferRef.current;
     if (!ctx || !buffer) return;
@@ -122,14 +125,17 @@ export default function QuestionCard({
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
-      source.onended = () => setIsPlayingTTS(false);
+      source.onended = () => {
+        setIsPlayingTTS(false);
+        onEnded?.();
+      };
       activeSourceRef.current = source;
       setIsPlayingTTS(true);
       source.start(0);
     };
 
     if (ctx.state === "suspended") {
-      ctx.resume().then(doPlay).catch(() => setIsPlayingTTS(false));
+      ctx.resume().then(doPlay).catch(() => { setIsPlayingTTS(false); onEnded?.(); });
     } else {
       doPlay();
     }
@@ -155,26 +161,34 @@ export default function QuestionCard({
     let cancelled = false;
     fetchTTS(question.text).then(async (result) => {
       if (cancelled) { setIsLoadingTTS(false); return; }
-      if (!result) { setIsLoadingTTS(false); return; }
+      // TTS mavjud bo'lmasa — taymerni darhol boshlash
+      if (!result) { setIsLoadingTTS(false); onTimerStart?.(); return; }
       try {
         const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0));
         const arrayBuf = addWavHeaderIfNeeded(bytes);
         const ctx = audioCtxRef.current;
-        if (!ctx) { setIsLoadingTTS(false); return; }
+        // AudioContext yo'q bo'lsa — taymerni darhol boshlash
+        if (!ctx) { setIsLoadingTTS(false); onTimerStart?.(); return; }
         const decoded = await ctx.decodeAudioData(arrayBuf);
         if (cancelled) return;
         audioBufferRef.current = decoded;
         setHasAudio(true);
         setIsLoadingTTS(false);
-        playBuffer();
+        // TTS tugaganda taymer boshlanadi (onTimerStart = callback)
+        playBuffer(onTimerStart);
       } catch (err) {
         console.error("[TTS] decode error:", err);
         setIsLoadingTTS(false);
+        // Decode xato bo'lsa ham — taymerni darhol boshlash
+        if (!cancelled) onTimerStart?.();
       }
+    }).catch(() => {
+      // Network xato — taymerni darhol boshlash
+      if (!cancelled) { setIsLoadingTTS(false); onTimerStart?.(); }
     });
 
     return () => { cancelled = true; };
-  }, [question.id, question.text, playBuffer]);
+  }, [question.id, question.text, playBuffer, onTimerStart]);
 
   // Klaviatura ochilganda VisualViewport viewport balandligi kichrayadi.
   // Bu eventni tutib, submit tugmasini ko'rinadigan joyga scroll qilamiz.
@@ -355,7 +369,7 @@ export default function QuestionCard({
               type="button"
               title="Savolni qayta eshitish"
               disabled={isLoadingTTS || !hasAudio}
-              onClick={playBuffer}
+              onClick={() => playBuffer()}
               style={{
                 width: "36px",
                 height: "36px",

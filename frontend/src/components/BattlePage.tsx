@@ -730,7 +730,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
               type="button"
               title="Savolni qayta eshitish"
               disabled={isLoadingTTS || !hasAudio}
-              onClick={playBuffer}
+              onClick={() => playBuffer()}
               style={{
                 width: "34px",
                 height: "34px",

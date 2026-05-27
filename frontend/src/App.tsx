@@ -162,11 +162,19 @@ export default function App() {
   // Stale ticket fetch'lardan himoya — har savolning o'z ticket fetch
   // belgisi bor; eski fetch keyin kelsa, biz uni e'tibordan chiqaramiz.
   const ticketRequestKeyRef = useRef<string | null>(null);
+  // TTS tugagandan keyin taymer boshlanadi — shu ref orqali nazorat qilamiz
+  const timerStartedRef = useRef(false);
   const handleTimerExpire = useCallback(() => {
     void submitAnswerRef.current?.("", ANSWER_TIMEOUT_MS + 1);
   }, []);
   const timer = useTimer(TIMER_SECONDS, handleTimerExpire);
   const { reset, start, stop, timeLeft } = timer;
+
+  // TTS o'qib bo'lgandan keyin chaqiriladi — taymer shu paytda boshlanadi
+  const handleTimerStartFromTTS = useCallback(() => {
+    timerStartedRef.current = true;
+    start();
+  }, [start]);
 
   const currentQuestion = roundQuestions[questionIndex] ?? null;
   const totalQuestions = roundQuestions.length;
@@ -273,7 +281,7 @@ export default function App() {
     setRevealInfo(null);
     setScreen("question");
     reset();
-    start();
+    timerStartedRef.current = false; // TTS tugaganda start() chaqiriladi
 
     const nextQuestion = roundQuestions[nextIndex];
     if (nextQuestion) {
@@ -502,7 +510,7 @@ export default function App() {
         setRevealInfo(null);
         setScreen("question");
         reset();
-        start();
+        timerStartedRef.current = false; // TTS tugaganda start() chaqiriladi
         fetchTicketFor(questions[0].id);
       } catch (error) {
         console.error("Start game failed", error);
@@ -577,7 +585,8 @@ export default function App() {
   function handleCancelExit() {
     setExitConfirmOpen(false);
 
-    if (screen === "question" && !revealInfo && !isRevealing) {
+    // Faqat TTS tugab taymer boshlangan bo'lsa resume qilamiz
+    if (screen === "question" && !revealInfo && !isRevealing && timerStartedRef.current) {
       start();
     }
   }
@@ -828,6 +837,7 @@ export default function App() {
             onGiveUp={handleGiveUp}
             onContinue={handleContinue}
             onExit={handleRequestExit}
+            onTimerStart={handleTimerStartFromTTS}
           />
         ) : null}
 
