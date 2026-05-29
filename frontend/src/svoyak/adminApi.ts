@@ -186,3 +186,25 @@ export async function adminDeleteQuestion(id: number): Promise<void> {
     method: "DELETE",
   });
 }
+
+
+// ─── Seed (one-time) ──────────────────────────────────────────────────────
+
+export type SeedResult = {
+  ok: boolean;
+  categoriesBefore: number;
+  categoriesAfter: number;
+  questionsBefore: number;
+  questionsAfter: number;
+  categoriesAdded: number;
+  questionsAdded: number;
+};
+
+/** Production'da boshlang'ich kategoriyalar va savollarni qo'shadi.
+ * Idempotent — mavjudini skip qiladi. force=true → matn bo'yicha yangilaydi. */
+export async function adminSeedDatabase(force: boolean = false): Promise<SeedResult> {
+  return request<SeedResult>("/svoyak/admin/seed", {
+    method: "POST",
+    body: { force },
+  });
+}

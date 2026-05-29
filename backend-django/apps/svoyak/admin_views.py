@@ -5,6 +5,7 @@ mini-app AdminPanel ichidan amalga oshiriladi.
 """
 from __future__ import annotations
 
+from django.core.management import call_command
 from django.db.models import Count
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -13,6 +14,44 @@ from apps.core.decorators import require_admin
 from apps.core.exceptions import AppError
 
 from .models import SvoyakCategory, SvoyakQuestion
+
+
+@api_view(["POST"])
+@require_admin
+def admin_seed(request):
+    """One-time seed — production database'ga kategoriyalar va savollarni
+    qo'shadi. Idempotent (mavjudini skip qiladi).
+
+    Admin AdminPanel'da "Seed bazani" tugmasi bosganda chaqiradi. Render
+    Procfile'dagi seed avtomatik ishlamasa (eski cache, fail bo'lsa va h.k.),
+    bu endpoint bilan qo'lda chaqirib seed qilish mumkin.
+    """
+    body = request.data if isinstance(request.data, dict) else {}
+    force = bool(body.get("force", False))
+
+    cats_before = SvoyakCategory.objects.count()
+    qs_before = SvoyakQuestion.objects.count()
+
+    try:
+        if force:
+            call_command("seed_svoyak", "--force", verbosity=0)
+        else:
+            call_command("seed_svoyak", verbosity=0)
+    except Exception as e:
+        raise AppError(500, f"Seed bajarib bo'lmadi: {e}")
+
+    cats_after = SvoyakCategory.objects.count()
+    qs_after = SvoyakQuestion.objects.count()
+
+    return Response({
+        "ok": True,
+        "categoriesBefore": cats_before,
+        "categoriesAfter": cats_after,
+        "questionsBefore": qs_before,
+        "questionsAfter": qs_after,
+        "categoriesAdded": max(0, cats_after - cats_before),
+        "questionsAdded": max(0, qs_after - qs_before),
+    })
 
 
 # ─── Kategoriyalar ──────────────────────────────────────────────────────────

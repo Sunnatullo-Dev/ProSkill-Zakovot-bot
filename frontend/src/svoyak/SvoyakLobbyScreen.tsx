@@ -329,7 +329,7 @@ export default function SvoyakLobbyScreen({
             {error ? (
               <div
                 style={{
-                  fontSize: "11px",
+                  fontSize: "10px",
                   color: "var(--muted)",
                   background: "rgba(0,0,0,0.30)",
                   padding: "10px",
@@ -339,7 +339,6 @@ export default function SvoyakLobbyScreen({
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                   fontFamily: "monospace",
-                  fontSize: "10px",
                 }}
               >
                 {error}

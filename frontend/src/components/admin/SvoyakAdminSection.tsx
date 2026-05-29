@@ -20,6 +20,7 @@ import {
   adminCreateQuestion,
   adminUpdateQuestion,
   adminDeleteQuestion,
+  adminSeedDatabase,
 } from "../../svoyak/adminApi";
 import type { AdminSvoyakCategory, AdminSvoyakQuestion } from "../../svoyak/adminApi";
 
@@ -151,6 +152,8 @@ function CategoriesTab() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<AdminSvoyakCategory | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const [seedMessage, setSeedMessage] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -192,6 +195,28 @@ function CategoriesTab() {
     }
   }
 
+  async function handleSeed(force: boolean) {
+    if (!window.confirm(
+      force
+        ? "Force seed: mavjud savollar matn bo'yicha yangilanadi. Davom etaylikmi?"
+        : "Bazaga 7 kategoriya va 90+ savol qo'shiladi (mavjud bo'lsa skip). Davom etaylikmi?"
+    )) return;
+    setSeeding(true);
+    setSeedMessage(null);
+    try {
+      const r = await adminSeedDatabase(force);
+      setSeedMessage(
+        `✓ Bajarildi. Kategoriya: ${r.categoriesBefore} → ${r.categoriesAfter} (+${r.categoriesAdded}). ` +
+        `Savol: ${r.questionsBefore} → ${r.questionsAfter} (+${r.questionsAdded}).`
+      );
+      await load();
+    } catch (err) {
+      setSeedMessage("❌ " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setSeeding(false);
+    }
+  }
+
   if (loading) {
     return <div style={{ padding: "20px", textAlign: "center", color: "var(--muted)" }}>Yuklanmoqda...</div>;
   }
@@ -205,15 +230,76 @@ function CategoriesTab() {
 
   return (
     <div>
+      {/* Seed panel — production'da bo'sh bazani to'ldirish uchun */}
+      {items.length === 0 ? (
+        <div
+          style={{
+            padding: "14px",
+            background: "rgba(245,200,66,0.08)",
+            border: "1.5px solid rgba(245,200,66,0.30)",
+            borderRadius: "12px",
+            marginBottom: "14px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "13px", color: "var(--text)", marginBottom: "10px", fontWeight: 700 }}>
+            🌱 Baza bo'sh
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginBottom: "10px" }}>
+            Boshlang'ich 7 kategoriya va 90+ savol bilan to'ldirish mumkin.
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSeed(false)}
+            disabled={seeding}
+            style={primaryButton(seeding)}
+          >
+            {seeding ? "Yuklanmoqda..." : "✨ Bazani seed qilish"}
+          </button>
+        </div>
+      ) : null}
+
+      {seedMessage ? (
+        <div
+          style={{
+            padding: "10px 12px",
+            background: seedMessage.startsWith("✓") ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)",
+            border: `1px solid ${seedMessage.startsWith("✓") ? "rgba(34,197,94,0.40)" : "rgba(239,68,68,0.40)"}`,
+            borderRadius: "10px",
+            marginBottom: "12px",
+            fontSize: "12px",
+            color: "var(--text)",
+            lineHeight: 1.4,
+          }}
+        >
+          {seedMessage}
+        </div>
+      ) : null}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
         <div style={{ fontSize: "13px", color: "var(--muted)" }}>{items.length} ta kategoriya</div>
-        <button
-          type="button"
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={primaryButton()}
-        >
-          + Yangi
-        </button>
+        <div style={{ display: "flex", gap: "6px" }}>
+          {items.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => handleSeed(false)}
+              disabled={seeding}
+              style={{
+                ...ghostButton,
+                opacity: seeding ? 0.5 : 1,
+              }}
+            >
+              {seeding ? "..." : "🌱 Seed"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            style={primaryButton()}
+          >
+            + Yangi
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

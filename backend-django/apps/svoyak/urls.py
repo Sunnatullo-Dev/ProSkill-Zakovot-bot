@@ -7,6 +7,7 @@ urlpatterns = [
     # Public catalog
     path("categories", views.list_categories),
     # Admin CRUD
+    path("admin/seed", admin_views.admin_seed),
     path("admin/categories", admin_views.admin_categories),
     path("admin/categories/<int:category_id>", admin_views.admin_category_detail),
     path("admin/questions", admin_views.admin_questions),
