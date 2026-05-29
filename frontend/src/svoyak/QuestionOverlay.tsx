@@ -11,6 +11,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { useTTS } from "./useTTS";
 
 type Props = {
   /** Mavzu nomi (yuqorida ko'rinadi). */
@@ -26,6 +27,10 @@ type Props = {
   timeLimitSeconds?: number;
   /** Ostida ko'rinadigan slot (BUZZ tugma, javob input va h.k.). */
   children?: ReactNode;
+  /** TTS'ni avtomatik boshlash (default: true). */
+  autoSpeak?: boolean;
+  /** TTS tugagandan keyin callback (host uchun open_buzz). */
+  onSpeakEnd?: () => void;
 };
 
 const TIMER_DEFAULT_SECONDS = 15;
@@ -116,7 +121,20 @@ export default function QuestionOverlay({
   startedAt,
   timeLimitSeconds = TIMER_DEFAULT_SECONDS,
   children,
+  autoSpeak = true,
+  onSpeakEnd,
 }: Props) {
+  // TTS — savol matnini ovozli o'qish
+  const tts = useTTS({ lang: "uz", onEnd: onSpeakEnd });
+  const lastSpokenRef = useRef<string>("");
+  useEffect(() => {
+    if (!autoSpeak) return;
+    if (!questionText) return;
+    if (lastSpokenRef.current === questionText) return;
+    lastSpokenRef.current = questionText;
+    tts.speak(questionText);
+  }, [autoSpeak, questionText, tts]);
+
   // Taymer: server tomondan startedAt ISO timestamp keladi. Mahalliy interval
   // har 100ms qoldiq vaqtni qayta hisoblaydi. Bu drift'siz va polling
   // bilan sinxron qoldiruvchi yagona to'g'ri yo'l.
@@ -176,13 +194,35 @@ export default function QuestionOverlay({
         />
       </div>
 
-      {/* Yuqori panel: kategoriya + ball + taymer raqami */}
+      {/* Yuqori panel: kategoriya + mute + ball */}
       <div style={HEADER_ROW}>
         <div style={CATEGORY_TAG}>
           <span style={{ fontSize: "16px" }}>{categoryIcon}</span>
           <span>{categoryName}</span>
         </div>
-        <div style={VALUE_BADGE}>{value}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {tts.supported ? (
+            <button
+              type="button"
+              onClick={tts.toggleMute}
+              aria-label={tts.isMuted ? "Ovozni yoqish" : "Ovozni o'chirish"}
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                border: "1px solid rgba(255,255,255,0.18)",
+                background: "rgba(0,0,0,0.30)",
+                color: tts.isMuted ? "rgba(255,255,255,0.40)" : "var(--svoyak-gold, #f5c842)",
+                fontSize: "16px",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              {tts.isMuted ? "🔇" : tts.isSpeaking ? "🔊" : "🔈"}
+            </button>
+          ) : null}
+          <div style={VALUE_BADGE}>{value}</div>
+        </div>
       </div>
 
       {/* Savol matni */}

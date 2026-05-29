@@ -8,8 +8,10 @@
 import { useState } from "react";
 import QuestionOverlay from "./QuestionOverlay";
 import BuzzOverlay from "./BuzzOverlay";
+import AnswerOverlay from "./AnswerOverlay";
+import RoundResultOverlay from "./RoundResultOverlay";
 
-type Stage = "reading" | "waiting_buzz" | "winner" | "blocked";
+type Stage = "reading" | "waiting_buzz" | "winner" | "blocked" | "answering" | "correct" | "wrong";
 
 const DEMO_QUESTION =
   "Amir Temur saltanati poytaxti qaysi shahar edi va u qaysi yilda asoschisi tomonidan tanlangan?";
@@ -43,7 +45,7 @@ export default function SvoyakDemoScreen() {
           flexWrap: "wrap",
         }}
       >
-        {(["reading", "waiting_buzz", "winner", "blocked"] as Stage[]).map((s) => (
+        {(["reading", "waiting_buzz", "winner", "answering", "blocked", "correct", "wrong"] as Stage[]).map((s) => (
           <button
             key={s}
             onClick={() => resetTimer(s)}
@@ -88,7 +90,38 @@ export default function SvoyakDemoScreen() {
         {stage === "blocked" ? (
           <BuzzOverlay state="blocked" onPress={async () => {}} blockedBy="Alice" />
         ) : null}
+
+        {stage === "answering" ? (
+          <AnswerOverlay
+            options={["Saljuqiylar", "Sheyboniylar", "Temuriylar", "Shayboniylar"]}
+            onAnswer={async (a) => {
+              resetTimer(a === "Temuriylar" ? "correct" : "wrong");
+            }}
+            onSkip={() => resetTimer("wrong")}
+          />
+        ) : null}
       </QuestionOverlay>
+
+      {stage === "correct" ? (
+        <RoundResultOverlay
+          correct={true}
+          scoreDelta={30}
+          correctAnswer="Temuriylar"
+          onDismiss={() => resetTimer("reading")}
+          autoDismissMs={0}
+        />
+      ) : null}
+
+      {stage === "wrong" ? (
+        <RoundResultOverlay
+          correct={false}
+          scoreDelta={-30}
+          correctAnswer="Temuriylar"
+          userAnswer="Shayboniylar"
+          onDismiss={() => resetTimer("reading")}
+          autoDismissMs={0}
+        />
+      ) : null}
     </div>
   );
 }

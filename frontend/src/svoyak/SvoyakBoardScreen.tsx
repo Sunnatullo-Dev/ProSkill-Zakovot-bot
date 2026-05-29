@@ -8,7 +8,7 @@
  * Day 5'da bu ekran ustiga BUZZ overlay va Question overlay qo'shiladi.
  * Hozircha ko'rsatish + pick mexanikasi.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { buzz, endGame, openBuzz, pickQuestion, skipRound, submitAnswer } from "./api";
 import { useSvoyakRoom } from "./useSvoyakRoom";
@@ -17,6 +17,8 @@ import { SVOYAK_VALUE_TIERS } from "./types";
 import { hapticSelect, hapticTap } from "../utils/haptics";
 import QuestionOverlay from "./QuestionOverlay";
 import BuzzOverlay from "./BuzzOverlay";
+import AnswerOverlay from "./AnswerOverlay";
+import RoundResultOverlay from "./RoundResultOverlay";
 
 type Props = {
   code: string;
@@ -132,6 +134,22 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
   const showOverlay =
     round && (round.status === "reading" || round.status === "waiting_buzz" || round.status === "answering");
 
+  // ─────── Round result flash ────────────
+  // Round 'completed'/'skipped' bo'lganda 2.4s flash. Bir round uchun bir
+  // marta — id'ni ref'da saqlab dismiss bo'lgach takror ko'rinmaydi.
+  const [dismissedResultRoundId, setDismissedResultRoundId] = useState<number | null>(null);
+  const showResultOverlay =
+    round &&
+    (round.status === "completed" || round.status === "skipped") &&
+    dismissedResultRoundId !== round.id;
+  // Yangi round boshlansa eski dismiss state'ni tozalab qo'yamiz.
+  useEffect(() => {
+    if (round && round.status !== "completed" && round.status !== "skipped") {
+      setDismissedResultRoundId(null);
+    }
+  }, [round?.id, round?.status]);
+
+
   // BUZZ holatini hisoblash (joriy o'yinchi ko'zi orqali)
   function buzzStateForViewer(): "waiting" | "active" | "blocked" | "winner" {
     if (!round) return "waiting";
@@ -225,11 +243,6 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
           );
         })}
       </div>
-
-      {/* Tugagan raund natijasi (qisqa flash) */}
-      {round && (round.status === "completed" || round.status === "skipped") ? (
-        <RoundResult round={round} />
-      ) : null}
 
       {/* Board grid */}
       <div
@@ -373,7 +386,7 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
 
         {round.status === "answering" ? (
           meIsWinner ? (
-            <AnswerInput
+            <AnswerOverlay
               options={round.options}
               onAnswer={handleAnswer}
               onSkip={handleSkip}
@@ -384,187 +397,19 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
         ) : null}
       </QuestionOverlay>
     ) : null}
+
+    {/* Round result flash — completed/skipped, bir round uchun bir marta */}
+    {showResultOverlay && round ? (
+      <RoundResultOverlay
+        correct={round.status === "skipped" ? null : round.answerCorrect === true}
+        scoreDelta={round.scoreDelta}
+        correctAnswer={round.correctAnswer}
+        userAnswer={null}
+        onDismiss={() => setDismissedResultRoundId(round.id)}
+      />
+    ) : null}
     </>
   );
 }
 
 
-function AnswerInput(props: {
-  options: string[];
-  onAnswer: (a: string) => void;
-  onSkip: () => void;
-}) {
-  const letters = ["A", "B", "C", "D"];
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-      <div style={{ fontSize: "11px", color: "var(--svoyak-neon-green)", textAlign: "center", marginBottom: "4px" }}>
-        ✋ Siz javob beryapsiz
-      </div>
-      {props.options.length === 4 ? (
-        props.options.map((opt, i) => (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => props.onAnswer(opt)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              padding: "11px 14px",
-              borderRadius: "10px",
-              border: "1px solid var(--svoyak-border)",
-              background: "rgba(255,255,255,0.05)",
-              color: "var(--text)",
-              fontSize: "14px",
-              fontWeight: 700,
-              textAlign: "left",
-              cursor: "pointer",
-            }}
-          >
-            <span
-              style={{
-                width: "26px",
-                height: "26px",
-                borderRadius: "50%",
-                background: "var(--svoyak-gold, #f5c842)",
-                color: "#0B0B14",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 900,
-                fontSize: "12px",
-              }}
-            >
-              {letters[i]}
-            </span>
-            <span style={{ flex: 1 }}>{opt}</span>
-          </button>
-        ))
-      ) : (
-        <FreeAnswer onAnswer={props.onAnswer} />
-      )}
-      <button
-        type="button"
-        onClick={props.onSkip}
-        style={{
-          marginTop: "4px",
-          padding: "9px",
-          borderRadius: "10px",
-          border: "1px dashed rgba(255,255,255,0.15)",
-          background: "transparent",
-          color: "var(--muted)",
-          fontSize: "12px",
-          cursor: "pointer",
-        }}
-      >
-        Bilmadim — o'tkazib yuborish
-      </button>
-    </div>
-  );
-}
-
-
-function FreeAnswer(props: { onAnswer: (a: string) => void }) {
-  // A/B/C/D options bo'lmagan hollar uchun erkin matn
-  return <FreeAnswerControlled onAnswer={props.onAnswer} />;
-}
-
-
-function FreeAnswerControlled(props: { onAnswer: (a: string) => void }) {
-  // Inline state — minimal
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const input = e.currentTarget.elements.namedItem("ans") as HTMLInputElement | null;
-        if (input && input.value.trim()) {
-          props.onAnswer(input.value.trim());
-        }
-      }}
-      style={{ display: "flex", flexDirection: "column", gap: "8px" }}
-    >
-      <input
-        name="ans"
-        autoFocus
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="none"
-        spellCheck={false}
-        enterKeyHint="send"
-        placeholder="Javobingiz..."
-        style={{
-          width: "100%",
-          padding: "12px 14px",
-          borderRadius: "10px",
-          border: "1px solid var(--svoyak-border)",
-          background: "rgba(0,0,0,0.25)",
-          color: "var(--text)",
-          fontSize: "15px",
-          outline: "none",
-        }}
-      />
-      <button
-        type="submit"
-        style={{
-          padding: "11px",
-          borderRadius: "10px",
-          border: "none",
-          background: "var(--svoyak-gold, #f5c842)",
-          color: "#0B0B14",
-          fontWeight: 900,
-          cursor: "pointer",
-        }}
-      >
-        Yuborish
-      </button>
-    </form>
-  );
-}
-
-
-function RoundResult(props: { round: NonNullable<SvoyakRoomState["currentRound"]> }) {
-  const { round } = props;
-  const correct = round.answerCorrect === true;
-  const skipped = round.status === "skipped";
-  return (
-    <div
-      style={{
-        background: skipped
-          ? "rgba(255,170,28,0.10)"
-          : correct
-          ? "rgba(34,224,127,0.12)"
-          : "rgba(255,59,92,0.12)",
-        border: skipped
-          ? "1px solid rgba(255,170,28,0.40)"
-          : correct
-          ? "1px solid rgba(34,224,127,0.40)"
-          : "1px solid rgba(255,59,92,0.40)",
-        borderRadius: "14px",
-        padding: "14px",
-        marginBottom: "10px",
-        textAlign: "center",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--svoyak-font-heading)",
-          fontSize: "20px",
-          fontWeight: 900,
-          color: skipped
-            ? "var(--svoyak-warning, #ffaa1c)"
-            : correct
-            ? "var(--svoyak-neon-green, #22e07f)"
-            : "var(--svoyak-neon-red, #ff3b5c)",
-        }}
-      >
-        {skipped ? "⏭ O'tkazildi" : correct ? "✓ To'g'ri" : "✗ Noto'g'ri"}
-        {round.scoreDelta !== null && round.scoreDelta !== 0 ? ` (${round.scoreDelta > 0 ? "+" : ""}${round.scoreDelta})` : ""}
-      </div>
-      {round.correctAnswer ? (
-        <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "6px" }}>
-          To'g'ri javob: <b style={{ color: "var(--text)" }}>{round.correctAnswer}</b>
-        </div>
-      ) : null}
-    </div>
-  );
-}
