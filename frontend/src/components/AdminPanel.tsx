@@ -21,6 +21,7 @@ import type {
 } from "../api/client";
 import type { Difficulty, ReportedQuestion } from "../types";
 import ConfirmDialog from "./ConfirmDialog";
+import SvoyakAdminSection from "./admin/SvoyakAdminSection";
 import {
   AlertIcon,
   CheckCircleIcon,
@@ -48,7 +49,7 @@ type AdminPanelProps = {
   onExitToUser: () => void;
 };
 
-type Section = "dashboard" | "questions" | "reports" | "categories";
+type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak";
 
 type SectionMeta = {
   id: Section;
@@ -86,6 +87,13 @@ const SECTIONS: SectionMeta[] = [
     Icon: TagIcon,
     accent: "#A78BFA",
     subtitle: "Kategoriyalarni ko'rish va qayta nomlash"
+  },
+  {
+    id: "svoyak",
+    label: "Svoyak",
+    Icon: ControllerIcon,
+    accent: "#F5C842",
+    subtitle: "Svoyak kategoriyalari va savollar bazasi"
   }
 ];
 
@@ -370,6 +378,7 @@ export default function AdminPanel({ onExitToUser }: AdminPanelProps) {
           {section === "questions" ? <QuestionsSection /> : null}
           {section === "reports" ? <ReportsSection /> : null}
           {section === "categories" ? <CategoriesSection /> : null}
+          {section === "svoyak" ? <SvoyakAdminSection /> : null}
         </div>
       </div>
     </div>

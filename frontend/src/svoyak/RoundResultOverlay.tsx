@@ -89,7 +89,9 @@ export default function RoundResultOverlay({
     <div
       style={{
         ...PAGE,
-        background: `radial-gradient(60% 50% at 50% 50%, ${bgColor}, rgba(5,10,24,0.95))`,
+        // Ostidagi QuestionOverlay'ni to'liq yopadi — solid dark base + radial accent.
+        backgroundColor: "#050a18",
+        backgroundImage: `radial-gradient(60% 50% at 50% 50%, ${bgColor}, transparent 70%)`,
         opacity: visible ? 1 : 0,
         transition: "opacity 0.22s ease",
       }}
