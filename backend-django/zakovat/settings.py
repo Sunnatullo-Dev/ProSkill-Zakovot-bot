@@ -221,14 +221,26 @@ if IS_PRODUCTION:
         _cors_origins.append(FRONTEND_URL)
     CORS_ALLOWED_ORIGINS = _cors_origins
     CORS_ALLOWED_ORIGIN_REGEXES = [
-        # Vercel deployment'lari (Preview va Production)
-        r"^https://[\w-]+\.vercel\.app$",
-        # Netlify deployment'lari
-        r"^https://[\w-]+\.netlify\.app$",
-        # Render frontend (statik sayt)
-        r"^https://[\w-]+\.onrender\.com$",
+        # Vercel deployment'lari (Preview va Production) — multi-subdomain ham
+        r"^https://[\w-]+(\.[\w-]+)*\.vercel\.app$",
+        # Netlify deployment'lari — multi-subdomain ham
+        r"^https://[\w-]+(\.[\w-]+)*\.netlify\.app$",
+        # Render frontend (statik sayt) — multi-subdomain ham
+        r"^https://[\w-]+(\.[\w-]+)*\.onrender\.com$",
+        # GitHub Pages
+        r"^https://[\w-]+\.github\.io$",
+        # Cloudflare Pages
+        r"^https://[\w-]+\.pages\.dev$",
+        # Telegram'ning WebView ba'zan `null` origin yuboradi (ba'zi qurilmalar)
+        # — bu uchun corsheaders allow_null_origin yo'q, lekin allow_all
+        # qoldirilsa xavfsizlik buziladi. Buning o'rniga frontend tomondan
+        # initData HMAC tekshirish himoya bo'ladi.
     ]
     CORS_ALLOW_CREDENTIALS = True
+    # X-Dev-Tid headerni dev test uchun ruxsat etamiz (production'da middleware
+    # IS_PRODUCTION bo'lsa bypass o'tkazib yuboradi — xavfsiz).
+    from corsheaders.defaults import default_headers
+    CORS_ALLOW_HEADERS = list(default_headers) + ["x-dev-tid"]
     if not _cors_origins:
         print(
             "[settings] WARNING: FRONTEND_URL o'rnatilmagan. Faqat Vercel/"
