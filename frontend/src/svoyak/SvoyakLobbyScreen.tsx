@@ -259,6 +259,58 @@ export default function SvoyakLobbyScreen({
     }
   }
 
+  /**
+   * Telegram kontakt taklif qilish.
+   *
+   * Telegram WebApp.switchInlineQuery — foydalanuvchining chat ro'yxati
+   * ochiladi, foydalanuvchi kontaktni tanlasa bot inline natija sifatida
+   * o'yin havolasini yuboradi. Bot esa /start svoyak_CODE bilan kelgan
+   * foydalanuvchini avtomatik xonaga qo'shadi (deep link).
+   *
+   * Eski telegram client'larda yoki desktop'da switchInlineQuery yo'q —
+   * shu holda openTelegramLink yoki share URL fallback.
+   */
+  function handleInvite() {
+    if (!activeCode) return;
+    hapticTap();
+    const tg = typeof window !== "undefined" ? (window as any).Telegram?.WebApp : null;
+    const botUsername = "ZakovatApp_bot"; // ?startapp= deep link uchun
+    const startParam = `svoyak_${activeCode}`;
+    const inviteText = `🎲 Svoyak'ga qo'shiling — kod: ${activeCode}`;
+
+    // 1) Birinchi tanlov: switchInlineQuery — kontakt picker ochiladi
+    if (tg?.switchInlineQuery) {
+      try {
+        tg.switchInlineQuery(startParam, ["users", "groups", "channels"]);
+        return;
+      } catch (err) {
+        console.warn("[svoyak] switchInlineQuery xato:", err);
+      }
+    }
+
+    // 2) Fallback: openTelegramLink (t.me/share/url) — share dialog
+    const shareUrl =
+      `https://t.me/share/url?` +
+      `url=${encodeURIComponent(`https://t.me/${botUsername}?startapp=${startParam}`)}` +
+      `&text=${encodeURIComponent(inviteText)}`;
+    if (tg?.openTelegramLink) {
+      try {
+        tg.openTelegramLink(shareUrl);
+        return;
+      } catch (err) {
+        console.warn("[svoyak] openTelegramLink xato:", err);
+      }
+    }
+
+    // 3) Eng oxirgi fallback: clipboard'ga link nusxalash
+    const fullLink = `https://t.me/${botUsername}?startapp=${startParam}`;
+    void navigator.clipboard?.writeText(fullLink).then(() => {
+      alert("Taklif havolasi nusxalandi:\n" + fullLink);
+    }).catch(() => {
+      alert("Taklif havolasi:\n" + fullLink);
+    });
+  }
+
   // ────────────────────────────────────────────────────────────────────────
 
   if (mode === "menu") {
@@ -571,23 +623,42 @@ export default function SvoyakLobbyScreen({
         >
           {activeCode}
         </div>
-        <button
-          type="button"
-          onClick={handleCopyCode}
-          style={{
-            marginTop: "10px",
-            padding: "8px 16px",
-            borderRadius: "999px",
-            border: "1px solid rgba(255,255,255,0.15)",
-            background: "rgba(255,255,255,0.05)",
-            color: "var(--text)",
-            fontSize: "12px",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          📋 Nusxalash
-        </button>
+        <div style={{ display: "flex", gap: "8px", marginTop: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={handleInvite}
+            style={{
+              padding: "10px 18px",
+              borderRadius: "999px",
+              border: "none",
+              background: "linear-gradient(135deg, #4DA6FF 0%, #2C6FCC 100%)",
+              color: "#FFFFFF",
+              fontFamily: "var(--svoyak-font-heading)",
+              fontSize: "13px",
+              fontWeight: 800,
+              cursor: "pointer",
+              boxShadow: "0 6px 18px -4px rgba(77,166,255,0.45)",
+            }}
+          >
+            ✉️ Do'stni taklif qilish
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyCode}
+            style={{
+              padding: "10px 14px",
+              borderRadius: "999px",
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "rgba(255,255,255,0.05)",
+              color: "var(--text)",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            📋 Nusxalash
+          </button>
+        </div>
       </div>
 
       {/* O'yinchilar */}

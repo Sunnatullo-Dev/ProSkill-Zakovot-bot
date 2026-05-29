@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import SvoyakLobbyScreen from "./SvoyakLobbyScreen";
 import SvoyakBoardScreen from "./SvoyakBoardScreen";
+import SvoyakErrorBoundary from "./SvoyakErrorBoundary";
 import type { SvoyakRoomState } from "./types";
 
 type Props = {
@@ -35,28 +36,32 @@ export default function SvoyakRouter({
   // Deep link bilan kelganida lobby'ni "joining" rejimida ochish — bu SvoyakLobbyScreen
   // ichida prop bilan hal qilingan.
 
-  if (stage.kind === "lobby") {
-    return (
-      <SvoyakLobbyScreen
-        playerName={playerName}
-        initialJoinCode={initialJoinCode}
-        onGameStarted={(state) => setStage({ kind: "board", code: state.code })}
-      />
-    );
-  }
-
-  if (stage.kind === "board") {
-    return (
-      <SvoyakBoardScreen
-        code={stage.code}
-        onGameEnded={(state) => setStage({ kind: "finished", state })}
-        onExit={onExitSvoyak}
-      />
-    );
-  }
-
-  // finished
-  return <SvoyakFinished state={stage.state} onPlayAgain={() => setStage({ kind: "lobby" })} onExit={onExitSvoyak} />;
+  // Hammasi error boundary bilan o'ralgan — render xatosi bo'lsa qora ekran
+  // o'rniga foydalanuvchiga ko'rinadigan xato + Qayta urinish tugma. onReset
+  // butun routerni lobby holatiga qaytaradi.
+  return (
+    <SvoyakErrorBoundary onReset={() => setStage({ kind: "lobby" })}>
+      {stage.kind === "lobby" ? (
+        <SvoyakLobbyScreen
+          playerName={playerName}
+          initialJoinCode={initialJoinCode}
+          onGameStarted={(state) => setStage({ kind: "board", code: state.code })}
+        />
+      ) : stage.kind === "board" ? (
+        <SvoyakBoardScreen
+          code={stage.code}
+          onGameEnded={(state) => setStage({ kind: "finished", state })}
+          onExit={onExitSvoyak}
+        />
+      ) : (
+        <SvoyakFinished
+          state={stage.state}
+          onPlayAgain={() => setStage({ kind: "lobby" })}
+          onExit={onExitSvoyak}
+        />
+      )}
+    </SvoyakErrorBoundary>
+  );
 }
 
 

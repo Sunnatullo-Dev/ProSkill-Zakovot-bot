@@ -47,7 +47,7 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
 
   const canPick = useMemo(() => {
     if (!data) return false;
-    const me = data.players.find((p) => p.telegramId === data.viewerTelegramId);
+    const me = (data.players ?? []).find((p) => p.telegramId === data.viewerTelegramId);
     return Boolean(me?.canPick);
   }, [data]);
 
@@ -127,7 +127,10 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
   }
 
   // ─────── Scoreboard ────────────
-  const sortedPlayers = [...data.players].sort((a, b) => b.score - a.score);
+  // Defensiv: data.players/board kelmasa bo'sh ro'yxat — qora ekran o'rniga.
+  const players = Array.isArray(data.players) ? data.players : [];
+  const board = Array.isArray(data.board) ? data.board : [];
+  const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   // ─────── Overlay: aktiv raund ────────────
   // Status reading / waiting_buzz / answering — to'liq ekran overlay.
@@ -169,7 +172,7 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
   // Bloklagan o'yinchi ismi (winner)
   const blockedBy = useMemo(() => {
     if (!round || !round.buzzWinnerTelegramId) return undefined;
-    const w = data.players.find((p) => p.telegramId === round.buzzWinnerTelegramId);
+    const w = (data.players ?? []).find((p) => p.telegramId === round.buzzWinnerTelegramId);
     return w?.displayName;
   }, [round, data.players]);
 
@@ -179,7 +182,9 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
     // Round'da kategoriya ID yo'q, lekin questionId orqali topib bo'lmaydi.
     // Doska har kategoriya uchun usedValueTiers'ga round.value qo'shilgan
     // bo'lishi kerak — eng yangi ishlatilgan tier'ga ega kategoriyani topamiz.
-    const cellsWithThisValue = data.board.filter((b) => b.usedValueTiers.includes(round.value));
+    const cellsWithThisValue = (data.board ?? []).filter(
+      (b) => Array.isArray(b.usedValueTiers) && b.usedValueTiers.includes(round.value)
+    );
     // Bir nechta bo'lsa — birinchisini olamiz (oddiy fallback).
     return cellsWithThisValue[0] ?? null;
   }, [round, data.board]);
@@ -258,7 +263,7 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
           {canPick ? "MAVZU VA BALLNI TANLANG" : "BOSHQA O'YINCHI TANLAMOQDA..."}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {data.board.map((cell) => (
+          {board.map((cell) => (
             <div key={cell.categoryId} style={{ display: "flex", gap: "6px", alignItems: "center" }}>
               <div
                 style={{
