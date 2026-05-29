@@ -362,6 +362,28 @@ export default function SvoyakLobbyScreen({
             </button>
           </div>
         ) : (
+          <>
+          {categories.every((c) => !c.ready) ? (
+            <div
+              style={{
+                padding: "14px",
+                background: "rgba(255,170,28,0.10)",
+                border: "1.5px solid rgba(255,170,28,0.35)",
+                borderRadius: "12px",
+                marginBottom: "12px",
+                fontSize: "12px",
+                color: "var(--text)",
+                lineHeight: 1.5,
+              }}
+            >
+              ⚠️ <b>Hech qaysi kategoriyada yetarli savol yo'q</b> (har biri uchun
+              kamida 5 ta savol kerak — har bal qiymati 10/20/30/40/50 ga bittadan).
+              <br /><br />
+              Admin sifatida pastdagi <b>Admin</b> tugmasini bosing → <b>Svoyak</b> →
+              <b>"✨ Bazani seed qilish"</b>. Shundan keyin 7 ta kategoriya va 110 ta
+              savol qo'shiladi.
+            </div>
+          ) : null}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
             {categories.map((cat) => {
               const selected = selectedCatIds.has(cat.id);
@@ -402,9 +424,16 @@ export default function SvoyakLobbyScreen({
                   }}
                 >
                   <span style={{ fontSize: "24px" }}>{cat.iconEmoji}</span>
-                  <span style={{ flex: 1 }}>{cat.name}</span>
+                  <span style={{ flex: 1 }}>
+                    {cat.name}
+                    {disabled ? (
+                      <div style={{ fontSize: "10px", color: "var(--svoyak-warning, #ffaa1c)", marginTop: "2px", fontWeight: 600 }}>
+                        ⚠️ Kamida 5 savol kerak
+                      </div>
+                    ) : null}
+                  </span>
                   <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-                    {cat.questionCount} savol
+                    {cat.questionCount} / 5+
                   </span>
                   {selected ? (
                     <span style={{ color: "var(--svoyak-gold, #f5c842)" }}>✓</span>
@@ -413,6 +442,7 @@ export default function SvoyakLobbyScreen({
               );
             })}
           </div>
+          </>
         )}
 
         {error ? (
