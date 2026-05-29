@@ -155,10 +155,11 @@ export default function SvoyakLobbyScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialJoinCode]);
 
-  // Host setup'ga kirganida kategoriyalarni yuklash
-  useEffect(() => {
-    if (mode !== "host_setup" || categories.length > 0 || catsLoading) return;
+  // Host setup'ga kirganida kategoriyalarni yuklash.
+  // Render free tier coldstart bo'lsa 20+ sek davom etadi — api.ts'da retry bor.
+  const loadCategories = () => {
     setCatsLoading(true);
+    setError("");
     void listCategories()
       .then((items) => {
         setCategories(items);
@@ -166,9 +167,22 @@ export default function SvoyakLobbyScreen({
         const readyIds = items.filter((c) => c.ready).slice(0, 3).map((c) => c.id);
         setSelectedCatIds(new Set(readyIds));
       })
-      .catch((err) => setError(String(err?.message ?? err)))
+      .catch((err) => {
+        const msg = String(err?.message ?? err);
+        // Network failure'larga yumshoq, foydalanuvchiga tushunarli matn
+        if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
+          setError("Server javob bermayapti. Bu odatda backend uyqudan turayotgani uchun (~30 sek). Qayta urinib ko'ring.");
+        } else {
+          setError(msg);
+        }
+      })
       .finally(() => setCatsLoading(false));
-  }, [mode, categories.length, catsLoading]);
+  };
+  useEffect(() => {
+    if (mode !== "host_setup" || categories.length > 0 || catsLoading) return;
+    loadCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, categories.length]);
 
   async function handleCreateRoom() {
     if (selectedCatIds.size === 0) {
@@ -305,7 +319,32 @@ export default function SvoyakLobbyScreen({
 
         {catsLoading ? (
           <div style={{ ...CARD, textAlign: "center", color: "var(--muted)" }}>
-            Yuklanmoqda...
+            <div style={{ marginBottom: "6px" }}>Yuklanmoqda...</div>
+            <div style={{ fontSize: "11px", opacity: 0.7 }}>
+              Server uyqudan turyapti — 30 sekundgacha kuting
+            </div>
+          </div>
+        ) : categories.length === 0 ? (
+          <div style={{ ...CARD, textAlign: "center" }}>
+            <div style={{ marginBottom: "12px", color: "var(--svoyak-warning, #ffaa1c)" }}>
+              ⚠️ Kategoriyalar yuklanmadi
+            </div>
+            <button
+              type="button"
+              onClick={loadCategories}
+              style={{
+                padding: "10px 20px",
+                borderRadius: "10px",
+                border: "1px solid var(--svoyak-gold, #f5c842)",
+                background: "rgba(245,200,66,0.10)",
+                color: "var(--svoyak-gold, #f5c842)",
+                fontWeight: 800,
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              🔄 Qayta urinib ko'rish
+            </button>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>

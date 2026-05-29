@@ -69,10 +69,47 @@ export type SvoyakCategoryListItem = {
   ready: boolean;
 };
 
-/** Aktiv kategoriyalar (host xona yaratish uchun). */
+/** Backend'ni uyg'otish (Render free tier coldstart oldini olish).
+ *
+ * Health endpoint auth talab qilmaydi va arzon. 1 marta urinamiz, ignored.
+ */
+async function warmupBackend(): Promise<void> {
+  try {
+    const ctl = new AbortController();
+    const timer = window.setTimeout(() => ctl.abort(), 35000);
+    await fetch(`${API_URL}/health`, { method: "GET", signal: ctl.signal });
+    window.clearTimeout(timer);
+  } catch {
+    /* warmup fail bo'lsa ham asosiy chaqiruv qayta urinadi */
+  }
+}
+
+/** Aktiv kategoriyalar (host xona yaratish uchun).
+ *
+ * Render free tier'da backend 15 daqiqa idle bo'lsa uxlaydi → birinchi
+ * request 30-40 sek davom etadi (cold start). Avval `warmupBackend()`
+ * orqali serverni uyg'otamiz, keyin 3 marta retry (0s/3s/10s backoff)
+ * bilan kategoriyalarni so'raymiz.
+ */
 export async function listCategories(): Promise<SvoyakCategoryListItem[]> {
-  const data = await request<{ items: SvoyakCategoryListItem[] }>("/svoyak/categories");
-  return data.items ?? [];
+  await warmupBackend();
+  const delays = [0, 3000, 10000];
+  let lastErr: unknown = null;
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+    try {
+      const data = await request<{ items: SvoyakCategoryListItem[] }>("/svoyak/categories");
+      return data.items ?? [];
+    } catch (err) {
+      lastErr = err;
+      // Network/coldstart bo'lsa qayta urinaman. Auth/clientside xato bo'lsa darhol uzaman.
+      const e = err as Error & { status?: number };
+      if (e.status && e.status >= 400 && e.status < 500) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Server ulanib bo'lmadi");
 }
 
 /** Host yangi xona yaratadi. Kategoriyalar tanlangan bo'lishi shart. */
