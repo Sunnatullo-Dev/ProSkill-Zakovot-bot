@@ -17,6 +17,17 @@ function buildHeaders(): Headers {
   if (initData) {
     headers.set("Authorization", `tma ${initData}`);
   }
+  // Dev-only: X-Dev-Tid header — bir browser'dan ko'p tab orqali multi-player
+  // simulyatsiyasi (localStorage'da saqlanadi, ?devTid=N URL parametri orqali
+  // o'rnatiladi — qarang main.tsx).
+  try {
+    const devTid = typeof window !== "undefined" ? window.localStorage.getItem("svoyak:devTid") : null;
+    if (devTid && /^\d+$/.test(devTid)) {
+      headers.set("X-Dev-Tid", devTid);
+    }
+  } catch {
+    /* ignore localStorage errors */
+  }
   return headers;
 }
 

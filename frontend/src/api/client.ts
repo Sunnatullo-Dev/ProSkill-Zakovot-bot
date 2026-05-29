@@ -683,6 +683,17 @@ function buildHeaders(initDataOverride?: string) {
     headers.set("Authorization", `tma ${initData}`);
   }
 
+  // Dev-only: X-Dev-Tid header (qarang src/svoyak/api.ts) — bir browser'dan
+  // bir nechta tabni alohida foydalanuvchi sifatida ishlatish uchun.
+  try {
+    const devTid = typeof window !== "undefined" ? window.localStorage.getItem("svoyak:devTid") : null;
+    if (devTid && /^\d+$/.test(devTid)) {
+      headers.set("X-Dev-Tid", devTid);
+    }
+  } catch {
+    /* ignore localStorage errors */
+  }
+
   return headers;
 }
 

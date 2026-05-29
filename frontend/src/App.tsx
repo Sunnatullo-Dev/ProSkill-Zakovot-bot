@@ -473,6 +473,11 @@ export default function App() {
         if (joinCode) {
           setAutoJoinCode(joinCode);
           setScreen("team");
+        } else if (svoyakMatch) {
+          // Deep link: t.me/bot?startapp=svoyak_ABCDEF — Svoyak xonasiga
+          // to'g'ridan-to'g'ri o'tish. Ism so'rovini ham keyinroq lobby
+          // ichida ko'rsatamiz, lekin oqimni uzmaymiz.
+          setScreen(needsName ? "name" : "svoyak");
         } else {
           setScreen(needsName ? "name" : "home");
         }

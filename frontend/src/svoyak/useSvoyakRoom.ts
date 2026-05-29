@@ -19,7 +19,8 @@ type State = {
   failureCount: number;
 };
 
-const BASE_INTERVAL_MS = 500;
+const ACTIVE_INTERVAL_MS = 500; // playing: tez polling (buzz uchun)
+const LOBBY_INTERVAL_MS = 1500; // lobby/paused: sekinroq (server yuklamasini kamaytirish)
 const ERROR_BACKOFF_MAX_MS = 10_000;
 
 export function useSvoyakRoom(code: string | null): State & {
@@ -38,6 +39,8 @@ export function useSvoyakRoom(code: string | null): State & {
   const mountedRef = useRef(true);
   const timeoutRef = useRef<number | null>(null);
   const inflightRef = useRef(false);
+  // Joriy room status — interval adaptive bo'lishi uchun.
+  const lastStatusRef = useRef<string | null>(null);
 
   const clearTimer = useCallback(() => {
     if (timeoutRef.current !== null) {
@@ -54,6 +57,7 @@ export function useSvoyakRoom(code: string | null): State & {
         const data = await getRoomState(currentCode);
         if (!mountedRef.current) return;
         failureCountRef.current = 0;
+        lastStatusRef.current = data.status;
         setState({
           data,
           isLoading: false,
@@ -89,11 +93,21 @@ export function useSvoyakRoom(code: string | null): State & {
       ) {
         return;
       }
+      // Status='finished' bo'lsa pollingni butunlay to'xtatamiz — parent
+      // component onGameEnded callback orqali GameOver ekraniga o'tadi va
+      // bu hook unmount qilinadi. Lekin agar parent darhol unmount qilmasa
+      // ham, server bo'sh chaqiruvlarni olmaydi.
+      if (lastStatusRef.current === "finished") {
+        return;
+      }
       const failures = failureCountRef.current;
+      // Adaptive interval — playing/answering tezroq, lobby sekinroq.
+      const baseInterval =
+        lastStatusRef.current === "playing" ? ACTIVE_INTERVAL_MS : LOBBY_INTERVAL_MS;
       const delay =
         failures > 0
-          ? Math.min(ERROR_BACKOFF_MAX_MS, BASE_INTERVAL_MS * 2 ** failures)
-          : BASE_INTERVAL_MS;
+          ? Math.min(ERROR_BACKOFF_MAX_MS, baseInterval * 2 ** failures)
+          : baseInterval;
       timeoutRef.current = window.setTimeout(async () => {
         await pollOnce(currentCode);
         if (mountedRef.current) {

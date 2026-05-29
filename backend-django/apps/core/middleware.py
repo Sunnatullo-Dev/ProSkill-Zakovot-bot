@@ -79,7 +79,26 @@ class TelegramAuthMiddleware:
         if not header.lower().startswith(prefix):
             return None
         init_data = header[len(prefix):].strip()
-        return verify_init_data(init_data)
+        user = verify_init_data(init_data)
+
+        # DEV bypass: guest auth + X-Dev-Tid header bo'lsa shu telegram_id
+        # bilan ishlatamiz. Bu bir browser'dan ko'p tab orqali multi-player
+        # test qilish imkonini beradi. Production'da o'tkazib yuboriladi.
+        if user is not None and user.telegram_id == 0 and not getattr(settings, "IS_PRODUCTION", False):
+            dev_tid_raw = request.headers.get("X-Dev-Tid") or request.headers.get("x-dev-tid")
+            if dev_tid_raw and dev_tid_raw.lstrip("-").isdigit():
+                dev_tid = int(dev_tid_raw)
+                if dev_tid > 0:
+                    # Demo user — telegram_id'ni almashtiramiz, ismni saqlaymiz.
+                    user = TelegramUser(
+                        telegram_id=dev_tid,
+                        first_name=f"Dev{dev_tid}",
+                        last_name=None,
+                        username=f"dev_{dev_tid}",
+                    )
+                    logger.info("dev-tid bypass: guest -> telegram_id=%s", dev_tid)
+
+        return user
 
 
 def _bot_admin_user() -> TelegramUser:
