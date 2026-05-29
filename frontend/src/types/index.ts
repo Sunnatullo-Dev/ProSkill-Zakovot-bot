@@ -131,9 +131,10 @@ export type Screen =
   | "profile"
   | "admin"
   | "leaderboard"
-  | "battle";
+  | "battle"
+  | "svoyak";
 
-export type NavTab = "home" | "leaderboard" | "team" | "profile" | "admin";
+export type NavTab = "home" | "leaderboard" | "svoyak" | "team" | "profile" | "admin";
 
 export type LeaderboardUser = AppUser;
 

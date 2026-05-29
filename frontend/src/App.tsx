@@ -22,6 +22,8 @@ import HomeScreen from "./components/HomeScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
 import OnboardingScreen from "./components/OnboardingScreen";
 import ProfileScreen from "./components/ProfileScreen";
+import SvoyakRouter from "./svoyak/SvoyakRouter";
+import SvoyakDemoScreen from "./svoyak/SvoyakDemoScreen";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
 import { useLanguage } from "./i18n/LanguageContext";
@@ -99,7 +101,7 @@ function writeCachedName(name: string): void {
 }
 
 // Admin alohida to'liq oyna sifatida ochiladi — foydalanuvchi navigatsiyasiga aralashmaydi.
-const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "leaderboard"];
+const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "leaderboard", "svoyak"];
 
 const TIMER_SECONDS = 15;
 const ANSWER_TIMEOUT_MS = 15000;
@@ -124,6 +126,11 @@ type SubmitAnswerFn = (userAnswer: string, timeTaken: number) => Promise<void>;
 const isAdminRoute = window.location.pathname.replace(/\/+$/, "").endsWith("/admin");
 
 export default function App() {
+  // Dev: ?svoyakDemo=1 URL parametri Svoyak overlay'larini mock-data bilan ko'rsatadi.
+  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("svoyakDemo") === "1") {
+    return <SvoyakDemoScreen />;
+  }
+
   const { initData, isReady, startParam, user: telegramUser, initDataMissing } = useTelegram();
   const { lang, setLang, t } = useLanguage();
   const [onboardingDone, setOnboardingDone] = useState<boolean>(() => readOnboardingDone());
@@ -149,6 +156,8 @@ export default function App() {
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
   const [autoJoinCode, setAutoJoinCode] = useState("");
+  // Svoyak deep link: ?startapp=svoyak_ABC123 orqali kelganda kod
+  const [svoyakJoinCode, setSvoyakJoinCode] = useState<string | undefined>(undefined);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -359,7 +368,12 @@ export default function App() {
         // join_CODE — jamoaga taklif havolasi
         const joinMatch = /^join_([A-Z0-9]{4,8})$/i.exec(startParam);
         const joinCode = joinMatch ? joinMatch[1].toUpperCase() : "";
-        const referrerId = !joinCode && /^\d+$/.test(startParam) ? Number(startParam) : undefined;
+        // svoyak_CODE — Svoyak xonasiga taklif havolasi
+        const svoyakMatch = /^svoyak_([A-Z0-9]{4,8})$/i.exec(startParam);
+        if (svoyakMatch) {
+          setSvoyakJoinCode(svoyakMatch[1].toUpperCase());
+        }
+        const referrerId = !joinCode && !svoyakMatch && /^\d+$/.test(startParam) ? Number(startParam) : undefined;
 
         // Login natijasini to'liq kutamiz — sekin tarmoqda foydalanuvchi
         // "mehmon" sifatida tezda kirib qolib, keyin haqiqiy javob keldikida
@@ -665,7 +679,9 @@ export default function App() {
           ? "admin"
           : screen === "leaderboard"
             ? "leaderboard"
-            : "home";
+            : screen === "svoyak"
+              ? "svoyak"
+              : "home";
 
   // Telegram ichida ochilgan, lekin initData topib bo'lmadi — auth ishlamaydi.
   // Foydalanuvchini "guest" sifatida o'tkazib yuborish o'rniga aniq xato ko'rsatamiz.
@@ -889,6 +905,17 @@ export default function App() {
             currentUserId={user?.telegramId ?? 0}
             playerName={playerName}
             score={score}
+          />
+        ) : null}
+
+        {screen === "svoyak" ? (
+          <SvoyakRouter
+            playerName={playerName}
+            initialJoinCode={svoyakJoinCode}
+            onExitSvoyak={() => {
+              setSvoyakJoinCode(undefined);
+              setScreen("home");
+            }}
           />
         ) : null}
 

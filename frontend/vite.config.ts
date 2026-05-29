@@ -18,7 +18,15 @@ export default defineConfig(({ mode, command }) => {
     plugins: [react()],
     server: {
       host: "0.0.0.0",
-      port: 5173
+      port: 5173,
+      // Dev proxy — frontend port 5174/5173 dan backend 8000 ga /api yo'llari
+      // o'tkaziladi. Bu CORS muammolarini hal qiladi va same-origin saqlanadi.
+      proxy: command === "serve" ? {
+        "/api": {
+          target: process.env["VITE_API_URL"] || "http://localhost:8000",
+          changeOrigin: true,
+        },
+      } : undefined,
     },
     build: {
       target: "es2018",

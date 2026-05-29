@@ -38,5 +38,6 @@ urlpatterns = [
     re_path(r"^api/teams(?:/|$)", include("apps.teams.urls")),
     path("api/battles/", include("apps.battles.urls")),
     path("api/admin/", include("apps.admin_api.urls")),
+    path("api/svoyak/", include("apps.svoyak.urls")),
     re_path(r"^(?!api/|admin/|health$|static/).*$", spa_fallback),
 ]

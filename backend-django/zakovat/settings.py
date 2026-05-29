@@ -157,6 +157,7 @@ INSTALLED_APPS = [
     "apps.teams",
     "apps.battles",
     "apps.admin_api",
+    "apps.svoyak",
 ]
 
 MIDDLEWARE = [

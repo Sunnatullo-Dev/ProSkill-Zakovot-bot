@@ -1,0 +1,69 @@
+/**
+ * Svoyak frontend tip ta'riflari.
+ *
+ * Backend `apps/svoyak/repositories._serialize_*` bilan moslashtirilgan.
+ */
+
+export type SvoyakRoomStatus = "lobby" | "playing" | "paused" | "finished";
+
+export type SvoyakPlayerStatus = "connected" | "disconnected" | "kicked";
+
+export type SvoyakRoundStatus =
+  | "reading"
+  | "waiting_buzz"
+  | "answering"
+  | "completed"
+  | "skipped";
+
+export type SvoyakPlayer = {
+  telegramId: number;
+  displayName: string;
+  avatarUrl: string | null;
+  score: number;
+  status: SvoyakPlayerStatus;
+  canPick: boolean;
+  isHost: boolean;
+};
+
+export type SvoyakBoardCell = {
+  categoryId: number;
+  categoryName: string;
+  categoryIcon: string;
+  order: number;
+  /** Foydalanilgan ball qiymatlari ro'yxati ([10, 30, 50] va h.k.). */
+  usedValueTiers: number[];
+};
+
+export type SvoyakCurrentRound = {
+  id: number;
+  questionId: number;
+  questionText: string;
+  questionType: "text" | "abcd";
+  options: string[];
+  value: number;
+  status: SvoyakRoundStatus;
+  startedAt: string | null;
+  buzzWinnerTelegramId: number | null;
+  buzzWinnerAtMs: number | null;
+  isMyTurn: boolean;
+  answerCorrect: boolean | null;
+  correctAnswer: string | null;
+  scoreDelta: number | null;
+};
+
+export type SvoyakRoomState = {
+  code: string;
+  status: SvoyakRoomStatus;
+  hostTelegramId: number;
+  createdAt: string | null;
+  startedAt: string | null;
+  settings: Record<string, unknown>;
+  players: SvoyakPlayer[];
+  board: SvoyakBoardCell[];
+  currentRound: SvoyakCurrentRound | null;
+  viewerTelegramId: number;
+  viewerIsHost: boolean;
+};
+
+export const SVOYAK_VALUE_TIERS = [10, 20, 30, 40, 50] as const;
+export type SvoyakValueTier = (typeof SVOYAK_VALUE_TIERS)[number];

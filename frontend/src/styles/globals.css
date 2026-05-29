@@ -24,6 +24,35 @@
   --color-error: var(--error);
   --color-text: var(--text);
   --color-muted: var(--muted);
+
+  /* ─── Svoyak (Своя игра) palitra — spec ranglari ──────────────────────── */
+  /* Asosiy fon: to'q ko'k yoki to'q binafsha (#0A192F yoki #1A0B2E). Biz
+     ikkalasini birlashtirgan radial gradient ishlatamiz — chiqishini
+     casino+intellektual shou kabi qilish uchun. */
+  --svoyak-bg: #0a1428;
+  --svoyak-bg-deep: #050a18;
+  --svoyak-surface: #0f1f3a;
+  --svoyak-card: #142850;
+  --svoyak-border: #1f3a6e;
+
+  /* Aksent ranglar (urg'u uchun) */
+  --svoyak-gold: #f5c842;        /* Ballar va mavzular nomi uchun */
+  --svoyak-gold-bright: #ffd95c; /* Hover/active holatlar */
+  --svoyak-neon-green: #22e07f;  /* To'g'ri javob, +score */
+  --svoyak-neon-red: #ff3b5c;    /* Noto'g'ri javob, -score, minus ring */
+  --svoyak-neon-blue: #4da6ff;   /* Aktiv BUZZ tugma */
+  --svoyak-neon-cyan: #5ee0ff;   /* Sekundar accent */
+  --svoyak-warning: #ffaa1c;     /* Savol o'qilmoqda (kutish) */
+
+  /* Shrift oilalari */
+  --svoyak-font-heading: "Montserrat", -apple-system, BlinkMacSystemFont, sans-serif;
+  --svoyak-font-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Glow effektlari */
+  --svoyak-glow-gold: 0 0 24px rgba(245, 200, 66, 0.4);
+  --svoyak-glow-green: 0 0 24px rgba(34, 224, 127, 0.5);
+  --svoyak-glow-red: 0 0 24px rgba(255, 59, 92, 0.55);
+  --svoyak-glow-blue: 0 0 20px rgba(77, 166, 255, 0.45);
 }
 
 * {
