@@ -169,12 +169,9 @@ export default function SvoyakLobbyScreen({
       })
       .catch((err) => {
         const msg = String(err?.message ?? err);
-        // Network failure'larga yumshoq, foydalanuvchiga tushunarli matn
-        if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
-          setError("Server javob bermayapti. Bu odatda backend uyqudan turayotgani uchun (~30 sek). Qayta urinib ko'ring.");
-        } else {
-          setError(msg);
-        }
+        // Foydalanuvchiga to'liq xato xabari ko'rsatamiz — Backend URL ham bor.
+        // Bu prod muammosini debug qilishga yordam beradi.
+        setError(msg);
       })
       .finally(() => setCatsLoading(false));
   };
@@ -329,6 +326,25 @@ export default function SvoyakLobbyScreen({
             <div style={{ marginBottom: "12px", color: "var(--svoyak-warning, #ffaa1c)" }}>
               ⚠️ Kategoriyalar yuklanmadi
             </div>
+            {error ? (
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "var(--muted)",
+                  background: "rgba(0,0,0,0.30)",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  marginBottom: "12px",
+                  textAlign: "left",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontFamily: "monospace",
+                  fontSize: "10px",
+                }}
+              >
+                {error}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={loadCategories}

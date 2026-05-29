@@ -79,9 +79,18 @@ async function warmupBackend(): Promise<void> {
     const timer = window.setTimeout(() => ctl.abort(), 35000);
     await fetch(`${API_URL}/health`, { method: "GET", signal: ctl.signal });
     window.clearTimeout(timer);
-  } catch {
+  } catch (err) {
+    console.warn("[svoyak] warmup failed:", err);
     /* warmup fail bo'lsa ham asosiy chaqiruv qayta urinadi */
   }
+}
+
+/** Diagnostik xato — xatoga API_URL qo'shamiz, foydalanuvchi qaysi backend
+ * URL'ga so'rov yuborilayotganini ko'rishi mumkin. */
+function makeDiagnosticError(originalErr: unknown, hint: string): Error {
+  const base = originalErr instanceof Error ? originalErr.message : String(originalErr);
+  const url = API_URL || "(VITE_API_URL O'RNATILMAGAN!)";
+  return new Error(`${hint}\nBackend: ${url}\nXato: ${base}`);
 }
 
 /** Aktiv kategoriyalar (host xona yaratish uchun).
@@ -109,7 +118,7 @@ export async function listCategories(): Promise<SvoyakCategoryListItem[]> {
       }
     }
   }
-  throw lastErr instanceof Error ? lastErr : new Error("Server ulanib bo'lmadi");
+  throw makeDiagnosticError(lastErr, "Server ulanib bo'lmadi");
 }
 
 /** Host yangi xona yaratadi. Kategoriyalar tanlangan bo'lishi shart. */
