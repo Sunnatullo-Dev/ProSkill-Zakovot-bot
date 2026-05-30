@@ -11,17 +11,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const MUTE_KEY = "svoyak:tts:mute";
+const MUTE_DECISION_KEY = "svoyak:tts:userDecided";
 
 function readMute(): boolean {
   try {
+    // Foydalanuvchi hech qachon tanlamagan bo'lsa — default MUTE.
+    // (Feedback: TTS chalg'itadi). Foydalanuvchi ovozni yoqishi mumkin —
+    // shu qaror localStorage'da saqlanadi va keyingi safar hisobga olinadi.
+    const decided = localStorage.getItem(MUTE_DECISION_KEY) === "1";
+    if (!decided) return true; // default: MUTED
     return localStorage.getItem(MUTE_KEY) === "1";
   } catch {
-    return false;
+    return true; // localStorage ishlamasa ham default MUTED
   }
 }
 
 function writeMute(v: boolean): void {
   try {
+    // Foydalanuvchi tugmani bossa — uning qarorini sodir bo'lgan deb belgilash
+    localStorage.setItem(MUTE_DECISION_KEY, "1");
     if (v) localStorage.setItem(MUTE_KEY, "1");
     else localStorage.removeItem(MUTE_KEY);
   } catch {

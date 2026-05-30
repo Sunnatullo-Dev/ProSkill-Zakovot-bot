@@ -209,18 +209,32 @@ export default function QuestionOverlay({
               onClick={tts.toggleMute}
               aria-label={tts.isMuted ? t("svoyak_q_unmute") : t("svoyak_q_mute")}
               style={{
-                width: "34px",
-                height: "34px",
-                borderRadius: "50%",
-                border: "1px solid rgba(255,255,255,0.18)",
-                background: "rgba(0,0,0,0.30)",
-                color: tts.isMuted ? "rgba(255,255,255,0.40)" : "var(--svoyak-gold, #f5c842)",
-                fontSize: "16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                height: "40px",
+                padding: "0 14px",
+                borderRadius: "999px",
+                border: tts.isMuted
+                  ? "1.5px solid var(--svoyak-gold, #f5c842)"
+                  : "1.5px solid rgba(34,224,127,0.55)",
+                background: tts.isMuted
+                  ? "rgba(245,200,66,0.10)"
+                  : "rgba(34,224,127,0.10)",
+                color: tts.isMuted
+                  ? "var(--svoyak-gold, #f5c842)"
+                  : "var(--svoyak-neon-green, #22e07f)",
+                fontSize: "13px",
+                fontWeight: 800,
                 cursor: "pointer",
-                padding: 0,
+                fontFamily: "var(--svoyak-font-heading)",
+                letterSpacing: "0.02em",
               }}
             >
-              {tts.isMuted ? "🔇" : tts.isSpeaking ? "🔊" : "🔈"}
+              <span style={{ fontSize: "16px" }}>
+                {tts.isMuted ? "🔇" : tts.isSpeaking ? "🔊" : "🔈"}
+              </span>
+              <span>{tts.isMuted ? t("svoyak_q_unmute") : t("svoyak_q_mute")}</span>
             </button>
           ) : null}
           <div style={VALUE_BADGE}>{value}</div>

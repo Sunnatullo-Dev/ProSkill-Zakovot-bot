@@ -317,13 +317,21 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         if (isRoundChange) {
           lastRoundIdRef.current = newRoundId;
           setAnswer("");
-          setFeedback(null);
           setErrorMessage("");
+          // To'g'ri javob feedback'ini 2.5s davomida saqlash (oldindan
+          // darhol nullga tushirardik). Bu — feedback #2 yechimi: foydalanuvchi
+          // savol vaqti tugaganidan keyin TO'G'RI JAVOBni ko'rsin, keyin yangi
+          // savolga o'tsin.
+          window.setTimeout(() => {
+            setFeedback(null);
+          }, 2500);
           // Yangi round kelganda input avtomatik focus — mobil'da qimmatli
           // sekundlarni tejaymiz, foydalanuvchi qo'l bilan tegma kerakmas.
+          // Lekin focus'ni 2.5s'dan keyin qilamiz — feedback ko'rinishida
+          // klaviatura ochilib kelmasin.
           window.setTimeout(() => {
             answerInputRef.current?.focus();
-          }, 0);
+          }, 2500);
         }
 
         // Bellashuv tugagan bo'lsa endi qayta-qayta tekshirib o'tirishimiz shart emas.
@@ -382,6 +390,22 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
       window.clearInterval(id);
     };
   }, [state?.currentRound?.roundId, state?.finished, timerActive]);
+
+  // Feedback #2: vaqt tugaganda va foydalanuvchi javob bermagan bo'lsa,
+  // "Vaqt tugadi" feedback'i chiqsin. Bu round o'zgarguncha turadi va keyin
+  // yuqoridagi 2.5s delay bilan tozalanadi.
+  useEffect(() => {
+    if (
+      secondsLeft === 0 &&
+      state?.currentRound &&
+      !state.currentRound.myAnswered &&
+      !feedback &&
+      !state.finished
+    ) {
+      setFeedback({ isCorrect: false, correctAnswer: "" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secondsLeft, state?.currentRound?.roundId, state?.currentRound?.myAnswered]);
 
   async function handleForfeit() {
     setForfeiting(true);

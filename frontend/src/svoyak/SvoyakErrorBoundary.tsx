@@ -42,8 +42,11 @@ export default class SvoyakErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // Stack trace'ni console'ga ham yozamiz (debug uchun)
-    console.error("[svoyak] render error:", error, info);
+    // Stack trace'ni console'ga ham yozamiz (debug uchun) — foydalanuvchidan
+    // log so'rasak shu chiqadi.
+    console.error("[svoyak] render error:", error.message);
+    console.error("[svoyak] stack:", error.stack);
+    console.error("[svoyak] component stack:", info.componentStack);
     this.setState({ info: info.componentStack ?? "" });
   }
 
@@ -91,13 +94,32 @@ export default class SvoyakErrorBoundary extends Component<Props, State> {
           style={{
             fontSize: "13px",
             color: "var(--muted)",
-            marginBottom: "20px",
+            marginBottom: "16px",
             textAlign: "center",
             maxWidth: "320px",
             lineHeight: 1.5,
           }}
         >
           {labels.text}
+        </div>
+
+        {/* Xato matnini doim ko'rsatish — admin'ga screenshot qilishi uchun */}
+        <div
+          style={{
+            background: "rgba(255,59,92,0.10)",
+            border: "1px solid rgba(255,59,92,0.30)",
+            borderRadius: "10px",
+            padding: "10px 12px",
+            maxWidth: "92%",
+            marginBottom: "16px",
+            fontSize: "11px",
+            fontFamily: "monospace",
+            color: "var(--svoyak-neon-red, #ff3b5c)",
+            wordBreak: "break-word",
+            textAlign: "center",
+          }}
+        >
+          {msg}
         </div>
 
         {/* Texnik tafsilot — debug uchun ko'rinadi */}
