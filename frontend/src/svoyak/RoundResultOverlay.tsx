@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { hapticResult } from "../utils/haptics";
+import { useT } from "../i18n";
 
 type Props = {
   /** True = to'g'ri javob, False = xato, null = skipped */
@@ -43,6 +44,7 @@ export default function RoundResultOverlay({
   onDismiss,
   autoDismissMs = 2400,
 }: Props) {
+  const t = useT();
   const [visible, setVisible] = useState(true);
 
   // Haptic + auto-dismiss
@@ -75,7 +77,11 @@ export default function RoundResultOverlay({
     : correct
     ? "var(--svoyak-neon-green, #22e07f)"
     : "var(--svoyak-neon-red, #ff3b5c)";
-  const verdictLabel = isSkip ? "O'TKAZILDI" : correct ? "TO'G'RI!" : "XATO";
+  const verdictLabel = isSkip
+    ? t("svoyak_result_skipped")
+    : correct
+    ? t("svoyak_result_correct")
+    : t("svoyak_result_wrong");
   const icon = isSkip ? "⊘" : correct ? "✓" : "✗";
 
   const formattedDelta =
@@ -136,7 +142,7 @@ export default function RoundResultOverlay({
             textShadow: "0 4px 12px rgba(0,0,0,0.45)",
           }}
         >
-          {formattedDelta} ball
+          {t("svoyak_result_ball", { n: formattedDelta })}
         </div>
       ) : null}
 
@@ -158,7 +164,7 @@ export default function RoundResultOverlay({
               marginBottom: "6px",
             }}
           >
-            TO'G'RI JAVOB
+            {t("svoyak_result_correct_answer")}
           </div>
           <div
             style={{
@@ -173,7 +179,7 @@ export default function RoundResultOverlay({
           </div>
           {userAnswer && !correct ? (
             <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--muted)" }}>
-              Sizning javobingiz:{" "}
+              {t("svoyak_result_your_answer")}{" "}
               <span style={{ color: "var(--svoyak-neon-red)", fontWeight: 700 }}>
                 {userAnswer}
               </span>

@@ -11,6 +11,7 @@ import SvoyakLobbyScreen from "./SvoyakLobbyScreen";
 import SvoyakBoardScreen from "./SvoyakBoardScreen";
 import SvoyakErrorBoundary from "./SvoyakErrorBoundary";
 import type { SvoyakRoomState } from "./types";
+import { useT } from "../i18n";
 
 type Props = {
   /** Joriy foydalanuvchi ismi. */
@@ -31,7 +32,15 @@ export default function SvoyakRouter({
   initialJoinCode,
   onExitSvoyak,
 }: Props) {
+  const t = useT();
   const [stage, setStage] = useState<Stage>({ kind: "lobby" });
+
+  const errorLabels = {
+    title: t("svoyak_error_title"),
+    text: t("svoyak_error_text"),
+    details: t("svoyak_error_details"),
+    retry: t("svoyak_error_retry"),
+  };
 
   // Deep link bilan kelganida lobby'ni "joining" rejimida ochish — bu SvoyakLobbyScreen
   // ichida prop bilan hal qilingan.
@@ -40,7 +49,7 @@ export default function SvoyakRouter({
   // o'rniga foydalanuvchiga ko'rinadigan xato + Qayta urinish tugma. onReset
   // butun routerni lobby holatiga qaytaradi.
   return (
-    <SvoyakErrorBoundary onReset={() => setStage({ kind: "lobby" })}>
+    <SvoyakErrorBoundary labels={errorLabels} onReset={() => setStage({ kind: "lobby" })}>
       {stage.kind === "lobby" ? (
         <SvoyakLobbyScreen
           playerName={playerName}
@@ -71,6 +80,7 @@ function SvoyakFinished(props: {
   onExit: () => void;
 }) {
   const { state, onPlayAgain, onExit } = props;
+  const t = useT();
   const sorted = [...state.players].sort((a, b) => b.score - a.score);
   const champion = sorted[0];
 
@@ -103,13 +113,13 @@ function SvoyakFinished(props: {
           marginBottom: "20px",
         }}
       >
-        O'yin tugadi
+        {t("svoyak_finished_title")}
       </div>
 
       {champion && champion.score > 0 ? (
         <div style={{ marginBottom: "24px" }}>
           <div style={{ fontSize: "13px", color: "var(--muted)", marginBottom: "4px" }}>
-            G'OLIB
+            {t("svoyak_finished_champion_label")}
           </div>
           <div
             style={{
@@ -124,7 +134,7 @@ function SvoyakFinished(props: {
         </div>
       ) : (
         <div style={{ marginBottom: "24px", color: "var(--muted)" }}>
-          G'olib aniqlanmadi
+          {t("svoyak_finished_no_winner")}
         </div>
       )}
 
@@ -185,7 +195,7 @@ function SvoyakFinished(props: {
           marginBottom: "10px",
         }}
       >
-        ▶ Yana o'ynash
+        {t("svoyak_finished_play_again")}
       </button>
       <button
         type="button"
@@ -202,7 +212,7 @@ function SvoyakFinished(props: {
           cursor: "pointer",
         }}
       >
-        ← Asosiy menyu
+        {t("svoyak_finished_main_menu")}
       </button>
     </div>
   );

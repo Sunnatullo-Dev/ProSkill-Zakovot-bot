@@ -24,6 +24,7 @@ import type { SvoyakCategoryListItem } from "./api";
 import { useSvoyakRoom } from "./useSvoyakRoom";
 import type { SvoyakRoomState } from "./types";
 import { hapticSelect, hapticTap } from "../utils/haptics";
+import { useT } from "../i18n";
 
 type SvoyakLobbyScreenProps = {
   /** Joriy foydalanuvchi (Telegram'dan) */
@@ -124,6 +125,7 @@ export default function SvoyakLobbyScreen({
   initialJoinCode,
   onGameStarted,
 }: SvoyakLobbyScreenProps) {
+  const t = useT();
   const [mode, setMode] = useState<Mode>(initialJoinCode ? "joining" : "menu");
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
@@ -316,11 +318,8 @@ export default function SvoyakLobbyScreen({
   if (mode === "menu") {
     return (
       <div style={PAGE}>
-        <div style={TITLE}>🎲 Svoyak</div>
-        <div style={SUBTITLE}>
-          Boshlovchi va do'stlar bilan jonli intellektual o'yin. Tezkorlik,
-          aniqlik va tavakkalchilik.
-        </div>
+        <div style={TITLE}>{t("svoyak_menu_title")}</div>
+        <div style={SUBTITLE}>{t("svoyak_menu_subtitle")}</div>
 
         <div style={CARD}>
           <button
@@ -333,7 +332,7 @@ export default function SvoyakLobbyScreen({
               setMode("host_setup");
             }}
           >
-            🆕 Yangi xona yaratish
+            {t("svoyak_menu_create")}
           </button>
           <button
             type="button"
@@ -345,7 +344,7 @@ export default function SvoyakLobbyScreen({
               setMode("joining");
             }}
           >
-            🔑 Kod orqali kirish
+            {t("svoyak_menu_join")}
           </button>
         </div>
 
@@ -361,22 +360,20 @@ export default function SvoyakLobbyScreen({
   if (mode === "host_setup") {
     return (
       <div style={PAGE}>
-        <div style={TITLE}>Kategoriyalarni tanlang</div>
-        <div style={SUBTITLE}>
-          Kamida 1 ta. Tavsiya: 3-5 ta — har biri 5 ta savol tushadi.
-        </div>
+        <div style={TITLE}>{t("svoyak_host_pick_categories")}</div>
+        <div style={SUBTITLE}>{t("svoyak_host_pick_categories_hint")}</div>
 
         {catsLoading ? (
           <div style={{ ...CARD, textAlign: "center", color: "var(--muted)" }}>
-            <div style={{ marginBottom: "6px" }}>Yuklanmoqda...</div>
+            <div style={{ marginBottom: "6px" }}>{t("svoyak_lobby_loading")}</div>
             <div style={{ fontSize: "11px", opacity: 0.7 }}>
-              Server uyqudan turyapti — 30 sekundgacha kuting
+              {t("svoyak_lobby_loading_hint")}
             </div>
           </div>
         ) : categories.length === 0 ? (
           <div style={{ ...CARD, textAlign: "center" }}>
             <div style={{ marginBottom: "12px", color: "var(--svoyak-warning, #ffaa1c)" }}>
-              ⚠️ Kategoriyalar yuklanmadi
+              {t("svoyak_lobby_load_failed")}
             </div>
             {error ? (
               <div
@@ -410,7 +407,7 @@ export default function SvoyakLobbyScreen({
                 cursor: "pointer",
               }}
             >
-              🔄 Qayta urinib ko'rish
+              {t("svoyak_lobby_retry")}
             </button>
           </div>
         ) : (
@@ -428,12 +425,9 @@ export default function SvoyakLobbyScreen({
                 lineHeight: 1.5,
               }}
             >
-              ⚠️ <b>Hech qaysi kategoriyada yetarli savol yo'q</b> (har biri uchun
-              kamida 5 ta savol kerak — har bal qiymati 10/20/30/40/50 ga bittadan).
+              <b>{t("svoyak_categories_empty_title")}</b>
               <br /><br />
-              Admin sifatida pastdagi <b>Admin</b> tugmasini bosing → <b>Svoyak</b> →
-              <b>"✨ Bazani seed qilish"</b>. Shundan keyin 7 ta kategoriya va 110 ta
-              savol qo'shiladi.
+              {t("svoyak_categories_empty_text")}
             </div>
           ) : null}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
@@ -480,7 +474,7 @@ export default function SvoyakLobbyScreen({
                     {cat.name}
                     {disabled ? (
                       <div style={{ fontSize: "10px", color: "var(--svoyak-warning, #ffaa1c)", marginTop: "2px", fontWeight: 600 }}>
-                        ⚠️ Kamida 5 savol kerak
+                        {t("svoyak_category_needs_5")}
                       </div>
                     ) : null}
                   </span>
@@ -513,7 +507,7 @@ export default function SvoyakLobbyScreen({
           }}
           onClick={handleCreateRoom}
         >
-          {busy ? "Yaratilmoqda..." : `▶ Xona yaratish (${selectedCatIds.size})`}
+          {busy ? t("svoyak_admin_saving") : t("svoyak_create_room", { n: selectedCatIds.size })}
         </button>
         <button
           type="button"
@@ -524,7 +518,7 @@ export default function SvoyakLobbyScreen({
             setError("");
           }}
         >
-          ← Orqaga
+          ← {t("back")}
         </button>
       </div>
     );
@@ -533,8 +527,8 @@ export default function SvoyakLobbyScreen({
   if (mode === "joining") {
     return (
       <div style={PAGE}>
-        <div style={TITLE}>Xonaga qo'shilish</div>
-        <div style={SUBTITLE}>Boshlovchidan olgan 6-belgili kodni kiriting.</div>
+        <div style={TITLE}>{t("svoyak_join_title")}</div>
+        <div style={SUBTITLE}>{t("svoyak_join_subtitle")}</div>
 
         <div style={CARD}>
           <input
@@ -546,7 +540,7 @@ export default function SvoyakLobbyScreen({
             spellCheck={false}
             value={joinCodeInput}
             onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-            placeholder="ABCDE6"
+            placeholder={t("svoyak_join_placeholder")}
             style={{
               ...INPUT,
               textAlign: "center",
@@ -574,10 +568,10 @@ export default function SvoyakLobbyScreen({
           }}
           onClick={() => handleJoinRoom(joinCodeInput)}
         >
-          {busy ? "Kirilmoqda..." : "→ Kirish"}
+          {busy ? t("svoyak_admin_saving") : t("svoyak_join_button")}
         </button>
         <button type="button" style={SECONDARY_BTN} onClick={() => setMode("menu")}>
-          ← Orqaga
+          ← {t("back")}
         </button>
       </div>
     );
@@ -590,12 +584,8 @@ export default function SvoyakLobbyScreen({
 
   return (
     <div style={PAGE}>
-      <div style={TITLE}>Xona tayyor</div>
-      <div style={SUBTITLE}>
-        {isHost
-          ? "Do'stlaringizga kodni yuboring va boshlash uchun kuting."
-          : "Boshlovchi o'yinni boshlashini kuting..."}
-      </div>
+      <div style={TITLE}>{t("svoyak_room_ready_title")}</div>
+      <div style={SUBTITLE}>{t("svoyak_room_ready_subtitle")}</div>
 
       {/* Kod kartochkasi */}
       <div
@@ -609,7 +599,7 @@ export default function SvoyakLobbyScreen({
         }}
       >
         <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "0.2em", marginBottom: "8px" }}>
-          XONA KODI
+          {t("svoyak_room_code_label")}
         </div>
         <div
           style={{
@@ -640,7 +630,7 @@ export default function SvoyakLobbyScreen({
               boxShadow: "0 6px 18px -4px rgba(77,166,255,0.45)",
             }}
           >
-            ✉️ Do'stni taklif qilish
+            {t("svoyak_invite_friend")}
           </button>
           <button
             type="button"
@@ -656,7 +646,7 @@ export default function SvoyakLobbyScreen({
               cursor: "pointer",
             }}
           >
-            📋 Nusxalash
+            📋 {t("svoyak_copy_code")}
           </button>
         </div>
       </div>
@@ -664,11 +654,11 @@ export default function SvoyakLobbyScreen({
       {/* O'yinchilar */}
       <div style={CARD}>
         <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "0.2em", marginBottom: "10px" }}>
-          O'YINCHILAR ({players.length})
+          {t("svoyak_players_count", { n: players.length })}
         </div>
         {players.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: "13px", textAlign: "center", padding: "8px" }}>
-            Hali hech kim qo'shilmagan
+            ...
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -700,7 +690,7 @@ export default function SvoyakLobbyScreen({
                     color: p.status === "connected" ? "var(--svoyak-neon-green, #22e07f)" : "var(--muted)",
                   }}
                 >
-                  {p.status === "connected" ? "● ulangan" : "○ uzilgan"}
+                  {p.status === "connected" ? t("svoyak_player_status_connected") : t("svoyak_player_status_disconnected")}
                 </span>
               </div>
             ))}
@@ -726,7 +716,7 @@ export default function SvoyakLobbyScreen({
             }}
             onClick={handleStartGame}
           >
-            {busy ? "..." : canStart ? "▶ O'yinni boshlash" : "Kamida 2 ta ulangan o'yinchi kerak"}
+            {busy ? "..." : canStart ? t("svoyak_start_game") : t("svoyak_need_2_players")}
           </button>
           <button
             type="button"
@@ -738,12 +728,12 @@ export default function SvoyakLobbyScreen({
               setMode("menu");
             }}
           >
-            ✕ Xonani yopish
+            {t("svoyak_close_room")}
           </button>
         </>
       ) : (
         <button type="button" style={SECONDARY_BTN} onClick={handleLeaveRoom}>
-          ← Chiqib ketish
+          {t("svoyak_leave_room")}
         </button>
       )}
 

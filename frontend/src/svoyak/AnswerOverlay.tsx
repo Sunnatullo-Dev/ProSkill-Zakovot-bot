@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { hapticResult, hapticSelect } from "../utils/haptics";
+import { useT } from "../i18n";
 
 type Props = {
   options: string[]; // har doim 4 ta
@@ -28,6 +29,7 @@ const COLORS = [
 ];
 
 export default function AnswerOverlay({ options, onAnswer, onSkip, timeLimitSeconds = 10 }: Props) {
+  const t = useT();
   const [pendingIdx, setPendingIdx] = useState<number | null>(null);
   const [remaining, setRemaining] = useState(timeLimitSeconds);
   const startedRef = useRef(Date.now());
@@ -69,7 +71,7 @@ export default function AnswerOverlay({ options, onAnswer, onSkip, timeLimitSeco
     // Fallback: input maydoni — agar backend 4 ta variant bermasa
     return (
       <div style={{ textAlign: "center", color: "var(--svoyak-warning)", padding: "12px" }}>
-        Variantlar yetishmayapti. (Backend issue)
+        {t("svoyak_answer_no_options")}
       </div>
     );
   }
@@ -153,7 +155,7 @@ export default function AnswerOverlay({ options, onAnswer, onSkip, timeLimitSeco
         }}
       >
         <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-          ⏱ {remaining}s qoldi
+          {t("svoyak_answer_time_left", { n: remaining })}
         </span>
         {onSkip ? (
           <button
@@ -171,7 +173,7 @@ export default function AnswerOverlay({ options, onAnswer, onSkip, timeLimitSeco
               cursor: pendingIdx !== null ? "default" : "pointer",
             }}
           >
-            O'tkazib yuborish
+            {t("svoyak_answer_skip")}
           </button>
         ) : null}
       </div>

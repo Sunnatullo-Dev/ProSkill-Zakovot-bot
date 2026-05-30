@@ -160,7 +160,7 @@ export default function BottomNav({ active, showAdmin, onNavigate }: BottomNavPr
             pointerEvents: "none"
           }}
         >
-          Svoyak
+          {t("nav_svoyak")}
         </span>
       </div>
 

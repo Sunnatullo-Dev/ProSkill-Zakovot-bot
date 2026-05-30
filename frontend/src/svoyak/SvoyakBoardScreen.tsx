@@ -19,6 +19,7 @@ import QuestionOverlay from "./QuestionOverlay";
 import BuzzOverlay from "./BuzzOverlay";
 import AnswerOverlay from "./AnswerOverlay";
 import RoundResultOverlay from "./RoundResultOverlay";
+import { useT } from "../i18n";
 
 type Props = {
   code: string;
@@ -43,6 +44,7 @@ const PAGE: CSSProperties = {
 
 
 export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) {
+  const t = useT();
   const { data, error, refetch } = useSvoyakRoom(code);
 
   const canPick = useMemo(() => {
@@ -260,7 +262,7 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
         }}
       >
         <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "0.2em", marginBottom: "10px", textAlign: "center" }}>
-          {canPick ? "MAVZU VA BALLNI TANLANG" : "BOSHQA O'YINCHI TANLAMOQDA..."}
+          {canPick ? t("svoyak_board_pick_now") : t("svoyak_board_waiting_pick")}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {board.map((cell) => (
@@ -342,7 +344,7 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
           cursor: "pointer",
         }}
       >
-        {isHost ? "✕ O'yinni tugatish" : "← Chiqib ketish"}
+        {isHost ? t("svoyak_board_exit_host") : t("svoyak_board_exit_player")}
       </button>
     </div>
 
@@ -359,7 +361,7 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
         {round.status === "reading" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", alignItems: "center" }}>
             <div style={{ fontSize: "13px", color: "var(--svoyak-warning)" }}>
-              ⏳ Savol o'qilmoqda...
+              {t("svoyak_q_reading")}
             </div>
             {isHost ? (
               <button
@@ -379,7 +381,7 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
                   boxShadow: "0 8px 22px -6px rgba(34,224,127,0.55)",
                 }}
               >
-                ▶ BUZZ OCHISH
+                {t("svoyak_q_open_buzz")}
               </button>
             ) : null}
           </div>

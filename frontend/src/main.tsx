@@ -6,7 +6,7 @@ import "./styles/globals.css";
 
 // Build version — Mini-App yangi yuklanganini tekshirish uchun.
 // Console'da har sahifa ochilganda ko'rinadi: "[zakovat] v2026-05-29-svoyak-invite"
-const BUILD_VERSION = "2026-05-29-svoyak-invite-button";
+const BUILD_VERSION = "2026-05-29-svoyak-i18n";
 console.log(`%c[zakovat] v${BUILD_VERSION}`, "color: #f5c842; font-weight: bold");
 // Telegram WebApp shapkasida ham ko'rinarli (debug uchun)
 try {

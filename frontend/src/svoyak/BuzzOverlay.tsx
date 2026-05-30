@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { hapticResult } from "../utils/haptics";
+import { useT } from "../i18n";
 
 type BuzzState = "waiting" | "active" | "blocked" | "winner";
 
@@ -57,14 +58,16 @@ const COLORS: Record<BuzzState, { bg: string; ring: string; text: string; glow: 
   },
 };
 
-const LABELS: Record<BuzzState, { primary: string; secondary?: string }> = {
-  waiting: { primary: "KUTING", secondary: "Savol o'qilmoqda..." },
-  active: { primary: "BOSING!", secondary: "Tezroq — kim oldin bossa!" },
-  blocked: { primary: "BLOKLANGAN", secondary: "Sizdan oldin bosildi" },
-  winner: { primary: "SIZ G'OLIBSIZ!", secondary: "Javob bering" },
-};
+/** Labels endi useT() orqali render vaqtida olinadi. */
 
 export default function BuzzOverlay({ state, onPress, blockedBy }: Props) {
+  const t = useT();
+  const LABELS: Record<BuzzState, { primary: string; secondary?: string }> = {
+    waiting: { primary: t("svoyak_buzz_waiting_label"), secondary: t("svoyak_buzz_waiting_hint") },
+    active: { primary: t("svoyak_buzz_active_label"), secondary: t("svoyak_buzz_active_hint") },
+    blocked: { primary: t("svoyak_buzz_blocked_label"), secondary: t("svoyak_buzz_blocked_hint") },
+    winner: { primary: t("svoyak_buzz_winner_label"), secondary: t("svoyak_buzz_winner_hint") },
+  };
   const [busy, setBusy] = useState(false);
   const [pressed, setPressed] = useState(false);
   const wasActiveRef = useRef(false);

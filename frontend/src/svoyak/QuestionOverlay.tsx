@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useTTS } from "./useTTS";
+import { useT } from "../i18n";
 
 type Props = {
   /** Mavzu nomi (yuqorida ko'rinadi). */
@@ -124,6 +125,7 @@ export default function QuestionOverlay({
   autoSpeak = true,
   onSpeakEnd,
 }: Props) {
+  const t = useT();
   // TTS — savol matnini ovozli o'qish
   const tts = useTTS({ lang: "uz", onEnd: onSpeakEnd });
   const lastSpokenRef = useRef<string>("");
@@ -205,7 +207,7 @@ export default function QuestionOverlay({
             <button
               type="button"
               onClick={tts.toggleMute}
-              aria-label={tts.isMuted ? "Ovozni yoqish" : "Ovozni o'chirish"}
+              aria-label={tts.isMuted ? t("svoyak_q_unmute") : t("svoyak_q_mute")}
               style={{
                 width: "34px",
                 height: "34px",

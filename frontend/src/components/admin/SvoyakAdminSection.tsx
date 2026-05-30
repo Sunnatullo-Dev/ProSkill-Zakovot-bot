@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "../../i18n";
 import {
   adminListCategories,
   adminCreateCategory,
@@ -90,6 +91,7 @@ const dangerButton: CSSProperties = {
 
 
 export default function SvoyakAdminSection() {
+  const t = useT();
   const [sub, setSub] = useState<SubTab>("categories");
 
   return (
@@ -107,10 +109,10 @@ export default function SvoyakAdminSection() {
         }}
       >
         <SubTabButton active={sub === "categories"} onClick={() => setSub("categories")}>
-          🗂 Kategoriyalar
+          {t("svoyak_admin_categories_tab")}
         </SubTabButton>
         <SubTabButton active={sub === "questions"} onClick={() => setSub("questions")}>
-          ❓ Savollar
+          {t("svoyak_admin_questions_tab")}
         </SubTabButton>
       </div>
 
@@ -147,6 +149,7 @@ function SubTabButton({ active, onClick, children }: { active: boolean; onClick:
 // ─── Kategoriyalar tabini ─────────────────────────────────────────────────
 
 function CategoriesTab() {
+  const t = useT();
   const [items, setItems] = useState<AdminSvoyakCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -206,8 +209,14 @@ function CategoriesTab() {
     try {
       const r = await adminSeedDatabase(force);
       setSeedMessage(
-        `✓ Bajarildi. Kategoriya: ${r.categoriesBefore} → ${r.categoriesAfter} (+${r.categoriesAdded}). ` +
-        `Savol: ${r.questionsBefore} → ${r.questionsAfter} (+${r.questionsAdded}).`
+        t("svoyak_admin_seed_result_ok", {
+          cb: r.categoriesBefore,
+          ca: r.categoriesAfter,
+          cd: r.categoriesAdded,
+          qb: r.questionsBefore,
+          qa: r.questionsAfter,
+          qd: r.questionsAdded,
+        })
       );
       await load();
     } catch (err) {
@@ -218,7 +227,7 @@ function CategoriesTab() {
   }
 
   if (loading) {
-    return <div style={{ padding: "20px", textAlign: "center", color: "var(--muted)" }}>Yuklanmoqda...</div>;
+    return <div style={{ padding: "20px", textAlign: "center", color: "var(--muted)" }}>{t("svoyak_lobby_loading")}</div>;
   }
   if (error) {
     return (
@@ -243,10 +252,10 @@ function CategoriesTab() {
           }}
         >
           <div style={{ fontSize: "13px", color: "var(--text)", marginBottom: "10px", fontWeight: 700 }}>
-            🌱 Baza bo'sh
+            {t("svoyak_admin_empty_db_title")}
           </div>
           <div style={{ fontSize: "11px", color: "var(--muted)", marginBottom: "10px" }}>
-            Boshlang'ich 7 kategoriya va 90+ savol bilan to'ldirish mumkin.
+            {t("svoyak_admin_empty_db_text")}
           </div>
           <button
             type="button"
@@ -254,7 +263,7 @@ function CategoriesTab() {
             disabled={seeding}
             style={primaryButton(seeding)}
           >
-            {seeding ? "Yuklanmoqda..." : "✨ Bazani seed qilish"}
+            {seeding ? t("svoyak_admin_seeding") : t("svoyak_admin_seed_button")}
           </button>
         </div>
       ) : null}
@@ -277,7 +286,7 @@ function CategoriesTab() {
       ) : null}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-        <div style={{ fontSize: "13px", color: "var(--muted)" }}>{items.length} ta kategoriya</div>
+        <div style={{ fontSize: "13px", color: "var(--muted)" }}>{t("svoyak_admin_categories_count", { n: items.length })}</div>
         <div style={{ display: "flex", gap: "6px" }}>
           {items.length > 0 ? (
             <button
@@ -289,7 +298,7 @@ function CategoriesTab() {
                 opacity: seeding ? 0.5 : 1,
               }}
             >
-              {seeding ? "..." : "🌱 Seed"}
+              {seeding ? "..." : t("svoyak_admin_seed_short")}
             </button>
           ) : null}
           <button
@@ -297,7 +306,7 @@ function CategoriesTab() {
             onClick={() => { setEditing(null); setShowForm(true); }}
             style={primaryButton()}
           >
-            + Yangi
+            {t("svoyak_admin_new_button")}
           </button>
         </div>
       </div>
@@ -356,6 +365,7 @@ function CategoryForm(props: {
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const { initial, onClose, onSaved } = props;
   const [name, setName] = useState(initial?.name ?? "");
   const [iconEmoji, setIconEmoji] = useState(initial?.iconEmoji ?? "");
@@ -392,21 +402,20 @@ function CategoryForm(props: {
   }
 
   return (
-    <Modal title={initial ? `Kategoriya: ${initial.name}` : "Yangi kategoriya"} onClose={onClose}>
+    <Modal title={initial ? initial.name : t("svoyak_admin_category_new")} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         <div>
-          <label style={labelStyle}>Nom</label>
+          <label style={labelStyle}>{t("svoyak_admin_category_label_name")}</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             style={inputStyle}
-            placeholder="Tarix, Sport..."
           />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
           <div>
-            <label style={labelStyle}>Emoji</label>
+            <label style={labelStyle}>{t("svoyak_admin_category_label_emoji")}</label>
             <input
               type="text"
               value={iconEmoji}
@@ -417,7 +426,7 @@ function CategoryForm(props: {
             />
           </div>
           <div>
-            <label style={labelStyle}>Til</label>
+            <label style={labelStyle}>{t("svoyak_admin_category_label_lang")}</label>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
@@ -431,13 +440,12 @@ function CategoryForm(props: {
           </div>
         </div>
         <div>
-          <label style={labelStyle}>Tartib</label>
+          <label style={labelStyle}>{t("svoyak_admin_category_label_order")}</label>
           <input
             type="number"
             value={order}
             onChange={(e) => setOrder(e.target.value)}
             style={inputStyle}
-            placeholder="Avto"
           />
         </div>
         {err ? (
@@ -447,10 +455,10 @@ function CategoryForm(props: {
         ) : null}
         <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
           <button type="button" onClick={onClose} style={{ ...ghostButton, flex: 1 }}>
-            Bekor qilish
+            {t("cancel")}
           </button>
           <button type="button" onClick={handleSave} disabled={saving} style={{ ...primaryButton(saving), flex: 2 }}>
-            {saving ? "Saqlanmoqda..." : "Saqlash"}
+            {saving ? t("svoyak_admin_saving") : t("save")}
           </button>
         </div>
       </div>
@@ -462,6 +470,7 @@ function CategoryForm(props: {
 // ─── Savollar tab ─────────────────────────────────────────────────────────
 
 function QuestionsTab() {
+  const t = useT();
   const [items, setItems] = useState<AdminSvoyakQuestion[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -552,7 +561,7 @@ function QuestionsTab() {
             onChange={(e) => { setFilterCat(e.target.value ? Number(e.target.value) : undefined); setPage(1); }}
             style={inputStyle}
           >
-            <option value="">Barcha kategoriyalar</option>
+            <option value="">{t("svoyak_admin_filter_all_categories")}</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.iconEmoji} {c.name} ({c.questionCount})
@@ -564,7 +573,7 @@ function QuestionsTab() {
             onChange={(e) => { setFilterTier(e.target.value ? Number(e.target.value) : undefined); setPage(1); }}
             style={inputStyle}
           >
-            <option value="">Barcha ballar</option>
+            <option value="">{t("svoyak_admin_filter_all_values")}</option>
             {VALUE_TIERS.map((t) => (
               <option key={t} value={t}>{t} ball</option>
             ))}
@@ -576,34 +585,34 @@ function QuestionsTab() {
             value={filterSearch}
             onChange={(e) => setFilterSearch(e.target.value)}
             style={{ ...inputStyle, flex: 1 }}
-            placeholder="Savol matn bo'yicha qidirish..."
+            placeholder={t("svoyak_admin_filter_search_placeholder")}
           />
-          <button type="submit" style={ghostButton}>Qidir</button>
+          <button type="submit" style={ghostButton}>{t("svoyak_admin_filter_search_button")}</button>
         </div>
       </form>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
         <div style={{ fontSize: "12px", color: "var(--muted)" }}>
-          {total} savol topildi · {page}/{pages}
+          {t("svoyak_admin_questions_count", { n: total, page, pages })}
         </div>
         <button
           type="button"
           onClick={() => { setEditing(null); setShowForm(true); }}
           style={primaryButton()}
         >
-          + Yangi savol
+          {t("svoyak_admin_new_question")}
         </button>
       </div>
 
       {loading ? (
-        <div style={{ padding: "20px", textAlign: "center", color: "var(--muted)" }}>Yuklanmoqda...</div>
+        <div style={{ padding: "20px", textAlign: "center", color: "var(--muted)" }}>{t("svoyak_lobby_loading")}</div>
       ) : error ? (
         <div style={{ padding: "16px", background: "rgba(239,68,68,0.10)", borderRadius: "10px", color: "#EF4444" }}>
           {error}
         </div>
       ) : items.length === 0 ? (
         <div style={{ padding: "30px 12px", textAlign: "center", color: "var(--muted)" }}>
-          Filtr bo'yicha hech narsa topilmadi
+          {t("svoyak_admin_no_results")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -627,7 +636,7 @@ function QuestionsTab() {
             disabled={page <= 1}
             style={{ ...ghostButton, opacity: page <= 1 ? 0.4 : 1 }}
           >
-            ← Oldingi
+            {t("svoyak_admin_pagination_prev")}
           </button>
           <div style={{ padding: "8px 12px", color: "var(--muted)", fontSize: "12px" }}>
             {page} / {pages}
@@ -638,7 +647,7 @@ function QuestionsTab() {
             disabled={page >= pages}
             style={{ ...ghostButton, opacity: page >= pages ? 0.4 : 1 }}
           >
-            Keyingi →
+            {t("svoyak_admin_pagination_next")}
           </button>
         </div>
       ) : null}
@@ -661,6 +670,7 @@ function QuestionCard(props: {
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   const { q, onEdit, onDelete } = props;
   return (
     <div
@@ -703,8 +713,8 @@ function QuestionCard(props: {
         )}
       </div>
       <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
-        <button type="button" onClick={onEdit} style={ghostButton}>✎ Tahrir</button>
-        <button type="button" onClick={onDelete} style={dangerButton}>✕ O'chir</button>
+        <button type="button" onClick={onEdit} style={ghostButton}>{t("svoyak_admin_edit")}</button>
+        <button type="button" onClick={onDelete} style={dangerButton}>{t("svoyak_admin_delete")}</button>
       </div>
     </div>
   );
@@ -717,6 +727,7 @@ function QuestionForm(props: {
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const { initial, categories, onClose, onSaved } = props;
   const [categoryId, setCategoryId] = useState<number>(initial?.categoryId ?? categories[0]?.id ?? 0);
   const [valueTier, setValueTier] = useState<10 | 20 | 30 | 40 | 50>(
@@ -774,11 +785,11 @@ function QuestionForm(props: {
   }
 
   return (
-    <Modal title={initial ? "Savolni tahrirlash" : "Yangi savol"} onClose={onClose}>
+    <Modal title={initial ? t("svoyak_admin_edit") : t("svoyak_admin_new_question")} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
           <div>
-            <label style={labelStyle}>Kategoriya</label>
+            <label style={labelStyle}>{t("svoyak_admin_question_label_category")}</label>
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(Number(e.target.value))}
@@ -792,7 +803,7 @@ function QuestionForm(props: {
             </select>
           </div>
           <div>
-            <label style={labelStyle}>Ball</label>
+            <label style={labelStyle}>{t("svoyak_admin_question_label_value")}</label>
             <select
               value={valueTier}
               onChange={(e) => setValueTier(Number(e.target.value) as 10 | 20 | 30 | 40 | 50)}
@@ -806,17 +817,16 @@ function QuestionForm(props: {
         </div>
 
         <div>
-          <label style={labelStyle}>Savol matni</label>
+          <label style={labelStyle}>{t("svoyak_admin_question_label_text")}</label>
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             style={{ ...inputStyle, minHeight: "60px", resize: "vertical", fontFamily: "inherit" }}
-            placeholder="Savolni kiriting..."
           />
         </div>
 
         <div>
-          <label style={labelStyle}>To'g'ri javob</label>
+          <label style={labelStyle}>{t("svoyak_admin_question_label_correct")}</label>
           <input
             type="text"
             value={correct}
@@ -832,13 +842,13 @@ function QuestionForm(props: {
             onChange={(e) => setTextMode(e.target.checked)}
           />
           <span style={{ fontSize: "12px", color: "var(--text)" }}>
-            Erkin matn (A/B/C/D yo'q — foydalanuvchi qo'lda yozadi)
+            {t("svoyak_admin_question_text_mode")}
           </span>
         </label>
 
         {!textMode ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={labelStyle}>3 ta noto'g'ri variant</label>
+            <label style={labelStyle}>{t("svoyak_admin_question_label_wrong")}</label>
             {[0, 1, 2].map((i) => (
               <input
                 key={i}
@@ -864,10 +874,10 @@ function QuestionForm(props: {
 
         <div style={{ display: "flex", gap: "8px" }}>
           <button type="button" onClick={onClose} style={{ ...ghostButton, flex: 1 }}>
-            Bekor qilish
+            {t("cancel")}
           </button>
           <button type="button" onClick={handleSave} disabled={saving} style={{ ...primaryButton(saving), flex: 2 }}>
-            {saving ? "Saqlanmoqda..." : "Saqlash"}
+            {saving ? t("svoyak_admin_saving") : t("save")}
           </button>
         </div>
       </div>

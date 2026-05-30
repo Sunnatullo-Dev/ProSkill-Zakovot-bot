@@ -11,6 +11,21 @@ import type { ReactNode, ErrorInfo } from "react";
 type Props = {
   children: ReactNode;
   onReset?: () => void;
+  /** Tarjima qilingan matnlar — render xato bo'lganda useT() ishlatilmaydi
+   * (class component), shuning uchun parent props orqali yuboradi. */
+  labels?: {
+    title: string;
+    text: string;
+    details: string;
+    retry: string;
+  };
+};
+
+const DEFAULT_LABELS = {
+  title: "Svoyak'da xato yuz berdi",
+  text: "Tashvishlanmang — qayta urinish tugmasini bosing yoki Mini-App'ni yopib qayta oching.",
+  details: "Texnik tafsilot",
+  retry: "🔄 Qayta urinib ko'rish",
 };
 
 type State = {
@@ -40,6 +55,7 @@ export default class SvoyakErrorBoundary extends Component<Props, State> {
   render() {
     if (!this.state.hasError) return this.props.children;
 
+    const labels = this.props.labels ?? DEFAULT_LABELS;
     const err = this.state.error;
     const msg = err instanceof Error ? err.message : String(err ?? "Noma'lum xato");
     const stack = err instanceof Error ? err.stack ?? "" : "";
@@ -69,7 +85,7 @@ export default class SvoyakErrorBoundary extends Component<Props, State> {
             textAlign: "center",
           }}
         >
-          Svoyak'da xato yuz berdi
+          {labels.title}
         </div>
         <div
           style={{
@@ -81,8 +97,7 @@ export default class SvoyakErrorBoundary extends Component<Props, State> {
             lineHeight: 1.5,
           }}
         >
-          Tashvishlanmang — qayta urinish tugmasini bosing yoki Mini-App'ni
-          yopib qayta oching.
+          {labels.text}
         </div>
 
         {/* Texnik tafsilot — debug uchun ko'rinadi */}
@@ -99,7 +114,7 @@ export default class SvoyakErrorBoundary extends Component<Props, State> {
           }}
         >
           <summary style={{ cursor: "pointer", color: "var(--text)" }}>
-            Texnik tafsilot
+            {labels.details}
           </summary>
           <div
             style={{
@@ -134,7 +149,7 @@ export default class SvoyakErrorBoundary extends Component<Props, State> {
             cursor: "pointer",
           }}
         >
-          🔄 Qayta urinib ko'rish
+          {labels.retry}
         </button>
       </div>
     );
