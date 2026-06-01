@@ -6,7 +6,8 @@ from django.db import models
 class BattleChallenge(models.Model):
     STATUS_CHOICES = [
         ("pending", "Kutilmoqda"),
-        ("accepted", "Qabul qilindi"),
+        # "accepted" statusi ishlatilmaydi — accept qilingan taklif
+        # to'g'ridan-to'g'ri "in_progress" ga o'tadi (start_game_flow orqali).
         ("in_progress", "Jarayonda"),
         ("finished", "Tugadi"),
         ("declined", "Rad etildi"),

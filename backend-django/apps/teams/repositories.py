@@ -50,26 +50,25 @@ def find_membership(telegram_id: int) -> dict[str, Any] | None:
 
 
 def create_team(name: str, owner_id: int) -> dict[str, Any]:
-    code = ""
+    # Kod generatsiya + yaratish — IntegrityError bo'lsa retry qilamiz.
+    # TOCTOU race: ikki so'rov bir vaqtda bir xil kodni topishi mumkin,
+    # lekin DB unique constraint xatoni ushlab, retry yangi kod bilan urinadi.
+    last_error: Exception | None = None
     for _ in range(CODE_GENERATION_ATTEMPTS):
-        candidate = _generate_code()
-        if not Team.objects.filter(code=candidate).exists():
-            code = candidate
-            break
+        code = _generate_code()
+        try:
+            with transaction.atomic():
+                team = Team.objects.create(name=name, code=code, owner_id=owner_id)
+                TeamMember.objects.create(team=team, telegram_id=owner_id)
+            return _map_team(team)
+        except IntegrityError as exc:
+            last_error = exc
+            # Kod to'qnashuvi bo'lsa yangi kod bilan qayta urinamiz.
+            # Agar owner_id unique constraint (boshqa jamoa a'zosi) bo'lsa
+            # ham IntegrityError — bu holda retry foydasiz, lekin xabar aniq.
+            continue
 
-    if not code:
-        raise AppError(500, "Yagona kod yaratib bo'lmadi, qaytadan urinib ko'ring")
-
-    # Team va birinchi a'zo — bitta atomic blok ichida. Jarayon o'rtada
-    # to'xtab qolsa orphan team qolmaydi, transaction butun rollback bo'ladi.
-    try:
-        with transaction.atomic():
-            team = Team.objects.create(name=name, code=code, owner_id=owner_id)
-            TeamMember.objects.create(team=team, telegram_id=owner_id)
-    except IntegrityError:
-        raise AppError(500, "Jamoa yaratish muvaffaqiyatsiz")
-
-    return _map_team(team)
+    raise AppError(500, "Jamoa yaratish muvaffaqiyatsiz, qaytadan urinib ko'ring")
 
 
 def get_team_with_members(team_id: str) -> dict[str, Any]:

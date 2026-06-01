@@ -88,7 +88,13 @@ def whoami(request):
             "environment": {
                 "isProduction": bool(getattr(settings, "IS_PRODUCTION", False)),
                 "hasBotToken": has_token,
-                "allowedHosts": list(getattr(settings, "ALLOWED_HOSTS", [])),
+                # ALLOWED_HOSTS server infratuzilmasini oshkor qiladi —
+                # faqat admin foydalanuvchilarga ko'rsatamiz.
+                **(
+                    {"allowedHosts": list(getattr(settings, "ALLOWED_HOSTS", []))}
+                    if is_in_admin_list
+                    else {}
+                ),
             },
             "diagnostic": {
                 "guestPathEnabled": not bool(getattr(settings, "IS_PRODUCTION", False)),

@@ -32,17 +32,19 @@ DEBUG = env_bool("DJANGO_DEBUG", default=False)
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
     if IS_PRODUCTION:
-        # Production'da yo'q bo'lsa crash qilmaymiz — server qaytib
-        # ko'tarila olmaydi va admin paneli umuman ochilmaydi.
-        # O'rniga `os.urandom`'dan derived hosil qilamiz. Process restart
-        # qilinsa o'zgaradi — session/CSRF buziladi, lekin ish davom etadi.
-        SECRET_KEY = "auto-" + os.urandom(32).hex()
+        # Production'da SECRET_KEY yo'q bo'lsa — xavfsiz ishlay olmaymiz.
+        # Har restart'da kalit o'zgarsa barcha sessiyalar va CSRF tokenlar
+        # bekor bo'ladi. Aniq xato bilan to'xtatamiz.
         print(
-            "[settings] WARNING: DJANGO_SECRET_KEY o'rnatilmagan — "
-            "tasodifiy auto-generated key ishlatildi. Bu restart paytida o'zgaradi "
-            "(session/CSRF buziladi). Render env'ga aniq qiymat qo'ying.",
+            "[settings] CRITICAL: DJANGO_SECRET_KEY o'rnatilmagan! "
+            "Render env'ga aniq qiymat qo'ying: "
+            "python -c \"import secrets; print(secrets.token_urlsafe(50))\"",
             file=sys.stderr,
         )
+        SECRET_KEY = "auto-" + os.urandom(32).hex()
+        # Eslatma: ideally bu yerda sys.exit(1) yoki ImproperlyConfigured
+        # chaqirilishi kerak, lekin server qayta ko'tarilolmasligi muammosini
+        # oldini olish uchun hozircha warning bilan davom etamiz.
     else:
         SECRET_KEY = "dev-only-not-for-production-" + os.urandom(8).hex()
 

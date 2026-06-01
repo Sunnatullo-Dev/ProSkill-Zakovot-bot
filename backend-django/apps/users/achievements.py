@@ -24,31 +24,31 @@ ACHIEVEMENTS: list[AchievementDef] = [
         id="first-game",
         label="Birinchi qadam",
         bonus=5,
-        is_unlocked=lambda stats: stats["gamesPlayed"] >= 1,
+        is_unlocked=lambda stats: stats.get("gamesPlayed", 0) >= 1,
     ),
     AchievementDef(
         id="ten-games",
         label="Tajribali",
         bonus=15,
-        is_unlocked=lambda stats: stats["gamesPlayed"] >= 10,
+        is_unlocked=lambda stats: stats.get("gamesPlayed", 0) >= 10,
     ),
     AchievementDef(
         id="score-100",
         label="Zukko",
         bonus=20,
-        is_unlocked=lambda stats: stats["totalScore"] >= 100,
+        is_unlocked=lambda stats: stats.get("totalScore", 0) >= 100,
     ),
     AchievementDef(
         id="score-500",
         label="Daho",
         bonus=50,
-        is_unlocked=lambda stats: stats["totalScore"] >= 500,
+        is_unlocked=lambda stats: stats.get("totalScore", 0) >= 500,
     ),
     AchievementDef(
         id="best-round",
         label="Rekordchi",
         bonus=25,
-        is_unlocked=lambda stats: stats["bestRoundScore"] >= 20,
+        is_unlocked=lambda stats: stats.get("bestRoundScore", 0) >= 20,
     ),
 ]
 

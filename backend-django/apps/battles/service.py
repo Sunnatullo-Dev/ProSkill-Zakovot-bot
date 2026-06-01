@@ -598,7 +598,7 @@ def get_pending_for_user(telegram_id: int) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
 
     for ch in challenges:
-        if ch["status"] not in ("pending", "accepted", "in_progress"):
+        if ch["status"] not in ("pending", "in_progress"):
             continue
         challenger_team = get_team_by_id(ch["challengerTeamId"])
         opponent_team = get_team_by_id(ch["opponentTeamId"])
@@ -645,6 +645,13 @@ def forfeit_battle(battle_id: str, telegram_id: int) -> None:
     # Atomik gate — boshqa client allaqachon finalize qilgan bo'lsa rad etadi.
     if not battle_repo.try_finalize(battle_id):
         return
+
+    # Joriy aktiv raundni yopamiz — ended_at=None bo'lib qolgan "yetim" raund
+    # qolmasligi uchun. try_finalize dan keyin yangi javob qabul qilinmaydi,
+    # shuning uchun bu xavfsiz.
+    current_round = battle_repo.get_round_by_number(battle_id, challenge["currentRoundNumber"])
+    if current_round and not current_round.get("endedAt"):
+        battle_repo.try_end_round(current_round["id"])
 
     # G'olib jamoa a'zolariga bonus (chiqib ketgan jamoaga emas).
     try:

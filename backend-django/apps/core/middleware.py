@@ -59,10 +59,11 @@ class TelegramAuthMiddleware:
             if internal_key and hmac.compare_digest(provided_key, internal_key):
                 return _bot_admin_user()
 
-            # 2) Bot tokenga qaytish — DOIM sinaymiz (internal_key sozlangan
-            # bo'lsa-yu bot eski tokeni yubo'rsa ham ishlasin). Bu xavfsizroq
-            # konfiguratsiyaga uzlasiz migratsiya imkonini beradi.
-            if bot_token and hmac.compare_digest(provided_key, bot_token):
+            # 2) Bot tokenga qaytish — FAQAT BOT_INTERNAL_API_KEY sozlanmagan
+            # bo'lsa. Agar internal kalit sozlangan bo'lsa, bot token fallback'i
+            # o'chiriladi: production'da bot tokeni log'larda ko'rinishi mumkin
+            # va uni bilgan har kim admin huquqiga ega bo'lib qolmasligi kerak.
+            if bot_token and not internal_key and hmac.compare_digest(provided_key, bot_token):
                 global _bot_token_fallback_warned
                 if not _bot_token_fallback_warned:
                     logger.warning(

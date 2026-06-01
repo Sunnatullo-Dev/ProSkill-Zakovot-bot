@@ -163,6 +163,9 @@ def join_room(
             # Qaytib ulanish — disconnect→connect.
             existing.status = "connected"
             existing.display_name = display_name or existing.display_name
+            # auto_now=True maydon update_fields bilan avtomatik yangilanmaydi,
+            # shuning uchun qo'lda o'rnatamiz.
+            existing.last_seen_at = timezone.now()
             existing.save(update_fields=["status", "display_name", "last_seen_at"])
         else:
             current_count = SvoyakPlayer.objects.filter(
@@ -203,6 +206,8 @@ def leave_room(*, code: str, telegram_id: int) -> None:
             player.delete()
         else:
             player.status = "disconnected"
+            # auto_now=True maydon update_fields bilan avtomatik yangilanmaydi.
+            player.last_seen_at = timezone.now()
             player.save(update_fields=["status", "last_seen_at"])
 
         if room.host_telegram_id == telegram_id and room.status != "finished":
@@ -482,8 +487,11 @@ def submit_answer(
             else:
                 is_correct = _normalize(trimmed) == _normalize(question.correct_answer)
         else:
-            # Erkin matn — aniq taqqoslash (kelajakda Gemini, hozir oddiy)
-            is_correct = _normalize(trimmed) == _normalize(question.correct_answer)
+            # Erkin matn — Gemini AI bilan fuzzy matching (solo o'yindagi kabi).
+            # "Alisher Navoiy" → "Navoiy" ham to'g'ri deb hisoblanadi.
+            from apps.answers.gemini import check_answer as gemini_check_answer
+            result = gemini_check_answer(question.text, question.correct_answer, trimmed)
+            is_correct = result.status == "correct"
 
         delta = round_row.value if is_correct else -round_row.value
         round_row.answer_text = trimmed

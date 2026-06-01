@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from apps.core.exceptions import AppError
+from django.db.models import Count, Max, Sum
 
 from .models import GameResult
 
@@ -22,12 +22,19 @@ def create_game_result(
 
 
 def get_stats(telegram_id: int) -> dict[str, Any]:
-    rows = list(GameResult.objects.filter(telegram_id=telegram_id))
+    # Barcha qatorlarni xotiraga yuklamasdan, bitta DB aggregate so'rovi bilan
+    # hisoblash — faol foydalanuvchilar uchun xotira va tezlik muammosini hal qiladi.
+    agg = GameResult.objects.filter(telegram_id=telegram_id).aggregate(
+        games_played=Count("id"),
+        total_correct=Sum("correct_count"),
+        total_questions=Sum("total_count"),
+        best_round_score=Max("round_score"),
+    )
 
-    games_played = len(rows)
-    total_correct = sum(r.correct_count for r in rows)
-    total_questions = sum(r.total_count for r in rows)
-    best_round_score = max((r.round_score for r in rows), default=0)
+    games_played = agg["games_played"] or 0
+    total_correct = agg["total_correct"] or 0
+    total_questions = agg["total_questions"] or 0
+    best_round_score = agg["best_round_score"] or 0
     accuracy = round((total_correct / total_questions) * 100) if total_questions > 0 else 0
 
     return {

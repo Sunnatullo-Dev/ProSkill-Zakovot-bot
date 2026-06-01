@@ -213,7 +213,10 @@ def reveal_answer(request):
 
     # Reveal'da ham biletni "consumed" deb belgilaymiz — Gemini'ni qaytadan
     # so'rab kvota yoqib bo'lmasin. Submit endpoint'i ham shu jti'ni rad etadi.
-    consume_answer_ticket(payload.jti)
+    # Agar bilet allaqachon ishlatilgan bo'lsa (masalan, submit_answer chaqirilgan),
+    # 409 qaytaramiz — Gemini API chaqirilmaydi.
+    if not consume_answer_ticket(payload.jti):
+        raise AppError(409, "Bu bilet allaqachon ishlatilgan")
 
     explanation = explain_question(question["text"], question["correctAnswer"])
     return Response({"correctAnswer": question["correctAnswer"], "explanation": explanation})

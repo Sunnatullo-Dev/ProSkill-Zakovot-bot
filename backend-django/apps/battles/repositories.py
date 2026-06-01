@@ -59,7 +59,7 @@ def get_active_challenges_for_team(team_id: str) -> list[dict[str, Any]]:
 
     bcs = BattleChallenge.objects.filter(
         Q(challenger_team_id=team_id) | Q(opponent_team_id=team_id),
-        status__in=["pending", "accepted", "in_progress"],
+        status__in=["pending", "in_progress"],
     ).order_by("-created_at")
     return [_map_challenge(bc) for bc in bcs]
 
