@@ -51,9 +51,14 @@ export default function SvoyakRouter({
   // o'rniga foydalanuvchiga ko'rinadigan xato + Qayta urinish tugma. onReset
   // butun routerni lobby holatiga qaytaradi.
   return (
-    <SvoyakErrorBoundary labels={errorLabels} onReset={() => setStage({ kind: "lobby" })}>
+    <SvoyakErrorBoundary
+      key={stage.kind}
+      labels={errorLabels}
+      onReset={() => setStage({ kind: "lobby" })}
+    >
       {stage.kind === "lobby" ? (
         <SvoyakLobbyScreen
+          key="lobby"
           playerName={playerName}
           initialJoinCode={initialJoinCode}
           coordinatorEnabled={appSettings.svoyakCoordinatorEnabled}
@@ -61,12 +66,14 @@ export default function SvoyakRouter({
         />
       ) : stage.kind === "board" ? (
         <SvoyakBoardScreen
+          key={"board-" + stage.code}
           code={stage.code}
           onGameEnded={(state) => setStage({ kind: "finished", state })}
           onExit={onExitSvoyak}
         />
       ) : (
         <SvoyakFinished
+          key="finished"
           state={stage.state}
           onPlayAgain={() => setStage({ kind: "lobby" })}
           onExit={onExitSvoyak}
