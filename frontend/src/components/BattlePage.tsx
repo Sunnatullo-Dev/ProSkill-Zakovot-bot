@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchTTS, forfeitBattle, getBattleState, submitBattleAnswer } from "../api/client";
-import type { BattleState, BattleTeamView } from "../types";
+import type { BattleState, BattleTeamView, TeamMember } from "../types";
 import { hapticResult } from "../utils/haptics";
 import { SpeakerIcon } from "./icons";
+import TeamChatPanel from "./TeamChatPanel";
 
 function addWavHeaderIfNeeded(bytes: Uint8Array): ArrayBuffer {
   if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
@@ -983,10 +984,22 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
         <MembersStatus team={myTeam} currentUserId={currentUserId} />
         <MembersStatus team={otherTeam} currentUserId={currentUserId} />
       </div>
+
+      {/* Jamoa chat — battle paytida muhokama qilish uchun */}
+      <TeamChatPanel
+        currentUserId={currentUserId}
+        members={myTeam.members.map((m) => ({
+          telegramId: m.telegramId,
+          joinedAt: "",
+          firstName: m.firstName ?? null,
+          username: m.username ?? null,
+        } satisfies TeamMember))}
+        canSend={currentUserId > 0}
+      />
     </div>
   );
 }
