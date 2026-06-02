@@ -45,9 +45,14 @@ function writeCache(data: AppSettings): void {
 }
 
 export function useAppSettings(): AppSettings {
-  const [settings, setSettings] = useState<AppSettings>(() => readCache() ?? DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
+    // Mount'da keshdan o'qiymiz — lazy initializer o'rniga useEffect ichida
+    // (Telegram WebView localStorage xatolaridan himoya)
+    const cached = readCache();
+    if (cached) setSettings(cached);
+
     // Background revalidate — UI tez ko'rinadi, yangi ma'lumot kelsa yangilanadi
     void getAppSettings().then((data) => {
       if (data) {

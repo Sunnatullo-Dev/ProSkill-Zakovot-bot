@@ -56,11 +56,11 @@ export default function RoundResultOverlay({
       /* ignore */
     }
     if (autoDismissMs > 0) {
-      const t = window.setTimeout(() => {
+      const timerId = window.setTimeout(() => {
         setVisible(false);
         window.setTimeout(() => onDismiss?.(), 220);
       }, autoDismissMs);
-      return () => window.clearTimeout(t);
+      return () => window.clearTimeout(timerId);
     }
     return undefined;
   }, [correct, autoDismissMs, onDismiss]);
