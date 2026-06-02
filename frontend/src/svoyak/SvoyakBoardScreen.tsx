@@ -47,22 +47,53 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
   const t = useT();
   const { data, error, refetch } = useSvoyakRoom(code);
 
+  // ─── BARCHA HOOKS EARLY RETURN DAN OLDIN ───────────────────────────────
+  // React qoidasi: hook'lar har renderda BIR XIL tartibda, SHARTISIZ chaqirilishi shart.
+
   const canPick = useMemo(() => {
     if (!data) return false;
     const me = (data.players ?? []).find((p) => p.telegramId === data.viewerTelegramId);
     return Boolean(me?.canPick);
   }, [data]);
 
-  // Koordinator rejimi — savol o'qiydi, buzz bosib/javob bera olmaydi
   const isCoordinator = useMemo(() => {
     if (!data) return false;
     const me = (data.players ?? []).find((p) => p.telegramId === data.viewerTelegramId);
     return me?.role === "coordinator";
   }, [data]);
 
+  // Round result flash uchun state — early return dan OLDIN bo'lishi SHART
+  const [dismissedResultRoundId, setDismissedResultRoundId] = useState<number | null>(null);
+
+  const round = data?.currentRound ?? null;
+
+  // Yangi round boshlansa eski dismiss state'ni tozalaymiz
+  useEffect(() => {
+    if (round && round.status !== "completed" && round.status !== "skipped") {
+      setDismissedResultRoundId(null);
+    }
+  }, [round?.id, round?.status]);
+
+  // Bloklagan o'yinchi ismi
+  const blockedBy = useMemo(() => {
+    if (!round || !round.buzzWinnerTelegramId) return undefined;
+    const w = (data?.players ?? []).find((p) => p.telegramId === round.buzzWinnerTelegramId);
+    return w?.displayName;
+  }, [round, data?.players]);
+
+  // Joriy savol uchun kategoriya
+  const currentCategory = useMemo(() => {
+    if (!round) return null;
+    const cellsWithThisValue = (data?.board ?? []).filter(
+      (b) => Array.isArray(b.usedValueTiers) && b.usedValueTiers.includes(round.value)
+    );
+    return cellsWithThisValue[0] ?? null;
+  }, [round, data?.board]);
+
+  // ─── HOOKS TUGADI — endi early return mumkin ───────────────────────────
+
   // O'yin tugagani — auto-redirect
   if (data && data.status === "finished") {
-    // Defer to avoid setState in render path
     Promise.resolve().then(() => onGameEnded(data));
   }
 
@@ -79,7 +110,6 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
     );
   }
 
-  const round = data.currentRound;
   const isHost = data.viewerIsHost;
   const meIsWinner = round?.buzzWinnerTelegramId === data.viewerTelegramId;
 
@@ -135,68 +165,29 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
     }
   }
 
-  // ─────── Scoreboard ────────────
-  // Defensiv: data.players/board kelmasa bo'sh ro'yxat — qora ekran o'rniga.
   const players = Array.isArray(data.players) ? data.players : [];
   const board = Array.isArray(data.board) ? data.board : [];
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
-  // ─────── Overlay: aktiv raund ────────────
-  // Status reading / waiting_buzz / answering — to'liq ekran overlay.
   const showOverlay =
     round && (round.status === "reading" || round.status === "waiting_buzz" || round.status === "answering");
 
-  // ─────── Round result flash ────────────
-  // Round 'completed'/'skipped' bo'lganda 2.4s flash. Bir round uchun bir
-  // marta — id'ni ref'da saqlab dismiss bo'lgach takror ko'rinmaydi.
-  const [dismissedResultRoundId, setDismissedResultRoundId] = useState<number | null>(null);
   const showResultOverlay =
     round &&
     (round.status === "completed" || round.status === "skipped") &&
     dismissedResultRoundId !== round.id;
-  // Yangi round boshlansa eski dismiss state'ni tozalab qo'yamiz.
-  useEffect(() => {
-    if (round && round.status !== "completed" && round.status !== "skipped") {
-      setDismissedResultRoundId(null);
-    }
-  }, [round?.id, round?.status]);
 
-
-  // BUZZ holatini hisoblash (joriy o'yinchi ko'zi orqali)
   function buzzStateForViewer(): "waiting" | "active" | "blocked" | "winner" {
     if (!round) return "waiting";
     if (round.status === "reading") return "waiting";
     if (round.status === "answering") {
       return meIsWinner ? "winner" : "blocked";
     }
-    // waiting_buzz: hammasi aktiv, lekin agar hozir client buzz qilmagan
-    // bo'lsa 'active'. Agar buzz_winner_id allaqachon mavjud bo'lsa boshqalar
-    // 'blocked'. (Real-time'da bu polling orqali yangilanadi.)
     if (round.buzzWinnerTelegramId !== null) {
       return meIsWinner ? "winner" : "blocked";
     }
     return "active";
   }
-
-  // Bloklagan o'yinchi ismi (winner)
-  const blockedBy = useMemo(() => {
-    if (!round || !round.buzzWinnerTelegramId) return undefined;
-    const w = (data.players ?? []).find((p) => p.telegramId === round.buzzWinnerTelegramId);
-    return w?.displayName;
-  }, [round, data.players]);
-
-  // Joriy savol uchun kategoriya nomi/icon — board snapshot'idan topiladi.
-  const currentCategory = useMemo(() => {
-    if (!round) return null;
-    // Round'da kategoriya ID yo'q, lekin questionId orqali topib bo'lmaydi.
-    // Doska har kategoriya uchun usedValueTiers'ga round.value qo'shilgan
-    // bo'lishi kerak — eng yangi ishlatilgan tier'ga ega kategoriyani topamiz.
-    const cellsWithThisValue = (data.board ?? []).filter(
-      (b) => Array.isArray(b.usedValueTiers) && b.usedValueTiers.includes(round.value)
-    );
-    // Bir nechta bo'lsa — birinchisini olamiz (oddiy fallback).
-    return cellsWithThisValue[0] ?? null;
-  }, [round, data.board]);
 
   return (
     <>
