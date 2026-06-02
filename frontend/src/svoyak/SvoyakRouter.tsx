@@ -12,6 +12,7 @@ import SvoyakBoardScreen from "./SvoyakBoardScreen";
 import SvoyakErrorBoundary from "./SvoyakErrorBoundary";
 import type { SvoyakRoomState } from "./types";
 import { useT } from "../i18n";
+import { useAppSettings } from "../hooks/useAppSettings";
 
 type Props = {
   /** Joriy foydalanuvchi ismi. */
@@ -33,6 +34,7 @@ export default function SvoyakRouter({
   onExitSvoyak,
 }: Props) {
   const t = useT();
+  const appSettings = useAppSettings();
   const [stage, setStage] = useState<Stage>({ kind: "lobby" });
 
   const errorLabels = {
@@ -54,6 +56,7 @@ export default function SvoyakRouter({
         <SvoyakLobbyScreen
           playerName={playerName}
           initialJoinCode={initialJoinCode}
+          coordinatorEnabled={appSettings.svoyakCoordinatorEnabled}
           onGameStarted={(state) => setStage({ kind: "board", code: state.code })}
         />
       ) : stage.kind === "board" ? (

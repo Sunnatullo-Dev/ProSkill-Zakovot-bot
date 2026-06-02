@@ -25,7 +25,6 @@ import { useSvoyakRoom } from "./useSvoyakRoom";
 import type { SvoyakRoomState } from "./types";
 import { hapticSelect, hapticTap } from "../utils/haptics";
 import { useT } from "../i18n";
-import { useAppSettings } from "../hooks/useAppSettings";
 
 type SvoyakLobbyScreenProps = {
   /** Joriy foydalanuvchi (Telegram'dan) */
@@ -34,6 +33,8 @@ type SvoyakLobbyScreenProps = {
   initialJoinCode?: string;
   /** Xona o'yin "playing" holatiga o'tganda chaqiriladi — Board ekranga o'tish. */
   onGameStarted: (state: SvoyakRoomState) => void;
+  /** Koordinator rejimi admin tomonidan yoqilganmi */
+  coordinatorEnabled?: boolean;
 };
 
 type Mode = "menu" | "host_setup" | "joining" | "in_lobby";
@@ -125,9 +126,9 @@ export default function SvoyakLobbyScreen({
   playerName,
   initialJoinCode,
   onGameStarted,
+  coordinatorEnabled = true,
 }: SvoyakLobbyScreenProps) {
   const t = useT();
-  const appSettings = useAppSettings();
   const [mode, setMode] = useState<Mode>(initialJoinCode ? "joining" : "menu");
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
@@ -555,7 +556,7 @@ export default function SvoyakLobbyScreen({
             maxLength={8}
           />
           {/* Rol tanlash — faqat admin yoqqan bo'lsa */}
-          {appSettings.svoyakCoordinatorEnabled ? (
+          {coordinatorEnabled ? (
             <>
               <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
                 <button
