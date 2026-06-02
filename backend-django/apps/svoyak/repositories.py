@@ -137,11 +137,16 @@ def find_room_by_code(code: str) -> SvoyakRoom | None:
 
 
 def join_room(
-    *, code: str, telegram_id: int, display_name: str
+    *, code: str, telegram_id: int, display_name: str, role: str = "player"
 ) -> dict[str, Any]:
-    """O'yinchini xonaga qo'shadi yoki qaytib ulanishini tasdiqlaydi."""
+    """O'yinchini xonaga qo'shadi yoki qaytib ulanishini tasdiqlaydi.
+
+    role: "player" | "coordinator" — koordinator savol o'qiydi, ball olmaydi.
+    """
     if telegram_id <= 0:
         raise AppError(401, "Mehmon Svoyak xonasiga qo'shilolmaydi")
+    if role not in ("player", "coordinator"):
+        role = "player"
     normalized = code.strip().upper()
 
     with transaction.atomic():
@@ -168,11 +173,13 @@ def join_room(
             existing.last_seen_at = timezone.now()
             existing.save(update_fields=["status", "display_name", "last_seen_at"])
         else:
-            current_count = SvoyakPlayer.objects.filter(
-                room=room, status__in=["connected", "disconnected"]
-            ).count()
-            if current_count >= max_players:
-                raise AppError(409, "Xona to'lib qolgan")
+            # Koordinator uchun o'yinchi soni chegarasi qo'llanilmaydi
+            if role == "player":
+                current_count = SvoyakPlayer.objects.filter(
+                    room=room, status__in=["connected", "disconnected"], role="player"
+                ).count()
+                if current_count >= max_players:
+                    raise AppError(409, "Xona to'lib qolgan")
             try:
                 SvoyakPlayer.objects.create(
                     room=room,
@@ -181,6 +188,7 @@ def join_room(
                     score=0,
                     status="connected",
                     can_pick=False,
+                    role=role,
                 )
             except IntegrityError:
                 raise AppError(409, "Allaqachon ulangansiz")
@@ -358,9 +366,12 @@ def open_buzz(*, code: str, telegram_id: int) -> dict[str, Any]:
         room = SvoyakRoom.objects.select_for_update().filter(code=normalized).first()
         if not room or not room.current_round_id:
             raise AppError(404, "Aktiv raund yo'q")
-        # Faqat host buzz ochish huquqiga ega (spec'da boshlovchi savol o'qiydi)
-        if room.host_telegram_id != telegram_id:
-            raise AppError(403, "Faqat host buzz'ni ocha oladi")
+        # Faqat host yoki koordinator buzz ochish huquqiga ega
+        is_coordinator = SvoyakPlayer.objects.filter(
+            room=room, telegram_id=telegram_id, role="coordinator"
+        ).exists()
+        if room.host_telegram_id != telegram_id and not is_coordinator:
+            raise AppError(403, "Faqat host yoki koordinator buzz'ni ocha oladi")
 
         round_row = SvoyakRound.objects.select_for_update().filter(
             id=room.current_round_id
@@ -405,6 +416,9 @@ def buzz(*, code: str, telegram_id: int) -> dict[str, Any]:
             raise AppError(403, "Siz bu xonada emassiz")
         if player.status != "connected":
             raise AppError(403, "Ulangan emassiz")
+        # Koordinator BUZZ bosa olmaydi — faqat savol o'qiydi
+        if player.role == "coordinator":
+            raise AppError(403, "Koordinator buzz bosa olmaydi")
 
         # Status reading bo'lsa — savol o'qilmoqda, hali bosish mumkin emas.
         # Bu yagona "haqiqiy" xato (cheat'ga urinish).
@@ -626,6 +640,7 @@ def _serialize_player(p: SvoyakPlayer) -> dict[str, Any]:
         "avatarUrl": p.avatar_url or None,
         "score": p.score,
         "status": p.status,
+        "role": p.role,  # "player" | "coordinator"
         "canPick": p.can_pick,
         "isHost": p.telegram_id == p.room.host_telegram_id,
     }

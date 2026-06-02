@@ -83,10 +83,14 @@ def join_room(request, code: str):
     user = request.current_user
     body = request.data if isinstance(request.data, dict) else {}
     display_name = (body.get("displayName") or "").strip()
+    role = body.get("role", "player")
+    if role not in ("player", "coordinator"):
+        role = "player"
     state = repositories.join_room(
         code=code,
         telegram_id=user.telegram_id,
         display_name=display_name,
+        role=role,
     )
     return Response(state)
 

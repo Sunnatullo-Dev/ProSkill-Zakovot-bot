@@ -53,6 +53,13 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
     return Boolean(me?.canPick);
   }, [data]);
 
+  // Koordinator rejimi — savol o'qiydi, buzz bosib/javob bera olmaydi
+  const isCoordinator = useMemo(() => {
+    if (!data) return false;
+    const me = (data.players ?? []).find((p) => p.telegramId === data.viewerTelegramId);
+    return me?.role === "coordinator";
+  }, [data]);
+
   // O'yin tugagani — auto-redirect
   if (data && data.status === "finished") {
     // Defer to avoid setState in render path
@@ -388,7 +395,32 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
         ) : null}
 
         {round.status === "waiting_buzz" ? (
-          <BuzzOverlay state={buzzStateForViewer()} onPress={handleBuzz} blockedBy={blockedBy} />
+          isCoordinator ? (
+            <div style={{ textAlign: "center", padding: "16px" }}>
+              <div style={{ fontSize: "14px", color: "var(--svoyak-gold)", fontWeight: 700 }}>
+                🎤 O'yinchilar javob kutilmoqda...
+              </div>
+              <button
+                type="button"
+                onClick={handleSkip}
+                style={{
+                  marginTop: "12px",
+                  padding: "10px 24px",
+                  borderRadius: "999px",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  background: "rgba(255,59,92,0.12)",
+                  color: "var(--svoyak-neon-red, #ff3b5c)",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                O'tkazib yuborish
+              </button>
+            </div>
+          ) : (
+            <BuzzOverlay state={buzzStateForViewer()} onPress={handleBuzz} blockedBy={blockedBy} />
+          )
         ) : null}
 
         {round.status === "answering" ? (
@@ -398,6 +430,29 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
               onAnswer={handleAnswer}
               onSkip={handleSkip}
             />
+          ) : isCoordinator ? (
+            <div style={{ textAlign: "center", padding: "16px" }}>
+              <div style={{ fontSize: "14px", color: "var(--svoyak-gold)", fontWeight: 700 }}>
+                🎤 Javob kutilmoqda...
+              </div>
+              <button
+                type="button"
+                onClick={handleSkip}
+                style={{
+                  marginTop: "12px",
+                  padding: "10px 24px",
+                  borderRadius: "999px",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  background: "rgba(255,59,92,0.12)",
+                  color: "var(--svoyak-neon-red, #ff3b5c)",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                Noto'g'ri / O'tkazish
+              </button>
+            </div>
           ) : (
             <BuzzOverlay state={buzzStateForViewer()} onPress={async () => {}} blockedBy={blockedBy} />
           )

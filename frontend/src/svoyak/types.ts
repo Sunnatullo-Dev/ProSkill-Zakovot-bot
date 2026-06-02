@@ -21,6 +21,7 @@ export type SvoyakPlayer = {
   avatarUrl: string | null;
   score: number;
   status: SvoyakPlayerStatus;
+  role: "player" | "coordinator";
   canPick: boolean;
   isHost: boolean;
 };

@@ -137,10 +137,11 @@ export async function createRoom(input: {
 export async function joinRoom(input: {
   code: string;
   displayName: string;
+  role?: "player" | "coordinator";
 }): Promise<SvoyakRoomState> {
   return request<SvoyakRoomState>(`/svoyak/rooms/${encodeURIComponent(input.code)}/join`, {
     method: "POST",
-    body: { displayName: input.displayName },
+    body: { displayName: input.displayName, role: input.role ?? "player" },
   });
 }
 

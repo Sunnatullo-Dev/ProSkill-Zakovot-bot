@@ -153,6 +153,11 @@ PLAYER_STATUS_CHOICES = [
     ("kicked", "Chiqarib yuborilgan"),
 ]
 
+PLAYER_ROLE_CHOICES = [
+    ("player", "O'yinchi"),
+    ("coordinator", "Koordinator (savol o'quvchi)"),
+]
+
 
 class SvoyakPlayer(models.Model):
     """Bitta room ichidagi bitta o'yinchi.
@@ -171,6 +176,10 @@ class SvoyakPlayer(models.Model):
     score = models.IntegerField(default=0)  # MINUS bo'lishi mumkin
     status = models.CharField(
         max_length=15, choices=PLAYER_STATUS_CHOICES, default="connected"
+    )
+    # Koordinator yoki oddiy o'yinchi
+    role = models.CharField(
+        max_length=15, choices=PLAYER_ROLE_CHOICES, default="player"
     )
     # Buzz bossa, server ushbu vaqtni yozadi. Boshqalar BUZZ tugmasini
     # bossa, bularning vaqtidan keyin kelsa — bloked.

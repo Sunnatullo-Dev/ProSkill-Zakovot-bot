@@ -138,6 +138,7 @@ export default function SvoyakLobbyScreen({
 
   // Join ekrani:
   const [joinCodeInput, setJoinCodeInput] = useState(initialJoinCode ?? "");
+  const [joinRole, setJoinRole] = useState<"player" | "coordinator">("player");
 
   // Lobby (xona ichidagi state — polling)
   const { data: roomState, error: pollError, refetch } = useSvoyakRoom(activeCode);
@@ -213,7 +214,7 @@ export default function SvoyakLobbyScreen({
     setError("");
     setBusy(true);
     try {
-      const state = await joinRoom({ code: normalized, displayName: playerName });
+      const state = await joinRoom({ code: normalized, displayName: playerName, role: joinRole });
       setActiveCode(state.code);
       setMode("in_lobby");
     } catch (err) {
@@ -551,6 +552,58 @@ export default function SvoyakLobbyScreen({
             }}
             maxLength={8}
           />
+          {/* Rol tanlash */}
+          <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() => setJoinRole("player")}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "10px",
+                border: joinRole === "player"
+                  ? "1.5px solid var(--svoyak-gold, #f5c842)"
+                  : "1.5px solid var(--svoyak-border, #1f3a6e)",
+                background: joinRole === "player"
+                  ? "rgba(245,200,66,0.15)"
+                  : "var(--svoyak-surface, #0f1f3a)",
+                color: "var(--text)",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: "pointer",
+                textAlign: "center",
+              }}
+            >
+              🎮 O'yinchi
+            </button>
+            <button
+              type="button"
+              onClick={() => setJoinRole("coordinator")}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "10px",
+                border: joinRole === "coordinator"
+                  ? "1.5px solid #4DA6FF"
+                  : "1.5px solid var(--svoyak-border, #1f3a6e)",
+                background: joinRole === "coordinator"
+                  ? "rgba(77,166,255,0.15)"
+                  : "var(--svoyak-surface, #0f1f3a)",
+                color: "var(--text)",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: "pointer",
+                textAlign: "center",
+              }}
+            >
+              🎤 Koordinator
+            </button>
+          </div>
+          {joinRole === "coordinator" ? (
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px", textAlign: "center" }}>
+              Koordinator savol o'qiydi, ball olmaydi
+            </div>
+          ) : null}
         </div>
 
         {error ? (
@@ -676,8 +729,23 @@ export default function SvoyakLobbyScreen({
                   opacity: p.status === "connected" ? 1 : 0.5,
                 }}
               >
-                <span style={{ fontSize: "18px" }}>{p.isHost ? "👑" : "👤"}</span>
+                <span style={{ fontSize: "18px" }}>
+                  {p.isHost ? "👑" : p.role === "coordinator" ? "🎤" : "👤"}
+                </span>
                 <span style={{ flex: 1, fontWeight: 700 }}>{p.displayName}</span>
+                {p.role === "coordinator" ? (
+                  <span style={{
+                    fontSize: "10px",
+                    padding: "2px 8px",
+                    borderRadius: "999px",
+                    background: "rgba(77,166,255,0.15)",
+                    color: "#4DA6FF",
+                    fontWeight: 700,
+                    marginRight: "4px",
+                  }}>
+                    Koordinator
+                  </span>
+                ) : null}
                 <span
                   style={{
                     fontSize: "10px",
