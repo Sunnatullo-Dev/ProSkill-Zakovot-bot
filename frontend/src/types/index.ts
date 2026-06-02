@@ -204,6 +204,11 @@ export type BattleRoundView = {
    * Bo'sh massiv yoki 4'dan kam — erkin matn rejimi (Gemini AI).
    */
   options?: string[];
+  /**
+   * To'g'ri javob — faqat foydalanuvchi javob bergan yoki vaqt tugagan bo'lsa
+   * backend qaytaradi. Aks holda null.
+   */
+  correctAnswer?: string | null;
   timeLimitSeconds: number;
   timeRemainingMs: number;
   myAnswered: boolean;

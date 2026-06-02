@@ -393,7 +393,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   }, [state?.currentRound?.roundId, state?.finished, timerActive]);
 
   // Feedback #2: vaqt tugaganda va foydalanuvchi javob bermagan bo'lsa,
-  // "Vaqt tugadi" feedback'i chiqsin. Bu round o'zgarguncha turadi va keyin
+  // to'g'ri javobni ko'rsatamiz. Bu round o'zgarguncha turadi va keyin
   // yuqoridagi 2.5s delay bilan tozalanadi.
   useEffect(() => {
     if (
@@ -403,7 +403,9 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
       !feedback &&
       !state.finished
     ) {
-      setFeedback({ isCorrect: false, correctAnswer: "" });
+      // Backend correctAnswer'ni vaqt tugaganda qaytaradi (timeRemainingMs <= 0)
+      const correctAnswer = state.currentRound.correctAnswer ?? "";
+      setFeedback({ isCorrect: false, correctAnswer });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsLeft, state?.currentRound?.roundId, state?.currentRound?.myAnswered]);
@@ -978,6 +980,20 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
           >
             {feedback?.isCorrect ? "✓ To'g'ri!" : feedback?.isCorrect === false ? "✗ Noto'g'ri" : "Javobingiz qabul qilindi"}
           </div>
+          {/* Vaqt tugaganda yoki noto'g'ri bo'lganda to'g'ri javobni ko'rsatamiz */}
+          {feedback?.isCorrect === false && feedback.correctAnswer ? (
+            <div style={{
+              marginTop: "8px",
+              padding: "8px 12px",
+              background: "rgba(34,197,94,0.12)",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 700,
+              color: "var(--success)"
+            }}>
+              ✅ To'g'ri javob: {feedback.correctAnswer}
+            </div>
+          ) : null}
           <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
             Boshqalarni kuting yoki vaqt tugashini kuting
           </div>

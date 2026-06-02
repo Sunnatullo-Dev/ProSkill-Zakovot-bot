@@ -450,12 +450,18 @@ def get_battle_state(battle_id: str, telegram_id: int) -> dict[str, Any]:
             # (backend `_map_question_public` orqali). Bo'sh bo'lsa
             # erkin matn rejimi (eski).
             question_options = (question or {}).get("options") or []
+            # To'g'ri javobni faqat foydalanuvchi javob bergan yoki vaqt tugagan
+            # bo'lsa qaytaramiz — aks holda javob sahifadan ko'rinib qolishi mumkin.
+            reveal_answer = None
+            if my_answered or remaining <= 0:
+                reveal_answer = (question or {}).get("correctAnswer")
             current_round = {
                 "roundId": round_row["id"],
                 "roundNumber": round_row["roundNumber"],
                 "totalRounds": len(rounds) or TOTAL_ROUNDS,
                 "questionText": (question or {}).get("text", ""),
                 "options": question_options,
+                "correctAnswer": reveal_answer,
                 "timeLimitSeconds": round_row["timeLimitSeconds"],
                 "timeRemainingMs": int(remaining),
                 "myAnswered": my_answered,
