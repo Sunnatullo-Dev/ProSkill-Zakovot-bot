@@ -10,7 +10,7 @@
  *   - Ishtirokchilar ro'yxati
  *   - Boshlash tugma (faqat host'da, kamida 2 o'yinchi)
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   createRoom,
@@ -147,8 +147,13 @@ export default function SvoyakLobbyScreen({
   const { data: roomState, error: pollError, refetch } = useSvoyakRoom(activeCode);
 
   // Xona "playing" holatiga o'tdi → Board ekranga
+  // startedRef: handleStartGame allaqachon onGameStarted chaqirgan bo'lsa,
+  // polling orqali ikkinchi marta chaqirilmasin (double render → #310)
+  const gameStartedRef = useRef(false);
   useEffect(() => {
+    if (gameStartedRef.current) return;
     if (roomState && roomState.status === "playing" && activeCode) {
+      gameStartedRef.current = true;
       onGameStarted(roomState);
     }
   }, [roomState, activeCode, onGameStarted]);
@@ -233,6 +238,7 @@ export default function SvoyakLobbyScreen({
     setBusy(true);
     try {
       const state = await startGame(activeCode);
+      gameStartedRef.current = true;  // polling ikkinchi marta chaqirmasin
       onGameStarted(state);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Boshlab bo'lmadi");
