@@ -8,9 +8,10 @@ type TeamChatPanelProps = {
   currentUserId: number;
   members: TeamMember[];
   canSend: boolean; // mehmon (telegramId<=0) yoza olmaydi
+  pollIntervalMs?: number; // default: 4000
 };
 
-const POLL_INTERVAL_MS = 4000;
+const DEFAULT_POLL_INTERVAL_MS = 4000;
 const POLL_MAX_INTERVAL_MS = 30_000;
 const MAX_MESSAGES = 100;
 
@@ -78,7 +79,7 @@ function formatTime(iso: string | null): string {
   }
 }
 
-export default function TeamChatPanel({ currentUserId, members, canSend }: TeamChatPanelProps) {
+export default function TeamChatPanel({ currentUserId, members, canSend, pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: TeamChatPanelProps) {
   const [messages, setMessages] = useState<TeamChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -122,7 +123,7 @@ export default function TeamChatPanel({ currentUserId, members, canSend }: TeamC
     const schedule = () => {
       const delay = Math.min(
         POLL_MAX_INTERVAL_MS,
-        POLL_INTERVAL_MS * Math.pow(2, failureCountRef.current)
+        pollIntervalMs * Math.pow(2, failureCountRef.current)
       );
       timeoutId = window.setTimeout(async () => {
         if (typeof document !== "undefined" && document.hidden) {

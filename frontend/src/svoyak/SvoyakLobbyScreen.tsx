@@ -25,6 +25,7 @@ import { useSvoyakRoom } from "./useSvoyakRoom";
 import type { SvoyakRoomState } from "./types";
 import { hapticSelect, hapticTap } from "../utils/haptics";
 import { useT } from "../i18n";
+import { useAppSettings } from "../hooks/useAppSettings";
 
 type SvoyakLobbyScreenProps = {
   /** Joriy foydalanuvchi (Telegram'dan) */
@@ -126,6 +127,7 @@ export default function SvoyakLobbyScreen({
   onGameStarted,
 }: SvoyakLobbyScreenProps) {
   const t = useT();
+  const appSettings = useAppSettings();
   const [mode, setMode] = useState<Mode>(initialJoinCode ? "joining" : "menu");
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
@@ -552,57 +554,61 @@ export default function SvoyakLobbyScreen({
             }}
             maxLength={8}
           />
-          {/* Rol tanlash */}
-          <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
-            <button
-              type="button"
-              onClick={() => setJoinRole("player")}
-              style={{
-                flex: 1,
-                padding: "10px",
-                borderRadius: "10px",
-                border: joinRole === "player"
-                  ? "1.5px solid var(--svoyak-gold, #f5c842)"
-                  : "1.5px solid var(--svoyak-border, #1f3a6e)",
-                background: joinRole === "player"
-                  ? "rgba(245,200,66,0.15)"
-                  : "var(--svoyak-surface, #0f1f3a)",
-                color: "var(--text)",
-                fontWeight: 700,
-                fontSize: "13px",
-                cursor: "pointer",
-                textAlign: "center",
-              }}
-            >
-              🎮 O'yinchi
-            </button>
-            <button
-              type="button"
-              onClick={() => setJoinRole("coordinator")}
-              style={{
-                flex: 1,
-                padding: "10px",
-                borderRadius: "10px",
-                border: joinRole === "coordinator"
-                  ? "1.5px solid #4DA6FF"
-                  : "1.5px solid var(--svoyak-border, #1f3a6e)",
-                background: joinRole === "coordinator"
-                  ? "rgba(77,166,255,0.15)"
-                  : "var(--svoyak-surface, #0f1f3a)",
-                color: "var(--text)",
-                fontWeight: 700,
-                fontSize: "13px",
-                cursor: "pointer",
-                textAlign: "center",
-              }}
-            >
-              🎤 Koordinator
-            </button>
-          </div>
-          {joinRole === "coordinator" ? (
-            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px", textAlign: "center" }}>
-              Koordinator savol o'qiydi, ball olmaydi
-            </div>
+          {/* Rol tanlash — faqat admin yoqqan bo'lsa */}
+          {appSettings.svoyakCoordinatorEnabled ? (
+            <>
+              <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setJoinRole("player")}
+                  style={{
+                    flex: 1,
+                    padding: "10px",
+                    borderRadius: "10px",
+                    border: joinRole === "player"
+                      ? "1.5px solid var(--svoyak-gold, #f5c842)"
+                      : "1.5px solid var(--svoyak-border, #1f3a6e)",
+                    background: joinRole === "player"
+                      ? "rgba(245,200,66,0.15)"
+                      : "var(--svoyak-surface, #0f1f3a)",
+                    color: "var(--text)",
+                    fontWeight: 700,
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    textAlign: "center",
+                  }}
+                >
+                  🎮 O'yinchi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setJoinRole("coordinator")}
+                  style={{
+                    flex: 1,
+                    padding: "10px",
+                    borderRadius: "10px",
+                    border: joinRole === "coordinator"
+                      ? "1.5px solid #4DA6FF"
+                      : "1.5px solid var(--svoyak-border, #1f3a6e)",
+                    background: joinRole === "coordinator"
+                      ? "rgba(77,166,255,0.15)"
+                      : "var(--svoyak-surface, #0f1f3a)",
+                    color: "var(--text)",
+                    fontWeight: 700,
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    textAlign: "center",
+                  }}
+                >
+                  🎤 Koordinator
+                </button>
+              </div>
+              {joinRole === "coordinator" ? (
+                <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px", textAlign: "center" }}>
+                  Koordinator savol o'qiydi, ball olmaydi
+                </div>
+              ) : null}
+            </>
           ) : null}
         </div>
 

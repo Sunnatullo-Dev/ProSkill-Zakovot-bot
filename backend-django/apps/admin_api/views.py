@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from apps.battles.models import BattleChallenge
 from apps.core.decorators import require_admin
 from apps.core.exceptions import AppError
+from apps.core.models import AppSettings
 from apps.game_results.repositories import count_all as count_game_results
 from apps.questions import repositories as question_repo
 from apps.teams.models import Team
@@ -101,6 +102,62 @@ def _coerce_wrong_answers(raw, *, field: str = "wrongAnswers") -> list[str]:
         seen.add(key)
         cleaned.append(text)
     return cleaned
+
+
+# ── App Settings ──────────────────────────────────────────────────────────────
+
+@api_view(["GET", "PATCH"])
+@require_admin
+def app_settings(request):
+    """Global ilova sozlamalarini olish yoki yangilash."""
+    if request.method == "GET":
+        settings = AppSettings.get()
+        return Response(settings.to_dict())
+
+    # PATCH — qisman yangilash
+    body = request.data if isinstance(request.data, dict) else {}
+    settings, _ = AppSettings.objects.get_or_create(id=1)
+
+    bool_fields = {
+        "battleChatEnabled": "battle_chat_enabled",
+        "battleShowCorrectOnTimeout": "battle_show_correct_on_timeout",
+        "ttsEnabled": "tts_enabled",
+        "ttsDefaultMuted": "tts_default_muted",
+        "difficultyEasyEnabled": "difficulty_easy_enabled",
+        "difficultyMediumEnabled": "difficulty_medium_enabled",
+        "difficultyHardEnabled": "difficulty_hard_enabled",
+        "svoyakCoordinatorEnabled": "svoyak_coordinator_enabled",
+    }
+
+    updated_fields = []
+    for api_key, model_field in bool_fields.items():
+        if api_key in body:
+            val = body[api_key]
+            if not isinstance(val, bool):
+                raise AppError(400, f"{api_key} boolean bo'lishi kerak")
+            setattr(settings, model_field, val)
+            updated_fields.append(model_field)
+
+    if "battleChatPollIntervalMs" in body:
+        try:
+            interval = int(body["battleChatPollIntervalMs"])
+        except (TypeError, ValueError):
+            raise AppError(400, "battleChatPollIntervalMs raqam bo'lishi kerak")
+        if not (1000 <= interval <= 30000):
+            raise AppError(400, "battleChatPollIntervalMs 1000-30000 oralig'ida bo'lishi kerak")
+        settings.battle_chat_poll_interval_ms = interval
+        updated_fields.append("battle_chat_poll_interval_ms")
+
+    if updated_fields:
+        settings.save(update_fields=updated_fields)
+        AppSettings.invalidate_cache()
+        logger.info(
+            "app_settings_updated",
+            extra={"event": "app_settings_updated", "fields": updated_fields,
+                   "by": getattr(request.current_user, "telegram_id", 0)},
+        )
+
+    return Response(settings.to_dict())
 
 
 # ── Stats ──────────────────────────────────────────────────────────────────────

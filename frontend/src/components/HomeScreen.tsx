@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { RoundFilter, Difficulty } from "../types";
 import { PlayIcon, StarIcon, TrophyIcon } from "./icons";
 import { useT } from "../i18n";
+import { useAppSettings } from "../hooks/useAppSettings";
 
 type HomeScreenProps = {
   error: string;
@@ -80,7 +81,16 @@ export default function HomeScreen({
   onStart
 }: HomeScreenProps) {
   const t = useT();
+  const appSettings = useAppSettings();
   const userInitial = playerName.trim()[0]?.toUpperCase() ?? "Z";
+
+  // Admin tomonidan o'chirilgan qiyinlik darajalarini filtrlaymiz
+  const enabledDifficulties = DIFFICULTY_OPTIONS.slice(0, 3).filter((opt) => {
+    if (opt.value === "easy" && !appSettings.difficultyEasyEnabled) return false;
+    if (opt.value === "medium" && !appSettings.difficultyMediumEnabled) return false;
+    if (opt.value === "hard" && !appSettings.difficultyHardEnabled) return false;
+    return true;
+  });
 
   return (
     <div
@@ -203,8 +213,8 @@ export default function HomeScreen({
           {t("home_difficulty")}
         </div>
         {/* 3 ta qiyinlik (oson/o'rtacha/qiyin) — qator */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
-          {DIFFICULTY_OPTIONS.slice(0, 3).map((opt) => (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${enabledDifficulties.length}, 1fr)`, gap: "8px" }}>
+          {enabledDifficulties.map((opt) => (
             <button
               key={opt.value ?? "any"}
               type="button"

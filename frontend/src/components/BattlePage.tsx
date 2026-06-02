@@ -4,6 +4,7 @@ import type { BattleState, BattleTeamView, TeamMember } from "../types";
 import { hapticResult } from "../utils/haptics";
 import { SpeakerIcon } from "./icons";
 import TeamChatPanel from "./TeamChatPanel";
+import { useAppSettings } from "../hooks/useAppSettings";
 
 function addWavHeaderIfNeeded(bytes: Uint8Array): ArrayBuffer {
   if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
@@ -140,6 +141,7 @@ function MembersStatus({ team, currentUserId }: { team: BattleTeamView; currentU
 }
 
 export default function BattlePage({ battleId, currentUserId, onExit }: BattlePageProps) {
+  const appSettings = useAppSettings();
   const [state, setState] = useState<BattleState | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [answer, setAnswer] = useState("");
@@ -404,8 +406,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   }, [state?.currentRound?.roundId, state?.finished, timerActive]);
 
   // Feedback #2: vaqt tugaganda va foydalanuvchi javob bermagan bo'lsa,
-  // to'g'ri javobni ko'rsatamiz. Bu round o'zgarguncha turadi va keyin
-  // yuqoridagi 2.5s delay bilan tozalanadi.
+  // to'g'ri javobni ko'rsatamiz (agar admin sozlamasida yoqilgan bo'lsa).
   useEffect(() => {
     if (
       secondsLeft === 0 &&
@@ -415,7 +416,9 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
       !state.finished
     ) {
       // Backend correctAnswer'ni vaqt tugaganda qaytaradi (timeRemainingMs <= 0)
-      const correctAnswer = state.currentRound.correctAnswer ?? "";
+      const correctAnswer = appSettings.battleShowCorrectOnTimeout
+        ? (state.currentRound.correctAnswer ?? "")
+        : "";
       setFeedback({ isCorrect: false, correctAnswer });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1048,17 +1051,20 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         <MembersStatus team={otherTeam} currentUserId={currentUserId} />
       </div>
 
-      {/* Jamoa chat — battle paytida muhokama qilish uchun */}
-      <TeamChatPanel
-        currentUserId={currentUserId}
-        members={myTeam.members.map((m) => ({
-          telegramId: m.telegramId,
-          joinedAt: "",
-          firstName: m.firstName ?? null,
-          username: m.username ?? null,
-        } satisfies TeamMember))}
-        canSend={currentUserId > 0}
-      />
+      {/* Jamoa chat — battle paytida muhokama qilish uchun (admin tomonidan boshqariladi) */}
+      {appSettings.battleChatEnabled ? (
+        <TeamChatPanel
+          currentUserId={currentUserId}
+          members={myTeam.members.map((m) => ({
+            telegramId: m.telegramId,
+            joinedAt: "",
+            firstName: m.firstName ?? null,
+            username: m.username ?? null,
+          } satisfies TeamMember))}
+          canSend={currentUserId > 0}
+          pollIntervalMs={appSettings.battleChatPollIntervalMs}
+        />
+      ) : null}
     </div>
   );
 }

@@ -595,6 +595,33 @@ export async function deleteAdminQuestion(id: string): Promise<ApiResult<{ ok: b
   return requestResult<{ ok: boolean }>(`/admin/questions/${id}`, { method: "DELETE" });
 }
 
+// ----- App Settings (feature flags) -----
+
+export type AppSettings = {
+  battleChatEnabled: boolean;
+  battleChatPollIntervalMs: number;
+  battleShowCorrectOnTimeout: boolean;
+  ttsEnabled: boolean;
+  ttsDefaultMuted: boolean;
+  difficultyEasyEnabled: boolean;
+  difficultyMediumEnabled: boolean;
+  difficultyHardEnabled: boolean;
+  svoyakCoordinatorEnabled: boolean;
+};
+
+export async function getAppSettings(): Promise<AppSettings | null> {
+  return (await request<AppSettings>("/admin/settings")) ?? null;
+}
+
+export async function updateAppSettings(
+  patch: Partial<AppSettings>
+): Promise<ApiResult<AppSettings>> {
+  return requestResult<AppSettings>("/admin/settings", {
+    method: "PATCH",
+    body: patch
+  });
+}
+
 export async function getAdminCategories(): Promise<AdminCategoryStat[]> {
   const response = await request<{ items: AdminCategoryStat[] }>("/admin/categories");
 

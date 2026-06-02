@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("settings", views.app_settings),
     path("stats", views.get_stats),
     path("questions", views.questions_collection),
     path("questions/bulk", views.bulk_create_questions),
