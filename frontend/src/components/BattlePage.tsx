@@ -154,6 +154,10 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
   const [isLoadingTTS, setIsLoadingTTS] = useState(false);
   const [isPlayingTTS, setIsPlayingTTS] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
+  // TTS mute — localStorage'dan o'qiladi, QuestionCard bilan sinxron kalit
+  const [ttsIsMuted, setTtsIsMuted] = useState<boolean>(() => {
+    try { return localStorage.getItem("zakovat:tts:muted") === "1"; } catch { return false; }
+  });
   // TTS tugagandan keyin taymerni ishga tushiramiz
   const [timerActive, setTimerActive] = useState(false);
   const lastRoundIdRef = useRef<string | null>(null);
@@ -242,7 +246,6 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
     audioBufferRef.current = null;
     setIsPlayingTTS(false);
     setHasAudio(false);
-    setIsLoadingTTS(true);
 
     // TTS tugaganda server vaqti bilan sinxronlab taymerni ishga tushiramiz
     const startTimer = () => {
@@ -250,6 +253,14 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
       if (ms > 0) setSecondsLeft(Math.ceil(ms / 1000));
       setTimerActive(true);
     };
+
+    // Mute bo'lsa — TTS yuklamas, taymerni darhol boshlaymiz
+    if (ttsIsMuted) {
+      startTimer();
+      return;
+    }
+
+    setIsLoadingTTS(true);
 
     let cancelled = false;
     fetchTTS(currentRoundText).then(async (result) => {
@@ -274,7 +285,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
     });
 
     return () => { cancelled = true; };
-  }, [currentRoundId, currentRoundText, playBuffer]);
+  }, [currentRoundId, currentRoundText, playBuffer, ttsIsMuted]);
 
   useEffect(() => {
     let active = true;
@@ -685,11 +696,43 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)" }}>
           Bellashuv {round ? `· Round ${round.roundNumber}/${round.totalRounds}` : ""}
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {isLoadingTTS || isPlayingTTS ? (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Ovoz o'chirish/yoqish toggle */}
+          <button
+            type="button"
+            title={ttsIsMuted ? "Ovozni yoqish" : "Ovozni o'chirish"}
+            onClick={() => {
+              setTtsIsMuted((prev) => {
+                const next = !prev;
+                try { localStorage.setItem("zakovat:tts:muted", next ? "1" : "0"); } catch { /* ignore */ }
+                if (next && activeSourceRef.current) {
+                  try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+                  setIsPlayingTTS(false);
+                }
+                return next;
+              });
+            }}
+            style={{
+              width: "30px",
+              height: "30px",
+              borderRadius: "50%",
+              border: `1px solid ${ttsIsMuted ? "rgba(239,68,68,0.4)" : "var(--border)"}`,
+              background: ttsIsMuted ? "rgba(239,68,68,0.10)" : "transparent",
+              color: ttsIsMuted ? "var(--error)" : "var(--muted)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "14px",
+              flexShrink: 0
+            }}
+          >
+            {ttsIsMuted ? "🔇" : "🔈"}
+          </button>
+          {!ttsIsMuted && (isLoadingTTS || isPlayingTTS) ? (
             <span
               style={{
-                fontSize: "14px",
+                fontSize: "13px",
                 fontWeight: 800,
                 color: "var(--accent)",
                 display: "flex",
@@ -697,7 +740,7 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
                 gap: "5px"
               }}
             >
-              <SpeakerIcon size={15} />
+              <SpeakerIcon size={14} />
               {isLoadingTTS ? "..." : "O'qilmoqda"}
             </span>
           ) : (

@@ -74,6 +74,10 @@ export default function QuestionCard({
   const [isLoadingTTS, setIsLoadingTTS] = useState(false);
   const [isPlayingTTS, setIsPlayingTTS] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
+  // TTS mute — localStorage'da saqlanadi, default: o'chirilmagan (false)
+  const [ttsIsMuted, setTtsIsMuted] = useState<boolean>(() => {
+    try { return localStorage.getItem("zakovat:tts:muted") === "1"; } catch { return false; }
+  });
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -146,7 +150,7 @@ export default function QuestionCard({
     setSelectedOption(null);
   }, [question.id]);
 
-  // Yangi savol kelganda TTS yuklab auto-play qilamiz
+  // Yangi savol kelganda TTS yuklab auto-play qilamiz (mute bo'lmasa)
   useEffect(() => {
     if (activeSourceRef.current) {
       try { activeSourceRef.current.stop(); } catch { /* ignore */ }
@@ -156,6 +160,13 @@ export default function QuestionCard({
     audioBufferRef.current = null;
     setIsPlayingTTS(false);
     setHasAudio(false);
+
+    // Mute bo'lsa — TTS yuklamas, taymerni darhol boshlaymiz
+    if (ttsIsMuted) {
+      onTimerStart?.();
+      return;
+    }
+
     setIsLoadingTTS(true);
 
     let cancelled = false;
@@ -188,7 +199,7 @@ export default function QuestionCard({
     });
 
     return () => { cancelled = true; };
-  }, [question.id, question.text, playBuffer, onTimerStart]);
+  }, [question.id, question.text, playBuffer, onTimerStart, ttsIsMuted]);
 
   // Klaviatura ochilganda VisualViewport viewport balandligi kichrayadi.
   // Bu eventni tutib, submit tugmasini ko'rinadigan joyga scroll qilamiz.
@@ -364,11 +375,45 @@ export default function QuestionCard({
           }}
         >
           {question.text}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "8px", marginTop: "14px" }}>
+            {/* Ovoz o'chirish/yoqish toggle */}
+            <button
+              type="button"
+              title={ttsIsMuted ? "Ovozni yoqish" : "Ovozni o'chirish"}
+              onClick={() => {
+                setTtsIsMuted((prev) => {
+                  const next = !prev;
+                  try { localStorage.setItem("zakovat:tts:muted", next ? "1" : "0"); } catch { /* ignore */ }
+                  // Agar o'chirilsa — hozir o'ynalyotgan audio to'xtasin
+                  if (next && activeSourceRef.current) {
+                    try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+                    setIsPlayingTTS(false);
+                  }
+                  return next;
+                });
+              }}
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "50%",
+                border: `1.5px solid ${ttsIsMuted ? "var(--error)" : "var(--border)"}`,
+                background: ttsIsMuted ? "rgba(239,68,68,0.12)" : "var(--bg)",
+                color: ttsIsMuted ? "var(--error)" : "var(--muted)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "16px",
+                transition: "all 0.2s",
+                flexShrink: 0
+              }}
+            >
+              {ttsIsMuted ? "🔇" : "🔈"}
+            </button>
             <button
               type="button"
               title="Savolni qayta eshitish"
-              disabled={isLoadingTTS || !hasAudio}
+              disabled={isLoadingTTS || !hasAudio || ttsIsMuted}
               onClick={() => playBuffer()}
               style={{
                 width: "36px",
@@ -377,11 +422,11 @@ export default function QuestionCard({
                 border: `1.5px solid ${isPlayingTTS ? "var(--accent)" : "var(--border)"}`,
                 background: isPlayingTTS ? "rgba(77,166,255,0.15)" : "var(--bg)",
                 color: isPlayingTTS ? "var(--accent)" : "var(--muted)",
-                cursor: hasAudio && !isLoadingTTS ? "pointer" : "default",
+                cursor: hasAudio && !isLoadingTTS && !ttsIsMuted ? "pointer" : "default",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                opacity: !hasAudio && !isLoadingTTS ? 0.35 : 1,
+                opacity: (!hasAudio && !isLoadingTTS) || ttsIsMuted ? 0.35 : 1,
                 transition: "all 0.2s",
                 flexShrink: 0
               }}
