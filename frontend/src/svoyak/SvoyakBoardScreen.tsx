@@ -347,14 +347,16 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
     </div>
 
     {/* Full-screen QuestionOverlay — aktiv raund bo'lsa */}
-    {showOverlay && round ? (
-      <QuestionOverlay
-        categoryName={currentCategory?.categoryName ?? ""}
-        categoryIcon={currentCategory?.categoryIcon ?? "🎲"}
-        value={round.value}
-        questionText={round.questionText}
-        startedAt={round.startedAt}
-      >
+    <QuestionOverlay
+      visible={Boolean(showOverlay && round)}
+      categoryName={currentCategory?.categoryName ?? ""}
+      categoryIcon={currentCategory?.categoryIcon ?? "🎲"}
+      value={round?.value ?? 0}
+      questionText={round?.questionText ?? ""}
+      startedAt={round?.startedAt}
+    >
+      {round ? (
+        <>
         {/* Slot: BUZZ tugma + javob input — vaziyatga qarab */}
         {round.status === "reading" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", alignItems: "center" }}>
@@ -448,8 +450,9 @@ export default function SvoyakBoardScreen({ code, onGameEnded, onExit }: Props) 
             <BuzzOverlay state={buzzStateForViewer()} onPress={async () => {}} blockedBy={blockedBy} />
           )
         ) : null}
-      </QuestionOverlay>
-    ) : null}
+        </>
+      ) : null}
+    </QuestionOverlay>
 
     {/* Round result flash — completed/skipped, bir round uchun bir marta */}
     {showResultOverlay && round ? (

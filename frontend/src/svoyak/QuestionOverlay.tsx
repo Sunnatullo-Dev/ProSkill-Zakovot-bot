@@ -32,6 +32,8 @@ type Props = {
   autoSpeak?: boolean;
   /** TTS tugagandan keyin callback (host uchun open_buzz). */
   onSpeakEnd?: () => void;
+  /** Ko'rinish holati — false bo'lsa display:none, hooks saqlanadi (#310 oldini olish) */
+  visible?: boolean;
 };
 
 const TIMER_DEFAULT_SECONDS = 15;
@@ -124,6 +126,7 @@ export default function QuestionOverlay({
   children,
   autoSpeak = true,
   onSpeakEnd,
+  visible = true,
 }: Props) {
   const t = useT();
   // TTS — savol matnini ovozli o'qish
@@ -179,7 +182,7 @@ export default function QuestionOverlay({
     : "var(--svoyak-neon-green, #22e07f)";
 
   return (
-    <div style={PAGE}>
+    <div style={{ ...PAGE, display: visible ? "flex" : "none" }}>
       {/* Chiziqli taymer — tepada */}
       <div style={PROGRESS_TRACK}>
         <div
