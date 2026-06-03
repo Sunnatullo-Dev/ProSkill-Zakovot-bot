@@ -5,14 +5,13 @@
  * Ichkari state — bu Svoyak'ga xos (xonalar, kodlar va h.k.) — bosh App
  * state'iga aralashmasin.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { CSSProperties } from "react";
 import SvoyakLobbyScreen from "./SvoyakLobbyScreen";
 import SvoyakBoardScreen from "./SvoyakBoardScreen";
 import SvoyakErrorBoundary from "./SvoyakErrorBoundary";
 import type { SvoyakRoomState } from "./types";
 import { useT } from "../i18n";
-import { useAppSettings } from "../hooks/useAppSettings";
 
 type Props = {
   /** Joriy foydalanuvchi ismi. */
@@ -34,7 +33,6 @@ export default function SvoyakRouter({
   onExitSvoyak,
 }: Props) {
   const t = useT();
-  const appSettings = useAppSettings();
   const [stage, setStage] = useState<Stage>({ kind: "lobby" });
 
   const errorLabels = {
@@ -44,41 +42,53 @@ export default function SvoyakRouter({
     retry: t("svoyak_error_retry"),
   };
 
-  // Deep link bilan kelganida lobby'ni "joining" rejimida ochish — bu SvoyakLobbyScreen
-  // ichida prop bilan hal qilingan.
+  // Har bir stage o'z ErrorBoundary va key'iga ega — React to'liq
+  // unmount/remount qiladi, hooks mismatch bo'lmaydi.
+  if (stage.kind === "lobby") {
+    return (
+      <SvoyakErrorBoundary
+        key="stage-lobby"
+        labels={errorLabels}
+        onReset={() => setStage({ kind: "lobby" })}
+      >
+        <SvoyakLobbyScreen
+          playerName={playerName}
+          initialJoinCode={initialJoinCode}
+          coordinatorEnabled={true}
+          onGameStarted={(state) => setStage({ kind: "board", code: state.code })}
+        />
+      </SvoyakErrorBoundary>
+    );
+  }
 
-  // Hammasi error boundary bilan o'ralgan — render xatosi bo'lsa qora ekran
-  // o'rniga foydalanuvchiga ko'rinadigan xato + Qayta urinish tugma. onReset
-  // butun routerni lobby holatiga qaytaradi.
+  if (stage.kind === "board") {
+    return (
+      <SvoyakErrorBoundary
+        key={"stage-board-" + stage.code}
+        labels={errorLabels}
+        onReset={() => setStage({ kind: "lobby" })}
+      >
+        <SvoyakBoardScreen
+          code={stage.code}
+          onGameEnded={(s) => setStage({ kind: "finished", state: s })}
+          onExit={onExitSvoyak}
+        />
+      </SvoyakErrorBoundary>
+    );
+  }
+
+  // stage.kind === "finished"
   return (
     <SvoyakErrorBoundary
-      key={stage.kind}
+      key="stage-finished"
       labels={errorLabels}
       onReset={() => setStage({ kind: "lobby" })}
     >
-      {stage.kind === "lobby" ? (
-        <SvoyakLobbyScreen
-          key="lobby"
-          playerName={playerName}
-          initialJoinCode={initialJoinCode}
-          coordinatorEnabled={appSettings.svoyakCoordinatorEnabled}
-          onGameStarted={(state) => setStage({ kind: "board", code: state.code })}
-        />
-      ) : stage.kind === "board" ? (
-        <SvoyakBoardScreen
-          key={"board-" + stage.code}
-          code={stage.code}
-          onGameEnded={(state) => setStage({ kind: "finished", state })}
-          onExit={onExitSvoyak}
-        />
-      ) : (
-        <SvoyakFinished
-          key="finished"
-          state={stage.state}
-          onPlayAgain={() => setStage({ kind: "lobby" })}
-          onExit={onExitSvoyak}
-        />
-      )}
+      <SvoyakFinished
+        state={stage.state}
+        onPlayAgain={() => setStage({ kind: "lobby" })}
+        onExit={onExitSvoyak}
+      />
     </SvoyakErrorBoundary>
   );
 }
