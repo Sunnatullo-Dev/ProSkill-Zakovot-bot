@@ -18,6 +18,8 @@ pip install -r requirements.txt
 echo "[build] === Frontend Vite build ==="
 cd ../frontend
 npm ci --no-audit --no-fund
+# Cache'ni tozalaymiz — eski build artefaktlar yangi bundlega aralashmasin
+rm -rf dist
 # VITE_API_URL Render Dashboard'dagi env'dan keladi.
 npm run build
 
