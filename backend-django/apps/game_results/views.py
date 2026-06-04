@@ -20,6 +20,8 @@ def save_result(request):
 
     if correct < 0 or total < 0 or round_score < 0:
         raise AppError(400, "Manfiy qiymat berib bo'lmaydi")
+    if total < 1:
+        raise AppError(400, "totalCount kamida 1 bo'lishi kerak")
     if correct > total:
         raise AppError(400, "correctCount totalCount dan katta bo'la olmaydi")
 

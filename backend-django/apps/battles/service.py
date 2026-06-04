@@ -291,6 +291,13 @@ def process_answer(
     if record["duplicate"]:
         raise AppError(409, "Siz bu round'ga javob bergansiz")
 
+    # To'g'ri javob uchun shaxsiy ball — oddiy o'yin bilan bir xil tartib.
+    if is_correct:
+        try:
+            add_user_score(telegram_id, 1)
+        except Exception as score_error:  # noqa: BLE001
+            logger.warning("battle individual score failed: %s", score_error)
+
     maybe_advance_round(battle_id)
 
     return {"isCorrect": is_correct, "correctAnswer": question["correctAnswer"]}
@@ -642,6 +649,12 @@ def forfeit_battle(battle_id: str, telegram_id: int) -> None:
         return
 
     forfeiting_team_id = membership["team_id"]
+
+    # Faqat jamoa egasi forfeit qila oladi — oddiy a'zo butun jamoani
+    # yutqaztirib qo'yolmasligi uchun (griefing exploit oldini olish).
+    forfeiting_team = get_team_by_id(forfeiting_team_id)
+    if not forfeiting_team or forfeiting_team["ownerId"] != telegram_id:
+        raise AppError(403, "Faqat jamoa egasi bellashuvdan chiqishi mumkin")
     winner_team_id = (
         challenge["opponentTeamId"]
         if forfeiting_team_id == challenge["challengerTeamId"]
