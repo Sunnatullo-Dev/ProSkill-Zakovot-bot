@@ -27,6 +27,12 @@ type QuestionCardProps = {
   onExit: () => void;
   /** TTS o'qib bo'lgandan keyin chaqiriladi — shu paytda taymer boshlanadi */
   onTimerStart?: () => void;
+  /** Foydalanuvchi balansidan bet qo'yishi uchun — 0 bo'lsa bet yo'q */
+  activeBet?: number;
+  /** Joriy foydalanuvchi bali — qancha tikilishi mumkinligini bilish uchun */
+  userBalance?: number;
+  /** Foydalanuvchi bet tanladi */
+  onBet?: (amount: number) => void;
 };
 
 const OPTION_LETTERS = ["A", "B", "C", "D"];
@@ -67,8 +73,12 @@ export default function QuestionCard({
   onGiveUp,
   onContinue,
   onExit,
-  onTimerStart
+  onTimerStart,
+  activeBet = 0,
+  userBalance = 0,
+  onBet
 }: QuestionCardProps) {
+  const [showBetPanel, setShowBetPanel] = useState(false);
   const [answer, setAnswer] = useState("");
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isLoadingTTS, setIsLoadingTTS] = useState(false);
@@ -678,6 +688,74 @@ export default function QuestionCard({
             >
               Javob berish {"\u2713"}
             </button>
+            {/* Svoyak bet tugmasi */}
+            {onBet && !activeBet && (
+              <div style={{ marginTop: "8px" }}>
+                {showBetPanel ? (
+                  <div
+                    style={{
+                      background: "var(--card)",
+                      border: "1px solid rgba(245,200,66,0.4)",
+                      borderRadius: "14px",
+                      padding: "12px",
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                      flexWrap: "wrap"
+                    }}
+                  >
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--gold)", flex: "0 0 auto" }}>
+                      ⚡ Tikish:
+                    </span>
+                    {[5, 10, 20, 50].map((amt) => (
+                      <button
+                        key={amt}
+                        disabled={userBalance < amt}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: "10px",
+                          border: "1px solid rgba(245,200,66,0.4)",
+                          background: userBalance >= amt ? "rgba(245,200,66,0.15)" : "var(--border)",
+                          color: userBalance >= amt ? "var(--gold)" : "var(--muted)",
+                          fontSize: "13px", fontWeight: 800,
+                          cursor: userBalance >= amt ? "pointer" : "not-allowed",
+                          opacity: userBalance >= amt ? 1 : 0.4
+                        }}
+                        type="button"
+                        onClick={() => { onBet(amt); setShowBetPanel(false); }}
+                      >
+                        {amt}
+                      </button>
+                    ))}
+                    <button
+                      style={{ background: "none", border: "none", color: "var(--muted)", fontSize: "12px", cursor: "pointer" }}
+                      type="button"
+                      onClick={() => setShowBetPanel(false)}
+                    >
+                      bekor
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    style={{
+                      background: "none", border: "none",
+                      fontSize: "13px", fontWeight: 600,
+                      color: "var(--gold)", cursor: "pointer",
+                      padding: "4px 0"
+                    }}
+                    type="button"
+                    onClick={() => setShowBetPanel(true)}
+                  >
+                    ⚡ Ball tikish (Svoyak)
+                  </button>
+                )}
+              </div>
+            )}
+            {activeBet > 0 && (
+              <div style={{ marginTop: "8px", fontSize: "13px", fontWeight: 700, color: "var(--gold)", textAlign: "center" }}>
+                ⚡ {activeBet} ball tikildi — to'g'ri javob: +{activeBet} 🎯
+              </div>
+            )}
             <button
               style={{
                 width: "100%",

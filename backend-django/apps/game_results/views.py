@@ -36,6 +36,15 @@ def get_stats(request):
     return Response({"stats": repositories.get_stats(user.telegram_id)})
 
 
+@api_view(["GET"])
+@require_auth
+def get_history(request):
+    user = request.current_user
+    limit = min(50, max(1, int(request.query_params.get("limit", 20))))
+    results = repositories.get_history(user.telegram_id, limit=limit)
+    return Response({"results": results})
+
+
 def _coerce_int(raw) -> int:
     if raw is None:
         raise AppError(400, "Maydon to'ldirilishi shart")

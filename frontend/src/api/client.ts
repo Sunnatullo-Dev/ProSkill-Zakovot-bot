@@ -219,7 +219,8 @@ export async function submitAnswer(
   userAnswer: string,
   _timeTaken: number,
   streakBefore: number,
-  ticket: string | null
+  ticket: string | null,
+  betAmount = 0
 ): Promise<AnswerResult> {
   if (!ticket) {
     return {
@@ -228,13 +229,18 @@ export async function submitAnswer(
       explanation: "Javobni tekshirib bo'lmadi",
       correctAnswer: "",
       pointsEarned: 0,
-      streak: 0
+      streak: 0,
+      betAmount: 0,
+      betWon: 0
     };
   }
 
-  const response = await request<SubmitAnswerApiResponse>("/answer/", {
+  const body: Record<string, unknown> = { ticket, userAnswer, streak: streakBefore };
+  if (betAmount > 0) body.betAmount = betAmount;
+
+  const response = await request<SubmitAnswerApiResponse & { betAmount?: number; betWon?: number }>("/answer/", {
     method: "POST",
-    body: { ticket, userAnswer, streak: streakBefore }
+    body
   });
 
   if (!response) {
@@ -244,7 +250,9 @@ export async function submitAnswer(
       explanation: "Javobni tekshirib bo'lmadi",
       correctAnswer: "",
       pointsEarned: 0,
-      streak: 0
+      streak: 0,
+      betAmount: 0,
+      betWon: 0
     };
   }
 
@@ -254,7 +262,9 @@ export async function submitAnswer(
     explanation: response.explanation,
     correctAnswer: response.correctAnswer,
     pointsEarned: response.pointsEarned,
-    streak: response.streak
+    streak: response.streak,
+    betAmount: response.betAmount ?? 0,
+    betWon: response.betWon ?? 0
   };
 }
 
@@ -329,6 +339,38 @@ export async function getGameStats(): Promise<GameStats> {
   const response = await request<{ stats: GameStats }>("/game-results/stats");
 
   return response?.stats ?? EMPTY_STATS;
+}
+
+export async function getGameHistory(limit = 20): Promise<import("../types").GameHistoryItem[]> {
+  const response = await request<{ results: import("../types").GameHistoryItem[] }>(
+    `/game-results/history?limit=${limit}`
+  );
+  return response?.results ?? [];
+}
+
+export async function getDailyToday(): Promise<import("../types").DailyInfo | null> {
+  try {
+    const response = await request<import("../types").DailyInfo>("/daily/today");
+    return response ?? null;
+  } catch (error) {
+    console.error("getDailyToday failed", error);
+    return null;
+  }
+}
+
+export async function completeDailyChallenge(
+  correctCount: number,
+  scoreEarned: number
+): Promise<import("../types").DailyCompleteResult | null> {
+  try {
+    return await request<import("../types").DailyCompleteResult>("/daily/complete", {
+      method: "POST",
+      body: { correctCount, scoreEarned }
+    });
+  } catch (error) {
+    console.error("completeDailyChallenge failed", error);
+    return null;
+  }
 }
 
 export async function createTeam(name: string): Promise<ApiResult<{ team: Team; code: string }>> {

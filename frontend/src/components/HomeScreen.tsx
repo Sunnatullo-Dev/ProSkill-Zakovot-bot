@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { RoundFilter, Difficulty } from "../types";
+import type { DailyInfo, RoundFilter, Difficulty } from "../types";
 import { PlayIcon, StarIcon, TrophyIcon } from "./icons";
 import { useT } from "../i18n";
 import { useAppSettings } from "../hooks/useAppSettings";
@@ -10,7 +10,9 @@ type HomeScreenProps = {
   playerName: string;
   record: number;
   score: number;
+  dailyInfo?: DailyInfo | null;
   onStart: (filter: RoundFilter) => void;
+  onDailyOpen?: () => void;
 };
 
 const cardStyle = {
@@ -78,7 +80,9 @@ export default function HomeScreen({
   playerName,
   record,
   score,
-  onStart
+  dailyInfo,
+  onStart,
+  onDailyOpen
 }: HomeScreenProps) {
   const t = useT();
   const appSettings = useAppSettings();
@@ -183,6 +187,46 @@ export default function HomeScreen({
           {statCell(<TrophyIcon size={18} />, record, "REKORD", "var(--accent)")}
         </div>
       </div>
+
+      {dailyInfo && onDailyOpen ? (
+        <button
+          type="button"
+          onClick={onDailyOpen}
+          style={{
+            width: "100%",
+            background: dailyInfo.completed
+              ? "var(--card)"
+              : "linear-gradient(135deg, rgba(77,166,255,0.18), rgba(124,58,237,0.18))",
+            border: `1px solid ${dailyInfo.completed ? "var(--border)" : "rgba(77,166,255,0.4)"}`,
+            borderRadius: "16px",
+            padding: "14px 16px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            textAlign: "left"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "22px" }}>
+              {dailyInfo.completed ? "✅" : dailyInfo.streak.current >= 3 ? "🔥" : "🗓"}
+            </span>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+                Kunlik topshiriq
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                {dailyInfo.completed
+                  ? `Streak: ${dailyInfo.streak.current} kun ✓`
+                  : dailyInfo.bonusPreview > 0
+                  ? `+${dailyInfo.bonusPreview} bonus ball imkoniyati`
+                  : "5 ta savol, har kuni yangi"}
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "18px", color: "var(--muted)" }}>›</span>
+        </button>
+      ) : null}
 
       {error ? (
         <div

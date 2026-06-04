@@ -21,7 +21,7 @@ from rest_framework.response import Response
 from apps.core.decorators import require_auth
 from apps.core.exceptions import AppError
 from apps.questions.repositories import get_question_by_id
-from apps.users.repositories import add_score
+from apps.users.repositories import add_score, deduct_score_if_sufficient
 
 from .gemini import check_answer, explain_question, generate_tts
 from .models import TtsCache
@@ -80,6 +80,18 @@ def submit_answer(request):
     except (TypeError, ValueError):
         raise AppError(400, "streak noto'g'ri")
 
+    # Svoyak bet — ixtiyoriy. Faqat 5/10/20/50 qiymatlar qabul qilinadi.
+    VALID_BETS = {5, 10, 20, 50}
+    bet_amount = 0
+    bet_raw = body.get("betAmount")
+    if bet_raw is not None:
+        try:
+            bet_amount = int(bet_raw)
+        except (TypeError, ValueError):
+            raise AppError(400, "betAmount noto'g'ri")
+        if bet_amount != 0 and bet_amount not in VALID_BETS:
+            raise AppError(400, "betAmount faqat 5, 10, 20 yoki 50 bo'lishi mumkin")
+
     payload = verify_answer_ticket(ticket)
 
     # Avval savol mavjudligini tekshiramiz — agar savol o'chirilgan bo'lsa
@@ -94,6 +106,12 @@ def submit_answer(request):
     # allaqachon ishlatilgan bo'lsa, takror jorayotgan bo'ladi.
     if not consume_answer_ticket(payload.jti):
         raise AppError(409, "Bu bilet allaqachon ishlatilgan")
+
+    # Bet tikish: bilet consumed bo'lgandan keyin (replay himoyasi o'tgach)
+    # atomik ravishda balansdan yechib olamiz. Yetarli bo'lmasa — rad etiladi.
+    if bet_amount > 0:
+        if not deduct_score_if_sufficient(user.telegram_id, bet_amount):
+            raise AppError(400, "Yetarli ballingiz yo'q")
 
     now_ms = int(time.time() * 1000)
     time_taken = max(0, now_ms - payload.issued_at_ms)
@@ -144,11 +162,19 @@ def submit_answer(request):
         )
     )
 
+    # Normal o'yin bali (streak + tezlik mukofoti)
     if score.points_earned > 0:
-        # Score yangilashni atomik bajaramiz — concurrent answer submission
-        # vaqtida "database is locked" yoki yo'qotilgan o'zgartirishlardan saqlaydi.
         with transaction.atomic():
             add_score(user.telegram_id, score.points_earned)
+
+    # Svoyak bet natijasi: to'g'ri → 2× bet qaytariladi (net +bet), noto'g'ri → ball ketdi
+    bet_won = 0
+    if bet_amount > 0:
+        if grading.status == "correct":
+            add_score(user.telegram_id, 2 * bet_amount)
+            bet_won = bet_amount
+        else:
+            bet_won = -bet_amount
 
     return Response(
         {
@@ -158,6 +184,8 @@ def submit_answer(request):
             "correctAnswer": question["correctAnswer"],
             "pointsEarned": score.points_earned,
             "streak": score.streak_after,
+            "betAmount": bet_amount,
+            "betWon": bet_won,
         }
     )
 

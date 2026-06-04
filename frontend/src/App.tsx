@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  completeDailyChallenge,
+  getDailyToday,
   getAnswerTicket,
   getRound,
   getTopUsers,
@@ -10,6 +12,7 @@ import {
   submitAnswer,
   updateMyLanguage
 } from "./api/client";
+import DailyChallengeScreen from "./components/DailyChallengeScreen";
 import { isCleanName } from "./utils/nameQuality";
 import TeamScreen from "./components/TeamScreen";
 import AdminPanel from "./components/AdminPanel";
@@ -35,6 +38,8 @@ import { hapticResult, hapticSelect, hapticTap } from "./utils/haptics";
 import type {
   AnswerResult,
   AppUser,
+  DailyCompleteResult,
+  DailyInfo,
   LeaderboardUser,
   NavTab,
   Question,
@@ -162,6 +167,12 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  // Daily challenge
+  const [dailyInfo, setDailyInfo] = useState<DailyInfo | null>(null);
+  const [isDailyMode, setIsDailyMode] = useState(false);
+  const [dailyLastResult, setDailyLastResult] = useState<DailyCompleteResult | null>(null);
+  // Svoyak bet
+  const [currentBet, setCurrentBet] = useState(0);
   // Foydalanuvchi haqiqiy Telegram'da, lekin backend uni mehmon deb qabul
   // qilyapti — bu HMAC nomos kelishi yoki NODE_ENV != production belgisi.
   // Bunday holatda app'ga davom etmaymiz, aniq xato ekran ko'rsatamiz.
@@ -248,7 +259,9 @@ export default function App() {
           }
         }
 
-        const result = await submitAnswer(question, submittedAnswer, timeTaken, streak, ticket);
+        const bet = currentBet;
+        setCurrentBet(0);
+        const result = await submitAnswer(question, submittedAnswer, timeTaken, streak, ticket, bet);
 
         hapticResult(result.status);
 
@@ -256,11 +269,13 @@ export default function App() {
           setCorrectAnswers((value) => value + 1);
         }
 
+        // Jami ball o'zgarishi: normal ball + bet natijasi
+        const totalDelta = result.pointsEarned + (result.betWon ?? 0);
         setStreak(result.streak);
         setRoundScore((value) => value + result.pointsEarned);
-        setScore((value) => value + result.pointsEarned);
+        setScore((value) => value + totalDelta);
         setUser((currentUser) =>
-          currentUser ? { ...currentUser, score: currentUser.score + result.pointsEarned } : currentUser
+          currentUser ? { ...currentUser, score: currentUser.score + totalDelta } : currentUser
         );
         setLastUserAnswer(submittedAnswer);
         setLastResult(result);
@@ -292,13 +307,23 @@ export default function App() {
 
     if (nextIndex >= roundQuestions.length) {
       reset();
-      setScreen("finish");
-      void saveGameResult({
-        correctCount: correctAnswers,
-        totalCount: roundQuestions.length,
-        roundScore
-      });
-      void loadTopUsers();
+      if (isDailyMode) {
+        setIsDailyMode(false);
+        void completeDailyChallenge(correctAnswers, roundScore).then((result) => {
+          setDailyLastResult(result);
+          setDailyInfo((prev) => prev ? { ...prev, completed: true } : prev);
+        });
+        void saveGameResult({ correctCount: correctAnswers, totalCount: roundQuestions.length, roundScore });
+        setScreen("daily");
+      } else {
+        setScreen("finish");
+        void saveGameResult({
+          correctCount: correctAnswers,
+          totalCount: roundQuestions.length,
+          roundScore
+        });
+        void loadTopUsers();
+      }
       return;
     }
 
@@ -429,6 +454,8 @@ export default function App() {
         }
 
         await loadTopUsers();
+        // Daily challenge info'ni background'da yuklash (bloklamaymiz)
+        void getDailyToday().then((info) => { if (info) setDailyInfo(info); });
 
         if (isAdminRoute) {
           setScreen("admin");
@@ -561,6 +588,29 @@ export default function App() {
     },
     [fetchTicketFor, reset, start]
   );
+
+  const startDailyChallenge = useCallback(async () => {
+    if (!dailyInfo || dailyInfo.completed) return;
+    hapticTap();
+    const questions = dailyInfo.questions;
+    if (questions.length === 0) return;
+    setIsDailyMode(true);
+    setRoundQuestions(questions);
+    setQuestionIndex(0);
+    setCorrectAnswers(0);
+    setStreak(0);
+    setRoundScore(0);
+    setLastResult(null);
+    setLastUserAnswer("");
+    currentTicketRef.current = null;
+    setCurrentTicket(null);
+    setRevealInfo(null);
+    setCurrentBet(0);
+    setScreen("question");
+    reset();
+    timerStartedRef.current = false;
+    fetchTicketFor(questions[0].id);
+  }, [dailyInfo, fetchTicketFor, reset]);
 
   async function handleQuestionSubmit(answer: string) {
     const timeTaken = (TIMER_SECONDS - timeLeft) * 1000;
@@ -858,7 +908,9 @@ export default function App() {
             playerName={playerName}
             record={recordScore}
             score={score}
+            dailyInfo={dailyInfo}
             onStart={startGame}
+            onDailyOpen={() => setScreen("daily")}
           />
         ) : null}
 
@@ -881,6 +933,9 @@ export default function App() {
             onContinue={handleContinue}
             onExit={handleRequestExit}
             onTimerStart={handleTimerStartFromTTS}
+            activeBet={currentBet}
+            userBalance={score}
+            onBet={(amount) => setCurrentBet(amount)}
           />
         ) : null}
 
@@ -921,6 +976,15 @@ export default function App() {
               setSvoyakJoinCode(undefined);
               setScreen("home");
             }}
+          />
+        ) : null}
+
+        {screen === "daily" && dailyInfo ? (
+          <DailyChallengeScreen
+            info={dailyInfo}
+            lastResult={dailyLastResult}
+            onStart={startDailyChallenge}
+            onBack={() => setScreen("home")}
           />
         ) : null}
 

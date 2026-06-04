@@ -99,6 +99,14 @@ def add_score(telegram_id: int, amount: int) -> dict[str, Any]:
     return _map_user(user)
 
 
+def deduct_score_if_sufficient(telegram_id: int, amount: int) -> bool:
+    """Atomik: score >= amount bo'lsa kamaytiradi (True), aks holda False."""
+    updated = User.objects.filter(
+        telegram_id=telegram_id, score__gte=amount
+    ).update(score=F("score") - amount)
+    return bool(updated)
+
+
 def get_top_users(limit: int = 10) -> list[dict[str, Any]]:
     users = User.objects.order_by("-score", "created_at")[:limit]
     return [_map_user(u) for u in users]

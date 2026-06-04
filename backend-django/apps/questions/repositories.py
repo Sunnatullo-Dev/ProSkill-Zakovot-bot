@@ -247,3 +247,9 @@ def get_category_stats() -> list[dict[str, Any]]:
 def rename_category(old_name: str, new_name: str) -> int:
     updated = Question.objects.filter(category=old_name).update(category=new_name)
     return updated
+
+
+def get_questions_by_ids(ids: list[str]) -> list[dict[str, Any]]:
+    """Berilgan ID tartibida savollarni qaytaradi (public format, options aralashtirilgan)."""
+    questions = {str(q.id): q for q in Question.objects.filter(id__in=ids)}
+    return [_map_question_public(questions[qid]) for qid in ids if qid in questions]

@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   checkAchievements,
+  getGameHistory,
   getGameStats,
   getReferrals,
   updateMyDisplayName,
   updateMyLanguage
 } from "../api/client";
 import type { AchievementUnlock } from "../api/client";
-import type { AppUser, GameStats } from "../types";
+import type { AppUser, GameHistoryItem, GameStats } from "../types";
 import { computeAchievements } from "../utils/achievements";
 import { buildInviteShare } from "../utils/share";
 import { hapticResult, hapticSelect, hapticTap } from "../utils/haptics";
@@ -150,6 +151,7 @@ export default function ProfileScreen({
 }: ProfileScreenProps) {
   const { lang, setLang, t } = useLanguage();
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
+  const [history, setHistory] = useState<GameHistoryItem[]>([]);
   const [referralCount, setReferralCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
@@ -175,10 +177,11 @@ export default function ProfileScreen({
 
     async function load() {
       setIsLoading(true);
-      const [gameStats, referrals] = await Promise.all([getGameStats(), getReferrals()]);
+      const [gameStats, referrals, hist] = await Promise.all([getGameStats(), getReferrals(), getGameHistory(10)]);
 
       if (active) {
         setStats(gameStats);
+        setHistory(hist);
         setReferralCount(referrals.myCount);
         setIsLoading(false);
       }
@@ -717,6 +720,55 @@ export default function ProfileScreen({
         </button>
       </div>
 
+
+      {history.length > 0 ? (
+        <div
+          style={{
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "20px",
+            padding: "16px",
+          }}
+        >
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--muted)", letterSpacing: "1px", marginBottom: "12px" }}>
+            O'YIN TARIXI
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {history.map((item) => {
+              const d = new Date(item.createdAt);
+              const label = d.toLocaleDateString("uz-UZ", { day: "numeric", month: "short" });
+              const time = d.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 12px",
+                    background: "var(--bg)",
+                    borderRadius: "12px",
+                    border: "1px solid var(--border)"
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: "12px", color: "var(--muted)" }}>{label} · {time}</div>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text)", marginTop: "2px" }}>
+                      {item.correctCount}/{item.totalCount} to'g'ri · {item.accuracy}%
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "18px", fontWeight: 900, color: "var(--gold)" }}>
+                      +{item.roundScore}
+                    </div>
+                    <div style={{ fontSize: "10px", color: "var(--muted)", letterSpacing: "1px" }}>BALL</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {shareOpen ? (
         <ShareSheet

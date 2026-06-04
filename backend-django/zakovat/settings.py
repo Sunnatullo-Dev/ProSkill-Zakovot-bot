@@ -160,6 +160,7 @@ INSTALLED_APPS = [
     "apps.battles",
     "apps.admin_api",
     "apps.svoyak",
+    "apps.daily",
 ]
 
 MIDDLEWARE = [

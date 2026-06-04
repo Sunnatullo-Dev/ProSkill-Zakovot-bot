@@ -47,3 +47,22 @@ def get_stats(telegram_id: int) -> dict[str, Any]:
 
 def count_all() -> int:
     return GameResult.objects.count()
+
+
+def get_history(telegram_id: int, limit: int = 20) -> list[dict]:
+    results = (
+        GameResult.objects.filter(telegram_id=telegram_id)
+        .order_by("-created_at")[:limit]
+    )
+    output = []
+    for r in results:
+        accuracy = round(r.correct_count / r.total_count * 100) if r.total_count > 0 else 0
+        output.append({
+            "id": str(r.id),
+            "correctCount": r.correct_count,
+            "totalCount": r.total_count,
+            "roundScore": r.round_score,
+            "accuracy": accuracy,
+            "createdAt": r.created_at.isoformat(),
+        })
+    return output

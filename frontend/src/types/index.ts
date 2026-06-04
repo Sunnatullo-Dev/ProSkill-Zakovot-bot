@@ -118,6 +118,36 @@ export type AnswerResult = {
   correctAnswer: string;
   pointsEarned: number;
   streak: number;
+  betAmount?: number;
+  betWon?: number;
+};
+
+export type DailyStreak = {
+  current: number;
+  longest: number;
+};
+
+export type DailyInfo = {
+  date: string;
+  questions: Question[];
+  completed: boolean;
+  streak: DailyStreak;
+  bonusPreview: number;
+};
+
+export type DailyCompleteResult = {
+  newStreak: number;
+  longestStreak: number;
+  streakBonus: number;
+};
+
+export type GameHistoryItem = {
+  id: string;
+  correctCount: number;
+  totalCount: number;
+  roundScore: number;
+  accuracy: number;
+  createdAt: string;
 };
 
 export type Screen =
@@ -132,7 +162,8 @@ export type Screen =
   | "admin"
   | "leaderboard"
   | "battle"
-  | "svoyak";
+  | "svoyak"
+  | "daily";
 
 export type NavTab = "home" | "leaderboard" | "svoyak" | "team" | "profile" | "admin";
 

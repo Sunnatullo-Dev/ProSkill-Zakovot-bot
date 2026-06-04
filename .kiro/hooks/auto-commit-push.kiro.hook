@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Auto Commit & Push",
+  "description": "Agent har bir ish sessiyasini tugatgandan keyin barcha o'zgarishlarni commit qilib, origin va deploy remote'larga push qiladi",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "cd \"C:\\Users\\Ucer\\Desktop\\ZAKOVOT\\.claude\\worktrees\\sharp-pascal-8a6007\" && git add -A && (git diff --cached --quiet || git commit -m \"fix: auto-commit by Kiro agent\") && git push origin claude/sharp-pascal-8a6007:main && git push deploy claude/sharp-pascal-8a6007:main",
+    "timeout": 90
+  }
+}

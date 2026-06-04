@@ -39,5 +39,6 @@ urlpatterns = [
     path("api/battles/", include("apps.battles.urls")),
     path("api/admin/", include("apps.admin_api.urls")),
     path("api/svoyak/", include("apps.svoyak.urls")),
+    path("api/daily/", include("apps.daily.urls")),
     re_path(r"^(?!api/|admin/|health$|static/).*$", spa_fallback),
 ]
