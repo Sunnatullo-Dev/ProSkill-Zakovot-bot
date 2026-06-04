@@ -263,7 +263,7 @@ def start_game(*, code: str, telegram_id: int) -> dict[str, Any]:
             raise AppError(409, f"Xona '{room.status}' holatda — endi boshlash mumkin emas")
 
         active_count = SvoyakPlayer.objects.filter(
-            room=room, status="connected"
+            room=room, status="connected", role="player"  # koordinatorni hisoblamaymiz
         ).count()
         if active_count < 2:
             raise AppError(409, "Kamida 2 ta ulangan o'yinchi kerak")
@@ -553,11 +553,14 @@ def skip_round(*, code: str, telegram_id: int) -> dict[str, Any]:
         if round_row.status in ("completed", "skipped"):
             raise AppError(409, "Raund allaqachon tugagan")
 
-        # Faqat host yoki buzz_winner skip qila oladi
+        # Faqat host, buzz_winner yoki koordinator skip qila oladi
         is_host = telegram_id == room.host_telegram_id
         is_winner = round_row.buzz_winner and round_row.buzz_winner.telegram_id == telegram_id
-        if not (is_host or is_winner):
-            raise AppError(403, "Faqat host yoki buzz g'olibi skip qila oladi")
+        is_coordinator = SvoyakPlayer.objects.filter(
+            room=room, telegram_id=telegram_id, role="coordinator"
+        ).exists()
+        if not (is_host or is_winner or is_coordinator):
+            raise AppError(403, "Faqat host, koordinator yoki buzz g'olibi skip qila oladi")
 
         round_row.status = "skipped"
         round_row.score_delta = 0
@@ -601,7 +604,9 @@ def _reassign_pick(room: SvoyakRoom, *, prefer_player_id: int | None) -> None:
     SvoyakPlayer.objects.filter(room=room).update(can_pick=False)
 
     candidates = list(
-        SvoyakPlayer.objects.filter(room=room, status="connected").order_by("score", "joined_at")
+        SvoyakPlayer.objects.filter(
+            room=room, status="connected", role="player"  # koordinatorni chiqarib tashlaymiz
+        ).order_by("score", "joined_at")
     )
     if not candidates:
         return

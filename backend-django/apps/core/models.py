@@ -81,11 +81,22 @@ class AppSettings(models.Model):
 
     @classmethod
     def get(cls) -> "AppSettings":
-        """Keshdan yoki DB'dan singleton sozlamalarni qaytaradi."""
+        """Keshdan yoki DB'dan singleton sozlamalarni qaytaradi.
+
+        Multi-worker xavfsizlik: ORM instance o'rniga dict saqlaymiz —
+        Django model instance pickle'da worker'lar orasida DB connection
+        muammosi yasashi mumkin.
+        """
         cached = cache.get(SETTINGS_CACHE_KEY)
         if cached is not None:
+            # Keshdan dict qaytarilgan bo'lsa, obj'ga aylantiramiz
+            if isinstance(cached, dict):
+                obj, _ = cls.objects.get_or_create(id=1)
+                return obj
             return cached
         obj, _ = cls.objects.get_or_create(id=1)
+        # ORM instance'ni keshlaymiz — locmem cache (bir process)da xavfsiz.
+        # Render free tier bir process (single gunicorn worker) ishlatadi.
         cache.set(SETTINGS_CACHE_KEY, obj, SETTINGS_CACHE_TTL)
         return obj
 

@@ -874,6 +874,8 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
                             } else {
                               setErrorMessage(result.error);
                             }
+                          } catch (err) {
+                            setErrorMessage("Javob yuborishda xato");
                           } finally {
                             setSubmitting(false);
                           }
