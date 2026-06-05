@@ -294,7 +294,7 @@ export default function App() {
         setIsSubmitting(false);
       }
     },
-    [currentTicket, isSubmitting, questionIndex, roundQuestions, start, stop, streak]
+    [currentBet, currentTicket, isSubmitting, questionIndex, roundQuestions, start, stop, streak]
   );
 
   useEffect(() => {
@@ -311,7 +311,8 @@ export default function App() {
         setIsDailyMode(false);
         void completeDailyChallenge(correctAnswers, roundScore).then((result) => {
           setDailyLastResult(result);
-          setDailyInfo((prev) => prev ? { ...prev, completed: true } : prev);
+          // Yangilangan streak va bonus uchun daily info'ni qayta yuklaymiz
+          void getDailyToday().then((fresh) => { if (fresh) setDailyInfo(fresh); });
         });
         void saveGameResult({ correctCount: correctAnswers, totalCount: roundQuestions.length, roundScore });
         setScreen("daily");
@@ -341,7 +342,7 @@ export default function App() {
     if (nextQuestion) {
       fetchTicketFor(nextQuestion.id);
     }
-  }, [correctAnswers, fetchTicketFor, loadTopUsers, questionIndex, reset, roundQuestions, roundScore, start]);
+  }, [correctAnswers, fetchTicketFor, isDailyMode, loadTopUsers, questionIndex, reset, roundQuestions, roundScore, start]);
 
   useEffect(() => {
     if (screen !== "result" || !lastResult) {
@@ -575,6 +576,8 @@ export default function App() {
         currentTicketRef.current = null;
         setCurrentTicket(null);
         setRevealInfo(null);
+        setCurrentBet(0);
+        setIsDailyMode(false);
         setScreen("question");
         reset();
         timerStartedRef.current = false; // TTS tugaganda start() chaqiriladi
@@ -640,6 +643,8 @@ export default function App() {
 
     hapticTap();
     stop();
+    // Javobni ko'rsatish tanlanganda bet bekor — pul deduct bo'lmaydi
+    setCurrentBet(0);
     setIsRevealing(true);
 
     try {
@@ -669,6 +674,8 @@ export default function App() {
     setRevealInfo(null);
     currentTicketRef.current = null;
     setCurrentTicket(null);
+    setCurrentBet(0);
+    setIsDailyMode(false);
     reset();
     setScreen("home");
   }
