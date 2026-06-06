@@ -940,9 +940,6 @@ export default function App() {
             onContinue={handleContinue}
             onExit={handleRequestExit}
             onTimerStart={handleTimerStartFromTTS}
-            activeBet={currentBet}
-            userBalance={score}
-            onBet={(amount) => setCurrentBet(amount)}
           />
         ) : null}
 
