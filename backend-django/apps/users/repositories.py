@@ -90,6 +90,14 @@ def set_unlocked_achievements(telegram_id: int, ids: list[str]) -> None:
 
 
 def add_score(telegram_id: int, amount: int) -> dict[str, Any]:
+    """Foydalanuvchi balliga musbat miqdor qo'shadi.
+
+    amount <= 0 bo'lsa — xato ko'taradi (manfiy ball berish ta'qiqlangan;
+    buning uchun `deduct_score_if_sufficient` ishlatilsin).
+    Score hech qachon manfiy bo'lmaydi: `GREATEST(score + amount, 0)` ekvivalent.
+    """
+    if amount <= 0:
+        raise ValueError(f"add_score: amount musbat bo'lishi kerak, berildi: {amount}")
     updated = User.objects.filter(telegram_id=telegram_id).update(
         score=F("score") + amount
     )
@@ -100,7 +108,13 @@ def add_score(telegram_id: int, amount: int) -> dict[str, Any]:
 
 
 def deduct_score_if_sufficient(telegram_id: int, amount: int) -> bool:
-    """Atomik: score >= amount bo'lsa kamaytiradi (True), aks holda False."""
+    """Atomik: score >= amount bo'lsa kamaytiradi va True qaytaradi.
+
+    score < amount bo'lsa — hech narsa o'zgartirmaydi va False qaytaradi.
+    Bu shuni anglatadiki, score hech qachon manfiy bo'lmaydi.
+    """
+    if amount <= 0:
+        raise ValueError(f"deduct_score_if_sufficient: amount musbat bo'lishi kerak, berildi: {amount}")
     updated = User.objects.filter(
         telegram_id=telegram_id, score__gte=amount
     ).update(score=F("score") - amount)

@@ -31,7 +31,15 @@ from .tickets import consume_answer_ticket, issue_answer_ticket, verify_answer_t
 
 
 ANSWER_TIMEOUT_MS = 15_000
-TIMEOUT_GRACE_MS = 2_000
+TIMEOUT_GRACE_MS  = 2_000
+
+# Streak limit: klient yuborgan streak qiymatiga ishonmaymiz —
+# faqat bonus hisoblashda ishlatamiz (max +1 ball ta'sir qiladi).
+# 100 dan katta qiymatlarni kesib tashlaymiz.
+MAX_CLIENT_STREAK = 100
+
+VALID_BETS = frozenset({5, 10, 20, 50})
+
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
@@ -43,6 +51,36 @@ def _rate_key(group: str, request) -> str:
     if user and getattr(user, "telegram_id", 0) > 0:
         return f"u:{user.telegram_id}"
     return f"ip:{request.META.get('REMOTE_ADDR', 'unknown')}"
+
+
+def _timeout_response(correct_answer: str) -> Response:
+    """Vaqt tugaganda qaytariladigan javob — bet YECHILMAYDI."""
+    return Response({
+        "status": "incorrect",
+        "isCorrect": False,
+        "explanation": "Vaqt tugadi",
+        "correctAnswer": correct_answer,
+        "pointsEarned": 0,
+        "streak": 0,
+        "betAmount": 0,
+        "betWon": 0,
+    })
+
+
+def _invalid_option_response(correct_answer: str, bet_amount: int) -> Response:
+    """A/B/C/D rejimida noto'g'ri/buzilgan variant yuborilganda.
+    Bet yechilgan (xavfsizlik: foydalanuvchi ruxsatsiz javob yubordi) → qaytarilmaydi.
+    """
+    return Response({
+        "status": "incorrect",
+        "isCorrect": False,
+        "explanation": "Noto'g'ri variant tanlandi",
+        "correctAnswer": correct_answer,
+        "pointsEarned": 0,
+        "streak": 0,
+        "betAmount": bet_amount,
+        "betWon": -bet_amount if bet_amount > 0 else 0,
+    })
 
 
 @api_view(["POST"])
@@ -65,6 +103,8 @@ def submit_answer(request):
     user = request.current_user
     body = request.data if isinstance(request.data, dict) else {}
 
+    # ── 1. Kiruvchi ma'lumotlarni tekshirish ──────────────────────────────────
+
     ticket = body.get("ticket")
     if not isinstance(ticket, str) or not ticket:
         raise AppError(400, "ticket talab qilinadi")
@@ -76,12 +116,13 @@ def submit_answer(request):
 
     streak_raw = body.get("streak", 0)
     try:
-        streak_before = max(0, int(streak_raw))
+        # MAX_CLIENT_STREAK chegarasi: klient streak ni oshirib +1 bonus
+        # olmasligi uchun. 100 dan katta qiymatlar kesiladi.
+        streak_before = max(0, min(int(streak_raw), MAX_CLIENT_STREAK))
     except (TypeError, ValueError):
         raise AppError(400, "streak noto'g'ri")
 
-    # Svoyak bet — ixtiyoriy. Faqat 5/10/20/50 qiymatlar qabul qilinadi.
-    VALID_BETS = {5, 10, 20, 50}
+    # Svoyak bet — ixtiyoriy. Faqat 0 | 5 | 10 | 20 | 50 qabul qilinadi.
     bet_amount = 0
     bet_raw = body.get("betAmount")
     if bet_raw is not None:
@@ -89,105 +130,90 @@ def submit_answer(request):
             bet_amount = int(bet_raw)
         except (TypeError, ValueError):
             raise AppError(400, "betAmount noto'g'ri")
-        if bet_amount != 0 and bet_amount not in VALID_BETS:
-            raise AppError(400, "betAmount faqat 5, 10, 20 yoki 50 bo'lishi mumkin")
+        if bet_amount < 0 or (bet_amount != 0 and bet_amount not in VALID_BETS):
+            raise AppError(400, "betAmount faqat 0 | 5 | 10 | 20 | 50 bo'lishi mumkin")
+
+    # ── 2. Bilet tekshiruvi ───────────────────────────────────────────────────
 
     payload = verify_answer_ticket(ticket)
 
-    # Avval savol mavjudligini tekshiramiz — agar savol o'chirilgan bo'lsa
-    # (admin uni "noto'g'ri" deb belgilab o'chirgan), biletni "consumed"
-    # qilish o'rinli emas. Foydalanuvchi keyingi safar uringanda javob bera
-    # olishi mumkin (yangi ticket bilan).
+    # Savol mavjudligini consume'dan oldin tekshiramiz — o'chirilgan savol
+    # uchun bilet sarf bo'lmasin, foydalanuvchi qaytadan urinishi mumkin.
     question = get_question_by_id(payload.question_id)
     if not question:
         raise AppError(404, "Savol topilmadi")
 
-    # Replay himoyasi: biletni ishlatilgan deb belgilashga urinamiz —
-    # allaqachon ishlatilgan bo'lsa, takror jorayotgan bo'ladi.
+    # Replay himoyasi: biletni ishlatilgan deb belgilaymiz.
     if not consume_answer_ticket(payload.jti):
         raise AppError(409, "Bu bilet allaqachon ishlatilgan")
 
-    # Bet tikish: bilet consumed bo'lgandan keyin (replay himoyasi o'tgach)
-    # atomik ravishda balansdan yechib olamiz. Yetarli bo'lmasa — rad etiladi.
+    # ── 3. Vaqt tekshiruvi — BET YECHILMASDAN OLDIN ─────────────────────────
+    # MUHIM: vaqt tugaganda bet yechilmasligi kerak — foydalanuvchi vaqtida
+    # javob berganda tarmoq kechikishi sababli serverda late arrive bo'lishi
+    # mumkin. Shu holda uni jazolamaslik uchun, avval vaqtni hisoblaymiz.
+
+    now_ms = int(time.time() * 1000)
+    time_taken_ms = max(0, now_ms - payload.issued_at_ms)
+
+    if time_taken_ms > ANSWER_TIMEOUT_MS + TIMEOUT_GRACE_MS:
+        # Bet yechilmagan holda "incorrect" qaytaramiz
+        return _timeout_response(question["correctAnswer"])
+
+    # ── 4. Bet yechish — vaqt o'tmaganligiga ishonch hosil bo'lgandan keyin ──
+    # Atomik: score >= bet_amount bo'lmasagina yechilmaydi.
     if bet_amount > 0:
         if not deduct_score_if_sufficient(user.telegram_id, bet_amount):
             raise AppError(400, "Yetarli ballingiz yo'q")
 
-    now_ms = int(time.time() * 1000)
-    time_taken = max(0, now_ms - payload.issued_at_ms)
+    # ── 5. Javob baholash ─────────────────────────────────────────────────────
 
-    if time_taken > ANSWER_TIMEOUT_MS + TIMEOUT_GRACE_MS:
-        return Response(
-            {
-                "status": "incorrect",
-                "isCorrect": False,
-                "explanation": "Vaqt tugadi",
-                "correctAnswer": question["correctAnswer"],
-                "pointsEarned": 0,
-                "streak": 0,
-            }
-        )
-
-    # A/B/C/D rejimi: savolda noto'g'ri variantlar bo'lsa Gemini'ga
-    # bormaymiz — darrov aniq taqqoslash bilan baholaymiz. Bu:
-    #   - tezroq (10s emas <100ms)
-    #   - bepul (Gemini API chaqiruvi yo'q)
-    #   - aniqroq (AI "qisman to'g'ri" deb adashmaydi)
     wrong_answers = question.get("wrongAnswers") or []
     if wrong_answers:
-        # Foydalanuvchi yuborgan javob — taqdim etilgan variantlardan biri
-        # bo'lishi kerak (xavfsizlik tekshiruvi: xohlagan matnni baholatmasin).
+        # A/B/C/D rejimi: faqat taqdim etilgan variantlardan biri qabul.
+        # Buzilgan ma'lumot yuborilsa → bet qaytarilmaydi (xavfsizlik).
         all_options = [question["correctAnswer"], *wrong_answers]
-        normalized_options = {opt.strip().casefold() for opt in all_options if isinstance(opt, str)}
-        if user_answer.casefold() not in normalized_options:
-            return Response(
-                {
-                    "status": "incorrect",
-                    "isCorrect": False,
-                    "explanation": "Noto'g'ri variant tanlandi",
-                    "correctAnswer": question["correctAnswer"],
-                    "pointsEarned": 0,
-                    "streak": 0,
-                }
-            )
+        valid_set = {opt.strip().casefold() for opt in all_options if isinstance(opt, str)}
+        if user_answer.casefold() not in valid_set:
+            return _invalid_option_response(question["correctAnswer"], bet_amount)
         grading = exact_match_grade(user_answer, question["correctAnswer"])
     else:
-        # Eski yo'l: erkin matn → Gemini AI baholaydi.
+        # Erkin matn: Gemini AI baholaydi.
         grading = check_answer(question["text"], question["correctAnswer"], user_answer)
+
+    # ── 6. Ball hisoblash ─────────────────────────────────────────────────────
+
     score = calculate_answer_score(
         ScoreInput(
             status=grading.status,
-            time_taken_ms=min(time_taken, ANSWER_TIMEOUT_MS),
+            time_taken_ms=min(time_taken_ms, ANSWER_TIMEOUT_MS),
             streak_before=streak_before,
         )
     )
 
-    # Normal o'yin bali (streak + tezlik mukofoti)
-    if score.points_earned > 0:
-        with transaction.atomic():
-            add_score(user.telegram_id, score.points_earned)
-
-    # Svoyak bet natijasi: to'g'ri → 2× bet qaytariladi (net +bet), noto'g'ri → ball ketdi
+    # Svoyak: to'g'ri → net +bet_amount (2× qaytariladi, biri allaqachon yechilgan)
+    #         noto'g'ri/partial → net -bet_amount (yechilgan, qaytarilmaydi)
     bet_won = 0
     if bet_amount > 0:
-        if grading.status == "correct":
-            add_score(user.telegram_id, 2 * bet_amount)
-            bet_won = bet_amount
-        else:
-            bet_won = -bet_amount
+        bet_won = bet_amount if grading.status == "correct" else -bet_amount
 
-    return Response(
-        {
-            "status": grading.status,
-            "isCorrect": grading.status == "correct",
-            "explanation": grading.explanation,
-            "correctAnswer": question["correctAnswer"],
-            "pointsEarned": score.points_earned,
-            "streak": score.streak_after,
-            "betAmount": bet_amount,
-            "betWon": bet_won,
-        }
-    )
+    # ── 7. Ball yozish — bitta atomik tranzaksiyada ───────────────────────────
+    # Normal ball va bet mukofotini bitta DB yazuvida qo'shamiz:
+    # bu oraliqda boshqa thread noto'g'ri qiymat ko'rmasligini kafolatlaydi.
+    total_add = score.points_earned + (2 * bet_amount if bet_won > 0 else 0)
+    if total_add > 0:
+        with transaction.atomic():
+            add_score(user.telegram_id, total_add)
+
+    return Response({
+        "status": grading.status,
+        "isCorrect": grading.status == "correct",
+        "explanation": grading.explanation,
+        "correctAnswer": question["correctAnswer"],
+        "pointsEarned": score.points_earned,
+        "streak": score.streak_after,
+        "betAmount": bet_amount,
+        "betWon": bet_won,
+    })
 
 
 @api_view(["POST"])
