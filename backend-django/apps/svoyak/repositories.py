@@ -31,6 +31,32 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
+# ─── Auto rejim konstantalari ────────────────────────────────────────────────
+
+AUTO_TIME_PER_QUESTION_MS = 15_000   # har savol uchun vaqt
+AUTO_GRACE_MS = 2_000                # vaqt tugaganda grace period
+AUTO_RESULT_MS = 3_000               # natija ko'rsatish vaqti
+
+# (min_score, solo_questions, team_questions)  — kamayish tartibida tekshiriladi
+_LEVEL_THRESHOLDS = [
+    (1000, 8, 12),
+    (600,  7, 11),
+    (300,  6, 10),
+    (150,  5,  9),
+    (50,   4,  8),
+    (0,    3,  7),
+]
+
+
+def _get_question_count(host_score: int, player_count: int) -> int:
+    """Hosting baliga va o'yinchilar soniga qarab savol soni."""
+    is_solo = player_count <= 1
+    for min_score, solo_q, team_q in _LEVEL_THRESHOLDS:
+        if host_score >= min_score:
+            return solo_q if is_solo else team_q
+    return 3 if is_solo else 7
+
+
 def _normalize(text: str) -> str:
     """A/B/C/D taqqoslash uchun Unicode-aware normalize."""
     if text is None:
@@ -56,19 +82,24 @@ def create_room(
     *,
     host_telegram_id: int,
     host_display_name: str,
-    category_ids: list[int],
+    category_ids: list[int] | None = None,
     settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Yangi xona yaratadi va hostni birinchi o'yinchi sifatida qo'shadi.
 
-    Doska uchun har bir kategoriya × 5 bal qiymati uchun random savol
-    tanlanadi va `SvoyakRoomCategorySnapshot` da saqlanadi. Bir savol
-    qaytadan ishlatilmaydi (xona davomida).
+    category_ids bo'sh yoki yo'q bo'lsa — auto rejim (savolar avtomatik).
+    category_ids berilsa — klassik doska rejimi.
     """
     if host_telegram_id <= 0:
         raise AppError(401, "Mehmon Svoyak xonasi yaratolmaydi — Telegram orqali kiring")
+
+    # Auto rejim: kategoriya tanlanmaydi
     if not category_ids:
-        raise AppError(400, "Hech bo'lmaganda bitta kategoriya tanlang")
+        return _create_auto_room(
+            host_telegram_id=host_telegram_id,
+            host_display_name=host_display_name,
+            settings=settings,
+        )
 
     categories = list(
         SvoyakCategory.objects.filter(id__in=category_ids, is_active=True)
@@ -231,6 +262,7 @@ def get_room_state(code: str, *, viewer_telegram_id: int) -> dict[str, Any]:
     """O'yin holatini barcha kerakli ma'lumotlar bilan qaytaradi.
 
     Tez bo'lishi kerak — har client har 500ms chaqiradi.
+    Auto rejimda: vaqt tugagan bo'lsa avtomatik keyingi savolga o'tadi.
     """
     room = (
         SvoyakRoom.objects
@@ -241,38 +273,16 @@ def get_room_state(code: str, *, viewer_telegram_id: int) -> dict[str, Any]:
     if not room:
         raise AppError(404, "Xona topilmadi")
 
+    # Auto rejimda vaqt tugaganini tekshiramiz
+    if room.settings.get("auto_mode") and room.status == "playing":
+        maybe_advance_auto(room)
+        room.refresh_from_db()
+
     return _serialize_room(room, viewer_telegram_id=viewer_telegram_id)
 
 
 # ─── O'yin mexanikasi ───────────────────────────────────────────────────────
 
-def start_game(*, code: str, telegram_id: int) -> dict[str, Any]:
-    """Host xonani lobby'dan playing'ga o'tkazadi.
-
-    Talablar: faqat host, 2+ o'yinchi, status oldindan lobby.
-    Birinchi pick huquqi host'da qoladi.
-    """
-    normalized = code.strip().upper()
-    with transaction.atomic():
-        room = SvoyakRoom.objects.select_for_update().filter(code=normalized).first()
-        if not room:
-            raise AppError(404, "Xona topilmadi")
-        if room.host_telegram_id != telegram_id:
-            raise AppError(403, "Faqat host o'yinni boshlay oladi")
-        if room.status != "lobby":
-            raise AppError(409, f"Xona '{room.status}' holatda — endi boshlash mumkin emas")
-
-        active_count = SvoyakPlayer.objects.filter(
-            room=room, status="connected", role="player"  # koordinatorni hisoblamaymiz
-        ).count()
-        if active_count < 2:
-            raise AppError(409, "Kamida 2 ta ulangan o'yinchi kerak")
-
-        room.status = "playing"
-        room.started_at = timezone.now()
-        room.save(update_fields=["status", "started_at"])
-
-    return get_room_state(normalized, viewer_telegram_id=telegram_id)
 
 
 def pick_question(
@@ -591,6 +601,312 @@ def end_game(*, code: str, telegram_id: int) -> dict[str, Any]:
     return get_room_state(normalized, viewer_telegram_id=telegram_id)
 
 
+# ─── Auto rejim funksiyalari ────────────────────────────────────────────────
+
+def _create_auto_room(
+    *,
+    host_telegram_id: int,
+    host_display_name: str,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Auto rejim xona — kategoriya yo'q, savollar keyinchalik tanlanadi."""
+    code = ""
+    for _ in range(CODE_GEN_ATTEMPTS):
+        candidate = _generate_code()
+        if not SvoyakRoom.objects.filter(code=candidate).exists():
+            code = candidate
+            break
+    if not code:
+        raise AppError(500, "Xona kodi yaratib bo'lmadi")
+
+    init_settings = dict(settings or {})
+    init_settings["auto_mode"] = True
+
+    with transaction.atomic():
+        room = SvoyakRoom.objects.create(
+            code=code,
+            host_telegram_id=host_telegram_id,
+            status="lobby",
+            settings=init_settings,
+        )
+        SvoyakPlayer.objects.create(
+            room=room,
+            telegram_id=host_telegram_id,
+            display_name=host_display_name or f"Host #{host_telegram_id}",
+            score=0,
+            status="connected",
+            can_pick=True,
+        )
+    return _serialize_room(room)
+
+
+def start_game(*, code: str, telegram_id: int) -> dict[str, Any]:
+    """Host xonani lobby'dan playing'ga o'tkazadi.
+
+    Auto rejimda: 1 o'yinchi ham yetarli (solo). Savollar tanlanadi va
+    birinchi savol boshlanadi.
+    Klassik rejimda: 2+ o'yinchi talab qilinadi.
+    """
+    normalized = code.strip().upper()
+    with transaction.atomic():
+        room = SvoyakRoom.objects.select_for_update().filter(code=normalized).first()
+        if not room:
+            raise AppError(404, "Xona topilmadi")
+        if room.host_telegram_id != telegram_id:
+            raise AppError(403, "Faqat host o'yinni boshlay oladi")
+        if room.status != "lobby":
+            raise AppError(409, f"Xona '{room.status}' holatda — endi boshlash mumkin emas")
+
+        is_auto = bool(room.settings.get("auto_mode"))
+        active_players = list(
+            SvoyakPlayer.objects.filter(room=room, status="connected", role="player")
+        )
+        player_count = len(active_players)
+
+        if is_auto:
+            if player_count < 1:
+                raise AppError(409, "Kamida 1 ta o'yinchi kerak")
+            _setup_auto_questions(room, player_count)
+        else:
+            if player_count < 2:
+                raise AppError(409, "Kamida 2 ta ulangan o'yinchi kerak")
+
+        room.status = "playing"
+        room.started_at = timezone.now()
+        room.save(update_fields=["status", "started_at"])
+
+        if is_auto:
+            _start_auto_question(room)
+
+    return get_room_state(normalized, viewer_telegram_id=telegram_id)
+
+
+def _setup_auto_questions(room: SvoyakRoom, player_count: int) -> None:
+    """Auto rejim uchun savol IDlarini tanlab settings'ga yozadi."""
+    from apps.users.models import User
+    host_user = User.objects.filter(telegram_id=room.host_telegram_id).only("score").first()
+    host_score = host_user.score if host_user else 0
+
+    q_count = _get_question_count(host_score, player_count)
+
+    # SvoyakQuestion'lardan random tanlaymiz (barcha aktiv, type='text')
+    qs = list(
+        SvoyakQuestion.objects.filter(is_active=True)
+        .values_list("id", flat=True)
+    )
+    if not qs:
+        # Zahira: agar svoyak savollar bo'lmasa — umumiy question pool ishlatamiz
+        from apps.questions.models import Question as GenQuestion
+        gen_ids = list(GenQuestion.objects.values_list("id", flat=True))
+        if not gen_ids:
+            raise AppError(500, "Savol bazasi bo'sh")
+        import random as _rnd
+        selected = _rnd.sample(gen_ids, min(q_count, len(gen_ids)))
+        settings = dict(room.settings)
+        settings.update({
+            "question_ids": [str(i) for i in selected],
+            "question_index": 0,
+            "total_questions": len(selected),
+            "use_general_pool": True,
+            "question_started_at_ms": 0,
+        })
+        room.settings = settings
+        room.save(update_fields=["settings"])
+        return
+
+    selected = [secrets.choice(qs) for _ in range(min(q_count, len(qs)))]
+    # Takrorlanmaslik: set orqali
+    seen: set[int] = set()
+    unique: list[int] = []
+    for qid in selected:
+        if qid not in seen:
+            seen.add(qid)
+            unique.append(qid)
+    if len(unique) < q_count:
+        extras = [q for q in qs if q not in seen]
+        import random as _rnd
+        _rnd.shuffle(extras)
+        unique.extend(extras[:q_count - len(unique)])
+
+    settings = dict(room.settings)
+    settings.update({
+        "question_ids": [str(i) for i in unique],
+        "question_index": 0,
+        "total_questions": len(unique),
+        "use_general_pool": False,
+        "question_started_at_ms": 0,
+    })
+    room.settings = settings
+    room.save(update_fields=["settings"])
+
+
+def _start_auto_question(room: SvoyakRoom) -> None:
+    """Joriy question_index bo'yicha yangi SvoyakRound yaratadi."""
+    settings = room.settings
+    q_ids = settings.get("question_ids", [])
+    idx = int(settings.get("question_index", 0))
+    if idx >= len(q_ids):
+        # O'yin tugadi
+        room.status = "finished"
+        room.finished_at = timezone.now()
+        room.save(update_fields=["status", "finished_at"])
+        return
+
+    q_id = q_ids[idx]
+    use_general = bool(settings.get("use_general_pool"))
+
+    question: SvoyakQuestion | None = None
+    if use_general:
+        from apps.questions.models import Question as GenQuestion
+        gen_q = GenQuestion.objects.filter(id=q_id).first()
+        if not gen_q:
+            _advance_auto_question(room)
+            return
+        # Umumiy savolni SvoyakQuestion ga "virtual" o'tkazmasdan to'g'ridan-to'g'ri
+        # settings'da saqlaymiz — round'ni stub bilan yaratamiz
+        settings["current_question_text"] = gen_q.text
+        settings["current_correct_answer"] = gen_q.correct_answer
+        settings["question_started_at_ms"] = _now_ms()
+        room.settings = settings
+        room.save(update_fields=["settings"])
+        return
+    else:
+        question = SvoyakQuestion.objects.filter(id=q_id).first()
+        if not question:
+            _advance_auto_question(room)
+            return
+
+    # SvoyakRound yaratish
+    new_round = SvoyakRound.objects.create(
+        room=room,
+        question=question,
+        value=1,
+        status="reading",
+        buzz_attempts=[],
+    )
+    room.current_round = new_round
+    settings["question_started_at_ms"] = _now_ms()
+    settings["current_question_text"] = question.text
+    settings["current_correct_answer"] = question.correct_answer
+    room.settings = settings
+    room.save(update_fields=["current_round", "settings"])
+
+
+def submit_auto_answer(*, code: str, telegram_id: int, answer_text: str) -> dict[str, Any]:
+    """Auto rejimda har qanday o'yinchi javob berishi mumkin (buzz yo'q)."""
+    normalized = code.strip().upper()
+    trimmed = (answer_text or "").strip()
+
+    with transaction.atomic():
+        room = SvoyakRoom.objects.select_for_update().filter(code=normalized).first()
+        if not room:
+            raise AppError(404, "Xona topilmadi")
+        if not room.settings.get("auto_mode"):
+            raise AppError(409, "Bu xona auto rejimda emas")
+        if room.status != "playing":
+            raise AppError(409, "O'yin aktiv emas")
+
+        player = SvoyakPlayer.objects.filter(room=room, telegram_id=telegram_id).first()
+        if not player:
+            raise AppError(403, "Siz bu xonada emassiz")
+
+        settings = dict(room.settings)
+        started_at_ms = int(settings.get("question_started_at_ms", 0))
+        now = _now_ms()
+
+        if started_at_ms > 0 and now - started_at_ms > AUTO_TIME_PER_QUESTION_MS + AUTO_GRACE_MS:
+            raise AppError(409, "Vaqt tugadi")
+
+        correct_answer = settings.get("current_correct_answer", "")
+        question_text = settings.get("current_question_text", "")
+
+        # Allaqachon javob bergami?
+        attempts = []
+        if room.current_round_id:
+            round_row = SvoyakRound.objects.select_for_update().filter(
+                id=room.current_round_id
+            ).first()
+            if round_row:
+                attempts = list(round_row.buzz_attempts or [])
+                already = any(a.get("telegramId") == telegram_id for a in attempts)
+                if already:
+                    raise AppError(409, "Siz allaqachon javob bergansiz")
+
+        # Gemini orqali baholash
+        from apps.answers.gemini import check_answer as gemini_check
+        result = gemini_check(question_text, correct_answer, trimmed)
+        is_correct = result.status == "correct"
+
+        if is_correct:
+            player.score += 1
+            player.save(update_fields=["score"])
+
+        new_attempt = {
+            "telegramId": telegram_id,
+            "displayName": player.display_name,
+            "answer": trimmed,
+            "isCorrect": is_correct,
+            "atMs": now,
+        }
+        attempts.append(new_attempt)
+
+        if room.current_round_id and round_row:
+            round_row.buzz_attempts = attempts
+            round_row.save(update_fields=["buzz_attempts"])
+        else:
+            settings["auto_attempts"] = attempts
+            room.settings = settings
+            room.save(update_fields=["settings"])
+
+        # Barcha o'yinchilar javob berdimi?
+        active_players = SvoyakPlayer.objects.filter(
+            room=room, status="connected", role="player"
+        ).count()
+        answered_count = len(attempts)
+        if answered_count >= active_players:
+            _advance_auto_question(room)
+
+    return get_room_state(normalized, viewer_telegram_id=telegram_id)
+
+
+def _advance_auto_question(room: SvoyakRoom) -> None:
+    """Keyingi savolga o'tadi yoki o'yinni tugatadi."""
+    settings = dict(room.settings)
+    idx = int(settings.get("question_index", 0)) + 1
+    total = int(settings.get("total_questions", 0))
+
+    if room.current_round_id:
+        SvoyakRound.objects.filter(id=room.current_round_id).update(
+            status="completed",
+            ended_at=timezone.now(),
+        )
+        room.current_round = None
+
+    settings["question_index"] = idx
+    settings["auto_attempts"] = []
+    settings["question_started_at_ms"] = 0
+    settings["current_question_text"] = ""
+    settings["current_correct_answer"] = ""
+    room.settings = settings
+    room.save(update_fields=["current_round", "settings"])
+
+    if idx >= total:
+        room.status = "finished"
+        room.finished_at = timezone.now()
+        room.save(update_fields=["status", "finished_at"])
+    else:
+        _start_auto_question(room)
+
+
+def maybe_advance_auto(room: SvoyakRoom) -> None:
+    """Polling'da chaqiriladi: vaqt tugagan bo'lsa avtomatik keyingi savolga o'tadi."""
+    if not room.settings.get("auto_mode") or room.status != "playing":
+        return
+    started_ms = int(room.settings.get("question_started_at_ms", 0))
+    if started_ms > 0 and _now_ms() - started_ms > AUTO_TIME_PER_QUESTION_MS:
+        _advance_auto_question(room)
+
+
 # ─── Yordamchi (private) funksiyalar ────────────────────────────────────────
 
 def _reassign_pick(room: SvoyakRoom, *, prefer_player_id: int | None) -> None:
@@ -694,6 +1010,37 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
     snapshots = list(
         room.category_snapshots.all().select_related("category")
     )
+    is_auto = bool(room.settings.get("auto_mode"))
+    auto_state = None
+    if is_auto:
+        s = room.settings
+        q_idx = int(s.get("question_index", 0))
+        total = int(s.get("total_questions", 0))
+        started_ms = int(s.get("question_started_at_ms", 0))
+        now_ms_val = _now_ms()
+        time_remaining = max(0, AUTO_TIME_PER_QUESTION_MS - (now_ms_val - started_ms)) if started_ms > 0 else AUTO_TIME_PER_QUESTION_MS
+
+        # Joriy round'dan attempts olish
+        attempts: list[dict] = []
+        if room.current_round_id and room.current_round:
+            attempts = list(room.current_round.buzz_attempts or [])
+        else:
+            attempts = list(s.get("auto_attempts", []))
+
+        my_attempt = next((a for a in attempts if a.get("telegramId") == viewer), None)
+
+        auto_state = {
+            "questionIndex": q_idx,
+            "totalQuestions": total,
+            "questionText": s.get("current_question_text", ""),
+            "correctAnswer": s.get("current_correct_answer", "") if room.status == "finished" or time_remaining == 0 else None,
+            "timeRemainingMs": time_remaining,
+            "startedAtMs": started_ms,
+            "attempts": attempts,
+            "myAttempt": my_attempt,
+            "isPlaying": room.status == "playing" and started_ms > 0 and q_idx < total,
+        }
+
     return {
         "code": room.code,
         "status": room.status,
@@ -701,6 +1048,8 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
         "createdAt": room.created_at.isoformat() if room.created_at else None,
         "startedAt": room.started_at.isoformat() if room.started_at else None,
         "settings": room.settings,
+        "isAutoMode": is_auto,
+        "autoState": auto_state,
         "players": [_serialize_player(p) for p in players],
         "board": [
             {

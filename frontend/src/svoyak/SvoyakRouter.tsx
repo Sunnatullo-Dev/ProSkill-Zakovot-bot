@@ -9,6 +9,7 @@ import { useState } from "react";
 import type { CSSProperties } from "react";
 import SvoyakLobbyScreen from "./SvoyakLobbyScreen";
 import SvoyakBoardScreen from "./SvoyakBoardScreen";
+import SvoyakAutoScreen from "./SvoyakAutoScreen";
 import SvoyakErrorBoundary from "./SvoyakErrorBoundary";
 import type { SvoyakRoomState } from "./types";
 import { useT } from "../i18n";
@@ -25,7 +26,7 @@ type Props = {
 
 type Stage =
   | { kind: "lobby" }
-  | { kind: "board"; code: string }
+  | { kind: "board"; code: string; autoMode: boolean }
   | { kind: "finished"; state: SvoyakRoomState };
 
 export default function SvoyakRouter({
@@ -57,7 +58,7 @@ export default function SvoyakRouter({
           playerName={playerName}
           initialJoinCode={initialJoinCode}
           coordinatorEnabled={appSettings.svoyakCoordinatorEnabled}
-          onGameStarted={(state) => setStage({ kind: "board", code: state.code })}
+          onGameStarted={(state) => setStage({ kind: "board", code: state.code, autoMode: Boolean(state.isAutoMode) })}
         />
       </SvoyakErrorBoundary>
     );
@@ -70,11 +71,19 @@ export default function SvoyakRouter({
         labels={errorLabels}
         onReset={() => setStage({ kind: "lobby" })}
       >
-        <SvoyakBoardScreen
-          code={stage.code}
-          onGameEnded={(s) => setStage({ kind: "finished", state: s })}
-          onExit={onExitSvoyak}
-        />
+        {stage.autoMode ? (
+          <SvoyakAutoScreen
+            code={stage.code}
+            onGameEnded={(s) => setStage({ kind: "finished", state: s })}
+            onExit={onExitSvoyak}
+          />
+        ) : (
+          <SvoyakBoardScreen
+            code={stage.code}
+            onGameEnded={(s) => setStage({ kind: "finished", state: s })}
+            onExit={onExitSvoyak}
+          />
+        )}
       </SvoyakErrorBoundary>
     );
   }

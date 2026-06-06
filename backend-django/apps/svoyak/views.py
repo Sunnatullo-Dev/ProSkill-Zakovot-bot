@@ -58,20 +58,20 @@ def create_room(request):
     body = request.data if isinstance(request.data, dict) else {}
 
     display_name = (body.get("displayName") or "").strip() or f"Host #{user.telegram_id}"
-    category_ids = body.get("categoryIds")
-    if not isinstance(category_ids, list):
-        raise AppError(400, "categoryIds ro'yxat bo'lishi kerak")
+    category_ids = body.get("categoryIds")  # ixtiyoriy — bo'sh bo'lsa auto rejim
     settings_obj = body.get("settings") if isinstance(body.get("settings"), dict) else {}
 
-    try:
-        cleaned_ids = [int(c) for c in category_ids]
-    except (TypeError, ValueError):
-        raise AppError(400, "categoryIds raqamlar ro'yxati bo'lishi kerak")
+    cleaned_ids: list[int] = []
+    if isinstance(category_ids, list) and category_ids:
+        try:
+            cleaned_ids = [int(c) for c in category_ids]
+        except (TypeError, ValueError):
+            raise AppError(400, "categoryIds raqamlar ro'yxati bo'lishi kerak")
 
     room = repositories.create_room(
         host_telegram_id=user.telegram_id,
         host_display_name=display_name,
-        category_ids=cleaned_ids,
+        category_ids=cleaned_ids or None,
         settings=settings_obj,
     )
     return Response(room, status=201)
@@ -184,4 +184,20 @@ def skip_round(request, code: str):
 def end_game(request, code: str):
     user = request.current_user
     state = repositories.end_game(code=code, telegram_id=user.telegram_id)
+    return Response(state)
+
+
+@api_view(["POST"])
+@require_auth
+@ratelimit(key=_rate_key, rate="60/m", block=True)
+def auto_answer(request, code: str):
+    """Auto rejim: har qanday o'yinchi javob berishi mumkin (buzz yo'q)."""
+    user = request.current_user
+    body = request.data if isinstance(request.data, dict) else {}
+    answer = body.get("answer") if isinstance(body.get("answer"), str) else ""
+    state = repositories.submit_auto_answer(
+        code=code,
+        telegram_id=user.telegram_id,
+        answer_text=answer,
+    )
     return Response(state)

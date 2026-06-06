@@ -193,17 +193,11 @@ export default function SvoyakLobbyScreen({
   }, [mode, categories.length]);
 
   async function handleCreateRoom() {
-    if (selectedCatIds.size === 0) {
-      setError("Kamida 1 ta kategoriya tanlang");
-      return;
-    }
     setError("");
     setBusy(true);
     try {
-      const state = await createRoom({
-        displayName: playerName,
-        categoryIds: Array.from(selectedCatIds),
-      });
+      // Auto rejim: kategoriya tanlanmaydi — savollar avtomatik beriladi
+      const state = await createRoom({ displayName: playerName });
       setActiveCode(state.code);
       setMode("in_lobby");
     } catch (err) {
@@ -368,138 +362,23 @@ export default function SvoyakLobbyScreen({
   }
 
   if (mode === "host_setup") {
+    // Xona yaratish — auto rejim, kategoriya tanlanmaydi
     return (
       <div style={PAGE}>
-        <div style={TITLE}>{t("svoyak_host_pick_categories")}</div>
-        <div style={SUBTITLE}>{t("svoyak_host_pick_categories_hint")}</div>
+        <div style={TITLE}>🎯 Yangi o'yin</div>
+        <div style={SUBTITLE}>Savollar avtomatik ketma-ket beriladi</div>
 
-        {catsLoading ? (
-          <div style={{ ...CARD, textAlign: "center", color: "var(--muted)" }}>
-            <div style={{ marginBottom: "6px" }}>{t("svoyak_lobby_loading")}</div>
-            <div style={{ fontSize: "11px", opacity: 0.7 }}>
-              {t("svoyak_lobby_loading_hint")}
-            </div>
+        <div style={{ ...CARD, textAlign: "center", padding: "24px" }}>
+          <div style={{ fontSize: "48px", marginBottom: "12px" }}>🚀</div>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text)", marginBottom: "8px" }}>
+            Auto rejim
           </div>
-        ) : categories.length === 0 ? (
-          <div style={{ ...CARD, textAlign: "center" }}>
-            <div style={{ marginBottom: "12px", color: "var(--svoyak-warning, #ffaa1c)" }}>
-              {t("svoyak_lobby_load_failed")}
-            </div>
-            {error ? (
-              <div
-                style={{
-                  fontSize: "10px",
-                  color: "var(--muted)",
-                  background: "rgba(0,0,0,0.30)",
-                  padding: "10px",
-                  borderRadius: "8px",
-                  marginBottom: "12px",
-                  textAlign: "left",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  fontFamily: "monospace",
-                }}
-              >
-                {error}
-              </div>
-            ) : null}
-            <button
-              type="button"
-              onClick={loadCategories}
-              style={{
-                padding: "10px 20px",
-                borderRadius: "10px",
-                border: "1px solid var(--svoyak-gold, #f5c842)",
-                background: "rgba(245,200,66,0.10)",
-                color: "var(--svoyak-gold, #f5c842)",
-                fontWeight: 800,
-                fontSize: "13px",
-                cursor: "pointer",
-              }}
-            >
-              {t("svoyak_lobby_retry")}
-            </button>
+          <div style={{ fontSize: "13px", color: "var(--muted)", lineHeight: 1.6, marginBottom: "16px" }}>
+            Solo: 3 ta savol • Jamoa: 7 ta savol<br />
+            Daraja oshsa — savol soni ham ko'payadi<br />
+            Faqat matn javob, vaqt: 15 soniya
           </div>
-        ) : (
-          <>
-          {categories.every((c) => !c.ready) ? (
-            <div
-              style={{
-                padding: "14px",
-                background: "rgba(255,170,28,0.10)",
-                border: "1.5px solid rgba(255,170,28,0.35)",
-                borderRadius: "12px",
-                marginBottom: "12px",
-                fontSize: "12px",
-                color: "var(--text)",
-                lineHeight: 1.5,
-              }}
-            >
-              <b>{t("svoyak_categories_empty_title")}</b>
-              <br /><br />
-              {t("svoyak_categories_empty_text")}
-            </div>
-          ) : null}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
-            {categories.map((cat) => {
-              const selected = selectedCatIds.has(cat.id);
-              const disabled = !cat.ready;
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  disabled={disabled || busy}
-                  onClick={() => {
-                    hapticSelect();
-                    setSelectedCatIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(cat.id)) next.delete(cat.id);
-                      else next.add(cat.id);
-                      return next;
-                    });
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "14px 16px",
-                    borderRadius: "14px",
-                    border: selected
-                      ? "1.5px solid var(--svoyak-gold, #f5c842)"
-                      : "1.5px solid var(--svoyak-border, #1f3a6e)",
-                    background: selected
-                      ? "linear-gradient(135deg, rgba(245,200,66,0.18), rgba(255,138,76,0.10))"
-                      : "var(--svoyak-surface, #0f1f3a)",
-                    color: disabled ? "var(--muted)" : "var(--text)",
-                    fontFamily: "var(--svoyak-font-body)",
-                    fontSize: "15px",
-                    fontWeight: 700,
-                    textAlign: "left",
-                    cursor: disabled ? "not-allowed" : "pointer",
-                    opacity: disabled ? 0.5 : 1,
-                  }}
-                >
-                  <span style={{ fontSize: "24px" }}>{cat.iconEmoji}</span>
-                  <span style={{ flex: 1 }}>
-                    {cat.name}
-                    {disabled ? (
-                      <div style={{ fontSize: "10px", color: "var(--svoyak-warning, #ffaa1c)", marginTop: "2px", fontWeight: 600 }}>
-                        {t("svoyak_category_needs_5")}
-                      </div>
-                    ) : null}
-                  </span>
-                  <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-                    {cat.questionCount} / 5+
-                  </span>
-                  {selected ? (
-                    <span style={{ color: "var(--svoyak-gold, #f5c842)" }}>✓</span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          </>
-        )}
+        </div>
 
         {error ? (
           <div style={{ color: "#FCA5A5", fontSize: "12px", marginBottom: "10px", textAlign: "center" }}>
@@ -509,26 +388,19 @@ export default function SvoyakLobbyScreen({
 
         <button
           type="button"
-          disabled={busy || selectedCatIds.size === 0}
-          style={{
-            ...PRIMARY_BTN,
-            opacity: selectedCatIds.size === 0 ? 0.5 : 1,
-            cursor: selectedCatIds.size === 0 ? "not-allowed" : "pointer",
-          }}
+          disabled={busy}
+          style={PRIMARY_BTN}
           onClick={handleCreateRoom}
         >
-          {busy ? t("svoyak_admin_saving") : t("svoyak_create_room", { n: selectedCatIds.size })}
+          {busy ? "Yaratilmoqda..." : "Xona yaratish →"}
         </button>
         <button
           type="button"
           disabled={busy}
           style={SECONDARY_BTN}
-          onClick={() => {
-            setMode("menu");
-            setError("");
-          }}
+          onClick={() => { setMode("menu"); setError(""); }}
         >
-          ← {t("back")}
+          ← Orqaga
         </button>
       </div>
     );
@@ -646,7 +518,10 @@ export default function SvoyakLobbyScreen({
   // mode === "in_lobby"
   const players = roomState?.players ?? [];
   const isHost = roomState?.viewerIsHost ?? false;
-  const canStart = isHost && players.filter((p) => p.status === "connected").length >= 2;
+  // Auto rejimda 1 o'yinchi (solo) ham o'ynay oladi
+  const isAutoMode = Boolean(roomState?.isAutoMode);
+  const minPlayers = isAutoMode ? 1 : 2;
+  const canStart = isHost && players.filter((p) => p.status === "connected").length >= minPlayers;
 
   return (
     <div style={PAGE}>

@@ -25,4 +25,6 @@ urlpatterns = [
     path("rooms/<str:code>/answer", views.submit_answer),
     path("rooms/<str:code>/skip", views.skip_round),
     path("rooms/<str:code>/end", views.end_game),
+    # Auto rejim
+    path("rooms/<str:code>/auto-answer", views.auto_answer),
 ]

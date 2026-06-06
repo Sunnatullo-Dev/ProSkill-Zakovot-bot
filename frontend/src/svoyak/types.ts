@@ -52,6 +52,26 @@ export type SvoyakCurrentRound = {
   scoreDelta: number | null;
 };
 
+export type SvoyakAutoAttempt = {
+  telegramId: number;
+  displayName: string;
+  answer: string;
+  isCorrect: boolean;
+  atMs: number;
+};
+
+export type SvoyakAutoState = {
+  questionIndex: number;
+  totalQuestions: number;
+  questionText: string;
+  correctAnswer: string | null;
+  timeRemainingMs: number;
+  startedAtMs: number;
+  attempts: SvoyakAutoAttempt[];
+  myAttempt: SvoyakAutoAttempt | null;
+  isPlaying: boolean;
+};
+
 export type SvoyakRoomState = {
   code: string;
   status: SvoyakRoomStatus;
@@ -59,6 +79,8 @@ export type SvoyakRoomState = {
   createdAt: string | null;
   startedAt: string | null;
   settings: Record<string, unknown>;
+  isAutoMode: boolean;
+  autoState: SvoyakAutoState | null;
   players: SvoyakPlayer[];
   board: SvoyakBoardCell[];
   currentRound: SvoyakCurrentRound | null;

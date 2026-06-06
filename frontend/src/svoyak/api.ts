@@ -121,16 +121,27 @@ export async function listCategories(): Promise<SvoyakCategoryListItem[]> {
   throw makeDiagnosticError(lastErr, "Server ulanib bo'lmadi");
 }
 
-/** Host yangi xona yaratadi. Kategoriyalar tanlangan bo'lishi shart. */
+/** Host yangi xona yaratadi. categoryIds yo'q bo'lsa — auto rejim. */
 export async function createRoom(input: {
   displayName: string;
-  categoryIds: number[];
+  categoryIds?: number[];
   settings?: Record<string, unknown>;
 }): Promise<SvoyakRoomState> {
   return request<SvoyakRoomState>("/svoyak/rooms", {
     method: "POST",
     body: input,
   });
+}
+
+/** Auto rejimda javob yuborish (buzz yo'q). */
+export async function autoAnswer(input: {
+  code: string;
+  answer: string;
+}): Promise<SvoyakRoomState> {
+  return request<SvoyakRoomState>(
+    `/svoyak/rooms/${encodeURIComponent(input.code)}/auto-answer`,
+    { method: "POST", body: { answer: input.answer } }
+  );
 }
 
 /** Kod orqali xonaga qo'shilish. */
