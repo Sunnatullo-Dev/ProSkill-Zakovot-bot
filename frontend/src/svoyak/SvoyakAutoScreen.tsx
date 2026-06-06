@@ -7,6 +7,7 @@ import { autoAnswer, endGame } from "./api";
 import { useSvoyakRoom } from "./useSvoyakRoom";
 import type { SvoyakRoomState } from "./types";
 import { hapticResult, hapticTap } from "../utils/haptics";
+import { useAppSettings } from "../hooks/useAppSettings";
 
 type Props = {
   code: string;
@@ -29,9 +30,11 @@ const PAGE = {
 
 export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
   const { data, error } = useSvoyakRoom(code);
+  const appSettings = useAppSettings();
+  const timePerQuestion = appSettings.svoyakTimePerQuestion ?? 15;
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [localSec, setLocalSec] = useState(15);
+  const [localSec, setLocalSec] = useState(timePerQuestion);
   const lastQuestionIdx = useRef<number>(-1);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -49,7 +52,7 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
     if (idx !== lastQuestionIdx.current) {
       lastQuestionIdx.current = idx;
       setAnswer("");
-      setLocalSec(Math.ceil(data.autoState.timeRemainingMs / 1000));
+      setLocalSec(Math.ceil(data.autoState.timeRemainingMs / 1000) || timePerQuestion);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [data?.autoState?.questionIndex]);
@@ -108,7 +111,11 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
     onExit();
   }
 
-  const timerColor = localSec > 10 ? "var(--svoyak-gold, #f5c842)" : localSec > 5 ? "var(--warning, #f59e0b)" : "var(--error, #ef4444)";
+  const timerColor = localSec > timePerQuestion * 0.6
+    ? "var(--svoyak-gold, #f5c842)"
+    : localSec > timePerQuestion * 0.25
+    ? "var(--warning, #f59e0b)"
+    : "var(--error, #ef4444)";
   const totalQ = auto?.totalQuestions ?? 0;
   const qIdx = (auto?.questionIndex ?? 0) + 1;
   const myAttempt = auto?.myAttempt ?? null;

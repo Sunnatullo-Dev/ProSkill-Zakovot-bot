@@ -148,6 +148,16 @@ def app_settings(request):
         settings.battle_chat_poll_interval_ms = interval
         updated_fields.append("battle_chat_poll_interval_ms")
 
+    if "svoyakTimePerQuestion" in body:
+        try:
+            secs = int(body["svoyakTimePerQuestion"])
+        except (TypeError, ValueError):
+            raise AppError(400, "svoyakTimePerQuestion raqam bo'lishi kerak")
+        if not (5 <= secs <= 60):
+            raise AppError(400, "svoyakTimePerQuestion 5-60 soniya oralig'ida bo'lishi kerak")
+        settings.svoyak_time_per_question = secs
+        updated_fields.append("svoyak_time_per_question")
+
     if updated_fields:
         settings.save(update_fields=updated_fields)
         AppSettings.invalidate_cache()

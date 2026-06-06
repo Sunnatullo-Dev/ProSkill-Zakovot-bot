@@ -33,9 +33,19 @@ def _now_ms() -> int:
 
 # ─── Auto rejim konstantalari ────────────────────────────────────────────────
 
-AUTO_TIME_PER_QUESTION_MS = 15_000   # har savol uchun vaqt
 AUTO_GRACE_MS = 2_000                # vaqt tugaganda grace period
 AUTO_RESULT_MS = 3_000               # natija ko'rsatish vaqti
+_DEFAULT_TIME_PER_QUESTION_S = 15    # standart (admin o'zgartirmasa)
+
+
+def _get_time_per_question_ms() -> int:
+    """Admin sozlamasidan vaqtni o'qiydi (keshlanadi)."""
+    try:
+        from apps.core.models import AppSettings
+        s = AppSettings.get()
+        return int(s.svoyak_time_per_question) * 1000
+    except Exception:
+        return _DEFAULT_TIME_PER_QUESTION_S * 1000
 
 # (min_score, solo_questions, team_questions)  — kamayish tartibida tekshiriladi
 _LEVEL_THRESHOLDS = [
@@ -814,7 +824,7 @@ def submit_auto_answer(*, code: str, telegram_id: int, answer_text: str) -> dict
         started_at_ms = int(settings.get("question_started_at_ms", 0))
         now = _now_ms()
 
-        if started_at_ms > 0 and now - started_at_ms > AUTO_TIME_PER_QUESTION_MS + AUTO_GRACE_MS:
+        if started_at_ms > 0 and now - started_at_ms > _get_time_per_question_ms() + AUTO_GRACE_MS:
             raise AppError(409, "Vaqt tugadi")
 
         correct_answer = settings.get("current_correct_answer", "")
@@ -903,7 +913,7 @@ def maybe_advance_auto(room: SvoyakRoom) -> None:
     if not room.settings.get("auto_mode") or room.status != "playing":
         return
     started_ms = int(room.settings.get("question_started_at_ms", 0))
-    if started_ms > 0 and _now_ms() - started_ms > AUTO_TIME_PER_QUESTION_MS:
+    if started_ms > 0 and _now_ms() - started_ms > _get_time_per_question_ms():
         _advance_auto_question(room)
 
 
@@ -1018,7 +1028,7 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
         total = int(s.get("total_questions", 0))
         started_ms = int(s.get("question_started_at_ms", 0))
         now_ms_val = _now_ms()
-        time_remaining = max(0, AUTO_TIME_PER_QUESTION_MS - (now_ms_val - started_ms)) if started_ms > 0 else AUTO_TIME_PER_QUESTION_MS
+        time_remaining = max(0, _get_time_per_question_ms() - (now_ms_val - started_ms)) if started_ms > 0 else _get_time_per_question_ms()
 
         # Joriy round'dan attempts olish
         attempts: list[dict] = []

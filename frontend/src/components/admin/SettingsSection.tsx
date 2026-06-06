@@ -304,11 +304,50 @@ export default function SettingsSection() {
         />
       </div>
 
-      {/* 5. Koordinator rejimi */}
+      {/* 5. Svoyak sozlamalari */}
       <div style={cardStyle}>
-        <div style={sectionTitle}>🎤 Svoyak — Koordinator rejimi</div>
+        <div style={sectionTitle}>🎯 Svoyak sozlamalari</div>
+
+        {/* Vaqt sozlamasi */}
+        <div style={{ marginBottom: "16px" }}>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text)", marginBottom: "4px" }}>
+            ⏱ Har savol uchun vaqt
+          </div>
+          <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "10px" }}>
+            Standart: 15 soniya · Minimal: 5 · Maksimal: 60
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {[5, 10, 15, 20, 30, 45, 60].map((secs) => (
+              <button
+                key={secs}
+                type="button"
+                disabled={saving === "svoyakTimePerQuestion"}
+                onClick={() => void handleChange("svoyakTimePerQuestion", secs)}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: "10px",
+                  border: `1.5px solid ${settings.svoyakTimePerQuestion === secs ? ACCENT : "var(--border)"}`,
+                  background: settings.svoyakTimePerQuestion === secs ? `${ACCENT}20` : "var(--card)",
+                  color: settings.svoyakTimePerQuestion === secs ? ACCENT : "var(--text)",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  cursor: saving === "svoyakTimePerQuestion" ? "not-allowed" : "pointer",
+                  opacity: saving === "svoyakTimePerQuestion" ? 0.5 : 1,
+                }}
+              >
+                {secs}s
+              </button>
+            ))}
+          </div>
+          {saving === "svoyakTimePerQuestion" && (
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px" }}>
+              Saqlanmoqda...
+            </div>
+          )}
+        </div>
+
         <SettingRow
-          label="Koordinator sifatida kirish"
+          label="🎤 Koordinator sifatida kirish"
           hint="Svoyak xonasiga koordinator sifatida qo'shilish mumkin bo'ladi"
           value={settings.svoyakCoordinatorEnabled}
           onChange={(v) => void handleChange("svoyakCoordinatorEnabled", v)}

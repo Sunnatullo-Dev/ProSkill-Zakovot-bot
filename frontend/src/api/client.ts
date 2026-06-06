@@ -649,6 +649,7 @@ export type AppSettings = {
   difficultyMediumEnabled: boolean;
   difficultyHardEnabled: boolean;
   svoyakCoordinatorEnabled: boolean;
+  svoyakTimePerQuestion: number;
 };
 
 export async function getAppSettings(): Promise<AppSettings | null> {

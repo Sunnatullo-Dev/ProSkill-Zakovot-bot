@@ -69,6 +69,12 @@ class AppSettings(models.Model):
         help_text="Svoyak'da koordinator roliga qo'shilish mumkinmi"
     )
 
+    # ── Svoyak vaqt sozlamalari ─────────────────────────────────────────────
+    svoyak_time_per_question = models.PositiveIntegerField(
+        default=15,
+        help_text="Svoyak'da har savol uchun vaqt (soniya, 5-60)"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -115,4 +121,5 @@ class AppSettings(models.Model):
             "difficultyMediumEnabled": self.difficulty_medium_enabled,
             "difficultyHardEnabled": self.difficulty_hard_enabled,
             "svoyakCoordinatorEnabled": self.svoyak_coordinator_enabled,
+            "svoyakTimePerQuestion": self.svoyak_time_per_question,
         }
