@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from apps.battles.models import BattleChallenge
+from apps.channels import repositories as channel_repo
 from apps.core.decorators import require_admin
 from apps.core.exceptions import AppError
 from apps.core.models import AppSettings
@@ -419,4 +420,84 @@ def admin_detail(request, telegram_id: int):
         "admin_removed",
         extra={"event": "admin_removed", "target": telegram_id, "by": by},
     )
+    return Response({"ok": True})
+
+
+# ── Required Channels ─────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST"])
+@require_admin
+def channels_collection(request):
+    """Majburiy kanallar ro'yxati (GET) yoki yangi kanal qo'shish (POST).
+
+    POST body::
+
+        {
+            "channelId": "-1001234567890",  // yoki "@username"
+            "channelUsername": "mychannel", // ixtiyoriy, @ siz
+            "channelTitle": "Kanal nomi",
+            "channelUrl": "https://t.me/mychannel"
+        }
+    """
+    if request.method == "POST":
+        body = request.data if isinstance(request.data, dict) else {}
+
+        channel_id = (body.get("channelId") or "").strip()
+        if not channel_id:
+            raise AppError(400, "channelId kerak (masalan: -1001234567890 yoki @username)")
+
+        channel_title = (body.get("channelTitle") or "").strip()
+        if not channel_title:
+            raise AppError(400, "channelTitle kerak")
+
+        channel_url = (body.get("channelUrl") or "").strip()
+        if not channel_url:
+            raise AppError(400, "channelUrl kerak (masalan: https://t.me/mychannel)")
+
+        # channelUsername — ixtiyoriy, @ siz saqlanadi
+        raw_username = (body.get("channelUsername") or "").strip()
+        channel_username = raw_username.lstrip("@")
+
+        # Agar channelId "@..." formatida berilsa, username sifatida ham qo'shamiz
+        if channel_id.startswith("@") and not channel_username:
+            channel_username = channel_id.lstrip("@")
+
+        user = request.current_user
+        result = channel_repo.add_channel(
+            channel_id=channel_id,
+            channel_username=channel_username,
+            channel_title=channel_title,
+            channel_url=channel_url,
+            added_by_telegram_id=user.telegram_id,
+            added_by_name=getattr(user, "first_name", "") or str(user.telegram_id),
+        )
+        return Response({"ok": True, "channel": result}, status=201)
+
+    # GET — barcha kanallar (aktiv + o'chirilgan)
+    return Response({"channels": channel_repo.list_all_channels()})
+
+
+@api_view(["DELETE", "POST"])
+@require_admin
+def channel_detail(request, channel_pk: int):
+    """Kanalni o'chirish (DELETE) yoki qayta faollashtirish (POST).
+
+    DELETE → soft delete (is_active=False)
+    POST   → reactivate (is_active=True)
+    """
+    if request.method == "DELETE":
+        ok = channel_repo.deactivate_channel(channel_pk)
+        if not ok:
+            raise AppError(404, "Kanal topilmadi")
+        logger.info(
+            "required_channel_deactivated",
+            extra={"event": "channel_deactivated", "pk": channel_pk,
+                   "by": getattr(request.current_user, "telegram_id", 0)},
+        )
+        return Response({"ok": True})
+
+    # POST → activate
+    ok = channel_repo.activate_channel(channel_pk)
+    if not ok:
+        raise AppError(404, "Kanal topilmadi")
     return Response({"ok": True})

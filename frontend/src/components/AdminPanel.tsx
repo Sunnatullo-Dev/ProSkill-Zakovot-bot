@@ -23,6 +23,7 @@ import type { Difficulty, ReportedQuestion } from "../types";
 import ConfirmDialog from "./ConfirmDialog";
 import SvoyakAdminSection from "./admin/SvoyakAdminSection";
 import SettingsSection from "./admin/SettingsSection";
+import ChannelsSection from "./admin/ChannelsSection";
 import {
   AlertIcon,
   CheckCircleIcon,
@@ -50,7 +51,7 @@ type AdminPanelProps = {
   onExitToUser: () => void;
 };
 
-type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings";
+type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels";
 
 type SectionMeta = {
   id: Section;
@@ -95,6 +96,13 @@ const SECTIONS: SectionMeta[] = [
     Icon: ControllerIcon,
     accent: "#F5C842",
     subtitle: "Svoyak kategoriyalari va savollar bazasi"
+  },
+  {
+    id: "channels",
+    label: "Kanallar",
+    Icon: AlertIcon,
+    accent: "#F59E0B",
+    subtitle: "Majburiy kanallar — qo'shish, o'chirish, tarix"
   },
   {
     id: "settings",
@@ -387,6 +395,7 @@ export default function AdminPanel({ onExitToUser }: AdminPanelProps) {
           {section === "reports" ? <ReportsSection /> : null}
           {section === "categories" ? <CategoriesSection /> : null}
           {section === "svoyak" ? <SvoyakAdminSection /> : null}
+          {section === "channels" ? <ChannelsSection /> : null}
           {section === "settings" ? <SettingsSection /> : null}
         </div>
       </div>

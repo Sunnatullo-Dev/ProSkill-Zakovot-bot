@@ -718,6 +718,75 @@ async function requestResult<T>(path: string, options: RequestOptions = {}): Pro
   }
 }
 
+// ─── Required Channels ────────────────────────────────────────────────────────
+
+export type RequiredChannel = {
+  id: number;
+  channelId: string;
+  channelUsername: string;
+  channelTitle: string;
+  channelUrl: string;
+  isActive: boolean;
+  addedByTelegramId: number | null;
+  addedByName: string;
+  createdAt: string | null;
+};
+
+export type ChannelSubscriptionStatus = {
+  id: number;
+  channelId: string;
+  channelTitle: string;
+  channelUrl: string;
+  subscribed: boolean;
+};
+
+export type SubscriptionCheckResult = {
+  allSubscribed: boolean;
+  channels: ChannelSubscriptionStatus[];
+};
+
+/** Aktiv majburiy kanallar ro'yxati (public). */
+export async function getRequiredChannels(): Promise<RequiredChannel[]> {
+  const res = await request<{ channels: RequiredChannel[] }>("/channels/");
+  return res?.channels ?? [];
+}
+
+/** Hozirgi foydalanuvchining obuna holatini tekshirish. */
+export async function checkSubscriptions(): Promise<SubscriptionCheckResult | null> {
+  return request<SubscriptionCheckResult>("/channels/check");
+}
+
+/** Admin: barcha kanallar (aktiv + o'chirilgan). */
+export async function adminListChannels(): Promise<RequiredChannel[]> {
+  const res = await request<{ channels: RequiredChannel[] }>("/admin/channels");
+  return res?.channels ?? [];
+}
+
+/** Admin: yangi kanal qo'shish. */
+export async function adminAddChannel(data: {
+  channelId: string;
+  channelUsername?: string;
+  channelTitle: string;
+  channelUrl: string;
+}): Promise<ApiResult<{ ok: boolean; channel: RequiredChannel }>> {
+  return requestResult<{ ok: boolean; channel: RequiredChannel }>("/admin/channels", {
+    method: "POST",
+    body: data,
+  });
+}
+
+/** Admin: kanalni o'chirish (soft delete). */
+export async function adminDeactivateChannel(id: number): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>(`/admin/channels/${id}`, { method: "DELETE" });
+}
+
+/** Admin: o'chirilgan kanalni qayta faollashtirish. */
+export async function adminActivateChannel(id: number): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>(`/admin/channels/${id}`, { method: "POST" });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T | null> {
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {

@@ -161,6 +161,7 @@ INSTALLED_APPS = [
     "apps.admin_api",
     "apps.svoyak",
     "apps.daily",
+    "apps.channels",
 ]
 
 MIDDLEWARE = [

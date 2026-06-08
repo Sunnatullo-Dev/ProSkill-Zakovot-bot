@@ -16,4 +16,7 @@ urlpatterns = [
     # Admins
     path("admins", views.admins_collection),
     path("admins/<int:telegram_id>", views.admin_detail),
+    # Required Channels
+    path("channels", views.channels_collection),
+    path("channels/<int:channel_pk>", views.channel_detail),
 ]

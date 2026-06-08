@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   completeDailyChallenge,
+  checkSubscriptions,
   getDailyToday,
   getAnswerTicket,
   getRound,
@@ -12,7 +13,9 @@ import {
   submitAnswer,
   updateMyLanguage
 } from "./api/client";
+import type { ChannelSubscriptionStatus } from "./api/client";
 import DailyChallengeScreen from "./components/DailyChallengeScreen";
+import SubscriptionGate from "./components/SubscriptionGate";
 import { isCleanName } from "./utils/nameQuality";
 import TeamScreen from "./components/TeamScreen";
 import AdminPanel from "./components/AdminPanel";
@@ -173,6 +176,9 @@ export default function App() {
   const [dailyLastResult, setDailyLastResult] = useState<DailyCompleteResult | null>(null);
   // Svoyak bet
   const [currentBet, setCurrentBet] = useState(0);
+  // Majburiy kanal tekshiruvi — null = tekshirilmagan/yuklanmoqda,
+  // bo'sh array = kanal yo'q yoki hammasi obuna, aks holda gate ko'rsatiladi.
+  const [subCheckChannels, setSubCheckChannels] = useState<ChannelSubscriptionStatus[] | null>(null);
   // Foydalanuvchi haqiqiy Telegram'da, lekin backend uni mehmon deb qabul
   // qilyapti — bu HMAC nomos kelishi yoki NODE_ENV != production belgisi.
   // Bunday holatda app'ga davom etmaymiz, aniq xato ekran ko'rsatamiz.
@@ -457,6 +463,16 @@ export default function App() {
         await loadTopUsers();
         // Daily challenge info'ni background'da yuklash (bloklamaymiz)
         void getDailyToday().then((info) => { if (info) setDailyInfo(info); });
+        // Majburiy kanal obuna tekshiruvi — admin uchun o'tkazib yuboramiz
+        if (!isAdminRoute) {
+          void checkSubscriptions().then((res) => {
+            if (!res) { setSubCheckChannels([]); return; }
+            if (res.allSubscribed) { setSubCheckChannels([]); return; }
+            setSubCheckChannels(res.channels);
+          }).catch(() => { setSubCheckChannels([]); }); // xato bo'lsa bloklashdan saqlaymiz
+        } else {
+          setSubCheckChannels([]);
+        }
 
         if (isAdminRoute) {
           setScreen("admin");
@@ -863,6 +879,25 @@ export default function App() {
             </div>
           </div>
         </section>
+      </main>
+    );
+  }
+
+  // Majburiy kanal gate — loading tugagan, lekin obunasiz kanallar bor
+  const needsSubscription =
+    screen !== "loading" &&
+    screen !== "name" &&
+    !isAdminUser &&
+    subCheckChannels !== null &&
+    subCheckChannels.some((c) => !c.subscribed);
+
+  if (needsSubscription && subCheckChannels) {
+    return (
+      <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+        <SubscriptionGate
+          channels={subCheckChannels}
+          onAllSubscribed={() => setSubCheckChannels([])}
+        />
       </main>
     );
   }
