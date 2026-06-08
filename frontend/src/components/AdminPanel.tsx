@@ -759,10 +759,7 @@ type EditFields = {
   correctAnswer: string;
   category: string;
   difficulty: "" | Difficulty;
-  /** A/B/C/D rejimi uchun 3 ta noto'g'ri variant (bo'sh bo'lsa — erkin matn). */
-  wrongA: string;
-  wrongB: string;
-  wrongC: string;
+  timeLimitSeconds: number;
 };
 
 function emptyFields(): EditFields {
@@ -771,22 +768,17 @@ function emptyFields(): EditFields {
     correctAnswer: "",
     category: "",
     difficulty: "",
-    wrongA: "",
-    wrongB: "",
-    wrongC: ""
+    timeLimitSeconds: 15,
   };
 }
 
 function fromQuestion(question: AdminQuestion): EditFields {
-  const wrong = question.wrongAnswers ?? [];
   return {
     text: question.text,
     correctAnswer: question.correctAnswer,
     category: question.category ?? "",
     difficulty: (question.difficulty as Difficulty | null) ?? "",
-    wrongA: wrong[0] ?? "",
-    wrongB: wrong[1] ?? "",
-    wrongC: wrong[2] ?? ""
+    timeLimitSeconds: (question as any).timeLimitSeconds ?? 15,
   };
 }
 
@@ -897,19 +889,14 @@ function QuestionsSection() {
       return;
     }
 
-    const wrongResult = collectWrongAnswers(createFields);
-    if (!wrongResult.ok) {
-      setCreateError(wrongResult.error);
-      return;
-    }
-
     setCreating(true);
     const result = await createAdminQuestion({
       text: createFields.text.trim(),
       correctAnswer: createFields.correctAnswer.trim(),
       category: createFields.category.trim() || null,
       difficulty: createFields.difficulty || null,
-      wrongAnswers: wrongResult.value
+      wrongAnswers: [],
+      timeLimitSeconds: createFields.timeLimitSeconds,
     });
     setCreating(false);
 
@@ -932,19 +919,14 @@ function QuestionsSection() {
       return;
     }
 
-    const wrongResult = collectWrongAnswers(editFields);
-    if (!wrongResult.ok) {
-      setEditError(wrongResult.error);
-      return;
-    }
-
     setBusyId(id);
     const result = await updateAdminQuestion(id, {
       text: editFields.text.trim(),
       correctAnswer: editFields.correctAnswer.trim(),
       category: editFields.category.trim() || null,
       difficulty: editFields.difficulty || null,
-      wrongAnswers: wrongResult.value
+      wrongAnswers: [],
+      timeLimitSeconds: editFields.timeLimitSeconds,
     });
     setBusyId(null);
 
@@ -1249,58 +1231,25 @@ function QuestionsSection() {
               )}
             </div>
 
-            {/* A/B/C/D rejimi uchun 3 ta noto'g'ri variant — ixtiyoriy.
-                Bo'sh qoldirilsa savol erkin matn rejimida (Gemini AI baholaydi).
-                Uchchalasini to'ldirilsa A/B/C/D test rejimida. */}
-            <div
-              style={{
-                marginTop: "4px",
-                padding: "10px 12px",
-                background: "rgba(77,166,255,0.06)",
-                border: "1px dashed var(--border)",
-                borderRadius: "10px"
-              }}
-            >
-              <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--muted)", marginBottom: "8px" }}>
-                A/B/C/D variantlari (ixtiyoriy — 3 ta noto'g'ri variant)
+            {/* A/B/C/D variantlar olib tashlandi — erkin matn rejimi ishlatiladi */}
+
+            {/* Vaqt limiti */}
+            {renderField(
+              "Vaqt limiti (soniya)",
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <input
+                  type="number"
+                  min={5}
+                  max={120}
+                  style={{ ...inputStyle, width: "100px" }}
+                  value={createFields.timeLimitSeconds}
+                  onChange={(event) =>
+                    setCreateFields((value) => ({ ...value, timeLimitSeconds: Math.max(5, Math.min(120, Number(event.target.value))) }))
+                  }
+                />
+                <span style={{ fontSize: "12px", color: "var(--muted)" }}>soniya (5–120)</span>
               </div>
-              {renderField(
-                "Noto'g'ri variant 1",
-                <input
-                  placeholder="Birinchi noto'g'ri javob"
-                  style={inputStyle}
-                  type="text"
-                  value={createFields.wrongA}
-                  onChange={(event) =>
-                    setCreateFields((value) => ({ ...value, wrongA: event.target.value }))
-                  }
-                />
-              )}
-              {renderField(
-                "Noto'g'ri variant 2",
-                <input
-                  placeholder="Ikkinchi noto'g'ri javob"
-                  style={inputStyle}
-                  type="text"
-                  value={createFields.wrongB}
-                  onChange={(event) =>
-                    setCreateFields((value) => ({ ...value, wrongB: event.target.value }))
-                  }
-                />
-              )}
-              {renderField(
-                "Noto'g'ri variant 3",
-                <input
-                  placeholder="Uchinchi noto'g'ri javob"
-                  style={inputStyle}
-                  type="text"
-                  value={createFields.wrongC}
-                  onChange={(event) =>
-                    setCreateFields((value) => ({ ...value, wrongC: event.target.value }))
-                  }
-                />
-              )}
-            </div>
+            )}
 
             {createError ? (
               <div style={{ fontSize: "12px", color: "var(--error)" }}>{createError}</div>
@@ -1480,53 +1429,25 @@ function QuestionsSection() {
                     )}
                   </div>
 
-                  {/* A/B/C/D variantlari — tahrirlash uchun */}
-                  <div
-                    style={{
-                      marginTop: "4px",
-                      padding: "10px 12px",
-                      background: "rgba(77,166,255,0.06)",
-                      border: "1px dashed var(--border)",
-                      borderRadius: "10px"
-                    }}
-                  >
-                    <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--muted)", marginBottom: "8px" }}>
-                      A/B/C/D variantlari (ixtiyoriy — 3 ta noto'g'ri variant)
+                  {/* A/B/C/D variantlar olib tashlandi — erkin matn rejimi */}
+
+                  {/* Vaqt limiti */}
+                  {renderField(
+                    "Vaqt limiti (soniya)",
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <input
+                        type="number"
+                        min={5}
+                        max={120}
+                        style={{ ...inputStyle, width: "100px" }}
+                        value={editFields.timeLimitSeconds}
+                        onChange={(event) =>
+                          setEditFields((value) => ({ ...value, timeLimitSeconds: Math.max(5, Math.min(120, Number(event.target.value))) }))
+                        }
+                      />
+                      <span style={{ fontSize: "12px", color: "var(--muted)" }}>soniya (5–120)</span>
                     </div>
-                    {renderField(
-                      "Noto'g'ri variant 1",
-                      <input
-                        style={inputStyle}
-                        type="text"
-                        value={editFields.wrongA}
-                        onChange={(event) =>
-                          setEditFields((value) => ({ ...value, wrongA: event.target.value }))
-                        }
-                      />
-                    )}
-                    {renderField(
-                      "Noto'g'ri variant 2",
-                      <input
-                        style={inputStyle}
-                        type="text"
-                        value={editFields.wrongB}
-                        onChange={(event) =>
-                          setEditFields((value) => ({ ...value, wrongB: event.target.value }))
-                        }
-                      />
-                    )}
-                    {renderField(
-                      "Noto'g'ri variant 3",
-                      <input
-                        style={inputStyle}
-                        type="text"
-                        value={editFields.wrongC}
-                        onChange={(event) =>
-                          setEditFields((value) => ({ ...value, wrongC: event.target.value }))
-                        }
-                      />
-                    )}
-                  </div>
+                  )}
 
                   {editError ? (
                     <div style={{ fontSize: "12px", color: "var(--error)" }}>{editError}</div>
@@ -1593,48 +1514,12 @@ function QuestionsSection() {
                 <CheckCircleIcon size={13} />
                 <strong>{question.correctAnswer}</strong>
               </div>
-              {/* A/B/C/D rejimi belgisi */}
-              {question.wrongAnswers && question.wrongAnswers.length === 3 ? (
-                <div
-                  style={{
-                    marginTop: "6px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "3px 8px",
-                    borderRadius: "999px",
-                    background: "linear-gradient(135deg, rgba(77,166,255,0.18), rgba(124,91,255,0.14))",
-                    border: "1px solid rgba(77,166,255,0.3)",
-                    fontSize: "10px",
-                    fontWeight: 800,
-                    color: "var(--accent)",
-                    letterSpacing: "0.04em"
-                  }}
-                  title={`Variantlar: ${question.wrongAnswers.join(", ")}`}
-                >
-                  A/B/C/D rejimi
+              {/* Vaqt limiti */}
+              {(question as any).timeLimitSeconds ? (
+                <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px" }}>
+                  ⏱ {(question as any).timeLimitSeconds}s
                 </div>
-              ) : (
-                <div
-                  style={{
-                    marginTop: "6px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "3px 8px",
-                    borderRadius: "999px",
-                    background: "rgba(245,200,66,0.10)",
-                    border: "1px solid rgba(245,200,66,0.25)",
-                    fontSize: "10px",
-                    fontWeight: 800,
-                    color: "var(--gold)",
-                    letterSpacing: "0.04em"
-                  }}
-                  title="Foydalanuvchi javobni o'zi yozadi, AI baholaydi"
-                >
-                  Erkin matn (AI)
-                </div>
-              )}
+              ) : null}
               <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
                 <button
                   style={iconButton("#4DA6FF")}
