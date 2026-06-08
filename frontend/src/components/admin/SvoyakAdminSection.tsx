@@ -8,10 +8,11 @@
  * Spec: AdminPanel'ning umumiy uslubiga mos (rangli accent kartochkalar,
  * modal-style form, kompakt mobile UI).
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "../../i18n";
+import { getAppSettings, updateAppSettings } from "../../api/client";
 import {
   adminListCategories,
   adminCreateCategory,
@@ -90,12 +91,211 @@ const dangerButton: CSSProperties = {
 };
 
 
+// ─── Vaqt sozlama kartochkasi ─────────────────────────────────────────────
+
+const TIME_PRESETS = [15, 30, 45, 60, 70, 90, 120, 180] as const;
+
+function formatSecs(s: number): string {
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r === 0 ? `${m}:00` : `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function SvoyakTimeSetting() {
+  const [current, setCurrent] = useState<number | null>(null);
+  const [inputVal, setInputVal] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    const data = await getAppSettings();
+    if (data) {
+      setCurrent(data.svoyakTimePerQuestion);
+      setInputVal(String(data.svoyakTimePerQuestion));
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function save(secs: number) {
+    if (secs < 5 || secs > 300 || isNaN(secs)) {
+      setMsg({ kind: "err", text: "5–300 soniya oralig'ida bo'lishi kerak" });
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    const result = await updateAppSettings({ svoyakTimePerQuestion: secs });
+    setSaving(false);
+    if (result.ok) {
+      setCurrent(result.data.svoyakTimePerQuestion);
+      setInputVal(String(result.data.svoyakTimePerQuestion));
+      setMsg({ kind: "ok", text: `✓ Saqlandi — ${formatSecs(secs)}` });
+      setTimeout(() => setMsg(null), 3000);
+    } else {
+      setMsg({ kind: "err", text: result.error });
+    }
+  }
+
+  const parsed = parseInt(inputVal, 10);
+  const inputValid = !isNaN(parsed) && parsed >= 5 && parsed <= 300;
+
+  return (
+    <div
+      style={{
+        background: "rgba(245,200,66,0.07)",
+        border: "1.5px solid rgba(245,200,66,0.30)",
+        borderRadius: "14px",
+        padding: "14px",
+        marginBottom: "14px",
+      }}
+    >
+      {/* Sarlavha */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+        <span style={{ fontSize: "18px" }}>⏱</span>
+        <div>
+          <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+            Har savol uchun javob vaqti
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
+            Hozirgi qiymat:{" "}
+            <strong style={{ color: SVOYAK_ACCENT }}>
+              {current !== null ? formatSecs(current) : "yuklanmoqda..."}
+            </strong>
+            {" "}· (+10s o'qish fazasi bor)
+          </div>
+        </div>
+      </div>
+
+      {/* Preset tugmalar */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
+        {TIME_PRESETS.map((s) => {
+          const active = current === s;
+          return (
+            <button
+              key={s}
+              type="button"
+              disabled={saving}
+              onClick={() => void save(s)}
+              style={{
+                padding: "7px 13px",
+                borderRadius: "10px",
+                border: `1.5px solid ${active ? SVOYAK_ACCENT : "var(--border)"}`,
+                background: active ? `rgba(245,200,66,0.18)` : "var(--surface)",
+                color: active ? SVOYAK_ACCENT : "var(--text)",
+                fontSize: "13px",
+                fontWeight: active ? 900 : 600,
+                cursor: saving ? "not-allowed" : "pointer",
+                opacity: saving ? 0.5 : 1,
+                transition: "all 0.15s",
+              }}
+            >
+              {formatSecs(s)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Ixtiyoriy qiymat kiritish */}
+      <div style={{ display: "flex", gap: "8px", alignItems: "stretch" }}>
+        <div style={{ flex: 1, position: "relative" }}>
+          <input
+            type="number"
+            min={5}
+            max={300}
+            value={inputVal}
+            disabled={saving}
+            onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && inputValid) void save(parsed); }}
+            style={{
+              ...inputStyle,
+              borderColor: inputValid || inputVal === "" ? "var(--border)" : "rgba(239,68,68,0.6)",
+              paddingRight: "40px",
+            }}
+            placeholder="Soniya kiriting (5–300)"
+          />
+          {inputVal && !isNaN(parsed) && parsed >= 5 && parsed <= 300 ? (
+            <span
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: "11px",
+                color: "var(--muted)",
+                pointerEvents: "none",
+              }}
+            >
+              {formatSecs(parsed)}
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          disabled={!inputValid || saving}
+          onClick={() => void save(parsed)}
+          style={{
+            ...primaryButton(!inputValid || saving),
+            flexShrink: 0,
+            padding: "10px 16px",
+          }}
+        >
+          {saving ? "..." : "Saqlash"}
+        </button>
+      </div>
+
+      {/* Slider */}
+      <div style={{ marginTop: "10px" }}>
+        <input
+          type="range"
+          min={5}
+          max={300}
+          step={5}
+          value={parseInt(inputVal, 10) || current || 70}
+          disabled={saving}
+          onChange={(e) => setInputVal(e.target.value)}
+          style={{ width: "100%", accentColor: SVOYAK_ACCENT }}
+        />
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--muted)", marginTop: "2px" }}>
+          <span>5s</span>
+          <span>1:00</span>
+          <span>2:00</span>
+          <span>5:00</span>
+        </div>
+      </div>
+
+      {/* Xabar */}
+      {msg ? (
+        <div
+          style={{
+            marginTop: "8px",
+            padding: "8px 10px",
+            borderRadius: "8px",
+            fontSize: "12px",
+            fontWeight: 700,
+            background: msg.kind === "ok" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+            color: msg.kind === "ok" ? "#22C55E" : "#EF4444",
+            border: `1px solid ${msg.kind === "ok" ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+          }}
+        >
+          {msg.text}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Asosiy komponent ─────────────────────────────────────────────────────
+
 export default function SvoyakAdminSection() {
   const t = useT();
   const [sub, setSub] = useState<SubTab>("categories");
 
   return (
     <div>
+      {/* ── Vaqt sozlamasi ── */}
+      <SvoyakTimeSetting />
+
       {/* Sub-tab switcher */}
       <div
         style={{
