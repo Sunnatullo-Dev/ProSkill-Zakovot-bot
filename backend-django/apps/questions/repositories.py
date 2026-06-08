@@ -54,12 +54,13 @@ def _map_question_full(q: Question) -> dict[str, Any]:
     """
     base = _map_question_public(q)
     base["correctAnswer"] = q.correct_answer
-    # Admin tahrirlash uchun originalp wrong_answers — shuffle qilinmagan,
+    # Admin tahrirlash uchun original wrong_answers — shuffle qilinmagan,
     # 3 ta string ro'yxati. Bo'sh bo'lsa savol erkin matn rejimida.
     raw_wrong = q.wrong_answers if isinstance(q.wrong_answers, list) else []
     base["wrongAnswers"] = [
         str(item) for item in raw_wrong if isinstance(item, str) and item.strip()
     ]
+    base["timeLimitSeconds"] = q.time_limit_seconds  # NULL = standart (15s)
     return base
 
 
@@ -148,6 +149,7 @@ def create_question(
     difficulty: str | None,
     *,
     wrong_answers: list[str] | None = None,
+    time_limit_seconds: int | None = None,
 ) -> None:
     Question.objects.create(
         text=text,
@@ -155,6 +157,7 @@ def create_question(
         category=category,
         difficulty=difficulty,
         wrong_answers=wrong_answers or [],
+        time_limit_seconds=time_limit_seconds,
     )
 
 
@@ -183,6 +186,8 @@ def update_question(
     wrong_answers: list[str] | None = None,
     unset_category: bool = False,
     unset_difficulty: bool = False,
+    time_limit_seconds: int | None = None,
+    unset_time_limit: bool = False,
 ) -> None:
     update: dict[str, Any] = {}
     if text is not None:
@@ -201,6 +206,10 @@ def update_question(
         # `wrong_answers=[]` qabul qilinadi — bu "A/B/C/D rejimini o'chir"
         # va savolni erkin matn rejimiga qaytar degani.
         update["wrong_answers"] = wrong_answers
+    if unset_time_limit:
+        update["time_limit_seconds"] = None
+    elif time_limit_seconds is not None:
+        update["time_limit_seconds"] = time_limit_seconds
 
     if not update:
         return

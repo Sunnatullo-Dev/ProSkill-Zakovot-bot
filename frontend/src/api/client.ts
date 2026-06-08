@@ -540,6 +540,8 @@ export type AdminQuestion = {
   category: string | null;
   difficulty: string | null;
   wrongAnswers?: string[];
+  /** Savol uchun vaqt limiti (soniya). null = standart (15s). */
+  timeLimitSeconds: number | null;
 };
 
 export type AdminQuestionsResponse = {
@@ -595,6 +597,8 @@ export async function createAdminQuestion(input: {
   difficulty?: "easy" | "medium" | "hard" | null;
   /** Aniq 3 ta noto'g'ri variant — A/B/C/D rejimi uchun. Bo'sh array → erkin matn rejimi. */
   wrongAnswers?: string[];
+  /** Savol uchun vaqt limiti (soniya, 5-120). null = standart (15s). */
+  timeLimitSeconds?: number | null;
 }): Promise<ApiResult<{ ok: boolean }>> {
   return requestResult<{ ok: boolean }>("/admin/questions", {
     method: "POST",
@@ -625,6 +629,8 @@ export async function updateAdminQuestion(
     category?: string | null;
     difficulty?: "easy" | "medium" | "hard" | null;
     wrongAnswers?: string[];
+    /** Savol uchun vaqt limiti (soniya, 5-120). null = standart (15s). */
+    timeLimitSeconds?: number | null;
   }
 ): Promise<ApiResult<{ ok: boolean }>> {
   return requestResult<{ ok: boolean }>(`/admin/questions/${id}`, {

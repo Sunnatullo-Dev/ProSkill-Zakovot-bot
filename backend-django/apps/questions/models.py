@@ -17,6 +17,10 @@ class Question(models.Model):
     difficulty = models.CharField(
         max_length=20, null=True, blank=True, choices=DIFFICULTY_CHOICES
     )
+    time_limit_seconds = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="Savol uchun vaqt limiti (soniya, 5-120). NULL = standart (15s)."
+    )
 
     class Meta:
         db_table = "questions"

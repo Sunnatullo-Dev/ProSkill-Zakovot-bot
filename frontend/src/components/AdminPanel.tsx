@@ -778,35 +778,10 @@ function fromQuestion(question: AdminQuestion): EditFields {
     correctAnswer: question.correctAnswer,
     category: question.category ?? "",
     difficulty: (question.difficulty as Difficulty | null) ?? "",
-    timeLimitSeconds: (question as any).timeLimitSeconds ?? 15,
+    timeLimitSeconds: question.timeLimitSeconds ?? 15,
   };
 }
 
-/** EditFields'dan API uchun wrongAnswers tayyorlaydi.
- *  - Hammasi bo'sh bo'lsa: [] (erkin matn rejimi)
- *  - Hammasi to'la bo'lsa: 3 ta string
- *  - Qisman to'la: xato (foydalanuvchi tushunsin)
- */
-function collectWrongAnswers(fields: EditFields): { ok: true; value: string[] } | { ok: false; error: string } {
-  const items = [fields.wrongA.trim(), fields.wrongB.trim(), fields.wrongC.trim()];
-  const filled = items.filter((x) => x.length > 0);
-  if (filled.length === 0) {
-    return { ok: true, value: [] };
-  }
-  if (filled.length !== 3) {
-    return {
-      ok: false,
-      error: "A/B/C/D rejimi uchun 3 ta noto'g'ri variant to'liq kerak (yoki uchchalasini bo'sh qoldiring)"
-    };
-  }
-  if (new Set(filled.map((x) => x.toLowerCase())).size !== 3) {
-    return { ok: false, error: "Noto'g'ri variantlar takrorlanmasin" };
-  }
-  if (filled.map((x) => x.toLowerCase()).includes(fields.correctAnswer.trim().toLowerCase())) {
-    return { ok: false, error: "To'g'ri javob noto'g'ri variantlar orasida bo'lmasin" };
-  }
-  return { ok: true, value: items };
-}
 
 function DifficultyBadge({ value }: { value: string | null }) {
   const meta = DIFFICULTIES.find((item) => item.value === value);
@@ -1515,9 +1490,9 @@ function QuestionsSection() {
                 <strong>{question.correctAnswer}</strong>
               </div>
               {/* Vaqt limiti */}
-              {(question as any).timeLimitSeconds ? (
+              {question.timeLimitSeconds ? (
                 <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px" }}>
-                  ⏱ {(question as any).timeLimitSeconds}s
+                  ⏱ {question.timeLimitSeconds}s
                 </div>
               ) : null}
               <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>

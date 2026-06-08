@@ -105,6 +105,23 @@ def _coerce_wrong_answers(raw, *, field: str = "wrongAnswers") -> list[str]:
     return cleaned
 
 
+def _parse_time_limit_seconds(raw) -> int | None:
+    """timeLimitSeconds maydonini validatsiya qiladi.
+
+    None → None (standart 15s ishlatiladi)
+    Raqam → 5-120 oralig'ida bo'lishi kerak
+    """
+    if raw is None:
+        return None
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        raise AppError(400, "timeLimitSeconds raqam bo'lishi kerak")
+    if not (5 <= val <= 120):
+        raise AppError(400, "timeLimitSeconds 5-120 soniya oralig'ida bo'lishi kerak")
+    return val
+
+
 # ── App Settings ──────────────────────────────────────────────────────────────
 
 @api_view(["GET", "PATCH"])
@@ -214,8 +231,11 @@ def questions_collection(request):
         # aks holda baholash chalkash bo'ladi.
         if wrong_answers and correct_answer.casefold() in {w.casefold() for w in wrong_answers}:
             raise AppError(400, "To'g'ri javob noto'g'ri variantlar orasida bo'lmasin")
+        time_limit_seconds = _parse_time_limit_seconds(body.get("timeLimitSeconds"))
         question_repo.create_question(
-            text, correct_answer, category, difficulty, wrong_answers=wrong_answers
+            text, correct_answer, category, difficulty,
+            wrong_answers=wrong_answers,
+            time_limit_seconds=time_limit_seconds,
         )
         return Response({"ok": True}, status=201)
 
@@ -316,6 +336,14 @@ def question_detail(request, question_id: str):
             existing_correct = existing_q["correctAnswer"]
         if wrong_answers and existing_correct.casefold() in {w.casefold() for w in wrong_answers}:
             raise AppError(400, "To'g'ri javob noto'g'ri variantlar orasida bo'lmasin")
+    time_limit_seconds = None
+    unset_time_limit = False
+    if "timeLimitSeconds" in body:
+        raw_tl = body.get("timeLimitSeconds")
+        if raw_tl is None:
+            unset_time_limit = True
+        else:
+            time_limit_seconds = _parse_time_limit_seconds(raw_tl)
     question_repo.update_question(
         question_id,
         text=text,
@@ -325,6 +353,8 @@ def question_detail(request, question_id: str):
         wrong_answers=wrong_answers,
         unset_category=unset_category,
         unset_difficulty=unset_difficulty,
+        time_limit_seconds=time_limit_seconds,
+        unset_time_limit=unset_time_limit,
     )
     return Response({"ok": True})
 
