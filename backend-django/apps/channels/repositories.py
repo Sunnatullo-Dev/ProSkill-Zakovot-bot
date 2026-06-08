@@ -76,6 +76,55 @@ def delete_channel(pk: int) -> bool:
 
 # ── Telegram Bot API ─────────────────────────────────────────────────────────
 
+def verify_channel_exists(username: str) -> tuple[bool | None, dict]:
+    """Telegram getChat API orqali kanal mavjudligini tekshiradi.
+
+    Returns::
+
+        (True,  {"numericId": str, "title": str, "url": str})
+            — kanal topildi (numeric ID va sarlavha)
+        (False, {})
+            — kanal aniq topilmadi (Telegram 400/404 qaytardi)
+        (None,  {})
+            — tekshirib bo'lmadi (bot token yo'q yoki tarmoq xatosi)
+    """
+    bot_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        logger.warning("verify_channel: TELEGRAM_BOT_TOKEN yo'q, tekshirilmadi")
+        return (None, {})
+
+    chat_id = f"@{username}" if not username.startswith("@") else username
+    url = f"https://api.telegram.org/bot{bot_token}/getChat"
+    params = urllib.parse.urlencode({"chat_id": chat_id})
+
+    try:
+        with urllib.request.urlopen(f"{url}?{params}", timeout=8) as resp:
+            data = json.loads(resp.read())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("getChat tarmoq xatosi: %s | username=%s", exc, username)
+        return (None, {})
+
+    if not data.get("ok"):
+        err = data.get("description", "")
+        logger.info("getChat not ok: %s | username=%s", err, username)
+        return (False, {})
+
+    result = data["result"]
+    numeric_id = str(result.get("id", chat_id))
+    title = result.get("title", "")
+    # Invite link yoki t.me/ havolasi
+    url_val = (
+        result.get("invite_link")
+        or (f"https://t.me/{result.get('username')}" if result.get("username") else f"https://t.me/{username}")
+    )
+    return (True, {
+        "numericId": numeric_id,
+        "title": title,
+        "username": result.get("username", username),
+        "url": url_val,
+    })
+
+
 def _check_one_channel(telegram_user_id: int, channel_id: str) -> bool:
     """Foydalanuvchi bitta kanalga obuna bo'lganligini tekshirish.
 

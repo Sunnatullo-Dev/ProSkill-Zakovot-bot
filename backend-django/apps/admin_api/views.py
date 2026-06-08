@@ -455,9 +455,26 @@ def channels_collection(request):
         if not channel_title:
             raise AppError(400, "Kanal nomi kerak")
 
-        # channel_id = @username formatida, URL avtomatik
-        channel_id = f"@{raw_username}"
-        channel_url = f"https://t.me/{raw_username}"
+        # Telegram getChat API orqali kanal mavjudligini tekshiramiz
+        exists, info = channel_repo.verify_channel_exists(raw_username)
+        if exists is False:
+            raise AppError(
+                400,
+                f"@{raw_username} nomli kanal topilmadi. "
+                "Iltimos to'g'ri kanal username'ini yozing va botni "
+                "kanalga admin sifatida qo'shing."
+            )
+
+        # Kanal topilsa — Telegram'dan numeric ID va rasmiy ma'lumotlarni olamiz
+        if exists is True:
+            channel_id = info["numericId"]          # masalan: -1001234567890
+            channel_url = info["url"]
+            # Admin kiritgan nomni saqlaymiz (Telegram sarlavhasini emas)
+            # chunki lokalizatsiyalangan nom kerak bo'lishi mumkin
+        else:
+            # Token yo'q yoki tarmoq xatosi — @username bilan davom etamiz
+            channel_id = f"@{raw_username}"
+            channel_url = f"https://t.me/{raw_username}"
 
         user = request.current_user
         result = channel_repo.add_channel(

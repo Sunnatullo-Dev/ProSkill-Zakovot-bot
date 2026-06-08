@@ -463,13 +463,20 @@ export default function App() {
         await loadTopUsers();
         // Daily challenge info'ni background'da yuklash (bloklamaymiz)
         void getDailyToday().then((info) => { if (info) setDailyInfo(info); });
-        // Majburiy kanal obuna tekshiruvi — admin uchun o'tkazib yuboramiz
+        // Majburiy kanal obuna tekshiruvi — loading tugamasin (await).
+        // Foydalanuvchi subscribe bo'lmay turib o'ynay olmasligi uchun
+        // ekran o'tishdan OLDIN tekshiramiz. Admin uchun o'tkazib yuboramiz.
         if (!isAdminRoute) {
-          void checkSubscriptions().then((res) => {
-            if (!res) { setSubCheckChannels([]); return; }
-            if (res.allSubscribed) { setSubCheckChannels([]); return; }
-            setSubCheckChannels(res.channels);
-          }).catch(() => { setSubCheckChannels([]); }); // xato bo'lsa bloklashdan saqlaymiz
+          try {
+            const subRes = await checkSubscriptions();
+            if (!subRes || subRes.allSubscribed) {
+              setSubCheckChannels([]);
+            } else {
+              setSubCheckChannels(subRes.channels);
+            }
+          } catch {
+            setSubCheckChannels([]); // tarmoq xato — bloklashdan saqlaymiz
+          }
         } else {
           setSubCheckChannels([]);
         }
