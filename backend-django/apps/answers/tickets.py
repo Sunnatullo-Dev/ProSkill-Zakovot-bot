@@ -26,7 +26,7 @@ from django.core.cache import cache
 from apps.core.exceptions import AppError
 
 
-CONSUMED_TTL_SECONDS = 60  # answer timeout 15s + grace 2s — keng marja
+CONSUMED_TTL_SECONDS = 180  # max savol vaqti 120s + grace 2s + marja
 
 
 @dataclass(frozen=True)

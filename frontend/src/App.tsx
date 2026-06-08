@@ -199,7 +199,7 @@ export default function App() {
     void submitAnswerRef.current?.("", ANSWER_TIMEOUT_MS + 1);
   }, []);
   const timer = useTimer(TIMER_SECONDS, handleTimerExpire);
-  const { reset, start, stop, timeLeft } = timer;
+  const { reset, start, stop, timeLeft, resetWithSeconds } = timer;
 
   // TTS o'qib bo'lgandan keyin chaqiriladi — taymer shu paytda boshlanadi
   const handleTimerStartFromTTS = useCallback(() => {
@@ -209,6 +209,12 @@ export default function App() {
 
   const currentQuestion = roundQuestions[questionIndex] ?? null;
   const totalQuestions = roundQuestions.length;
+
+  /** Savol uchun to'g'ri sekund: savoldagi time_limit yoki standart 15s. */
+  const getQuestionSeconds = useCallback((q: { timeLimitSeconds?: number | null } | null) =>
+    (q?.timeLimitSeconds && q.timeLimitSeconds >= 5 ? q.timeLimitSeconds : TIMER_SECONDS),
+    []
+  );
 
   const fetchTicketFor = useCallback((questionId: string) => {
     // Har bir fetch'ga noyob belgi qo'yamiz. Faqat aktual belgi qaytgan
@@ -341,14 +347,14 @@ export default function App() {
     setCurrentTicket(null);
     setRevealInfo(null);
     setScreen("question");
-    reset();
+    const nextQuestion = roundQuestions[nextIndex];
+    resetWithSeconds(getQuestionSeconds(nextQuestion ?? null));
     timerStartedRef.current = false; // TTS tugaganda start() chaqiriladi
 
-    const nextQuestion = roundQuestions[nextIndex];
     if (nextQuestion) {
       fetchTicketFor(nextQuestion.id);
     }
-  }, [correctAnswers, fetchTicketFor, isDailyMode, loadTopUsers, questionIndex, reset, roundQuestions, roundScore, start]);
+  }, [correctAnswers, fetchTicketFor, getQuestionSeconds, isDailyMode, loadTopUsers, questionIndex, reset, resetWithSeconds, roundQuestions, roundScore, start]);
 
   useEffect(() => {
     if (screen !== "result" || !lastResult) {
@@ -602,7 +608,7 @@ export default function App() {
         setCurrentBet(0);
         setIsDailyMode(false);
         setScreen("question");
-        reset();
+        resetWithSeconds(getQuestionSeconds(questions[0]));
         timerStartedRef.current = false; // TTS tugaganda start() chaqiriladi
         fetchTicketFor(questions[0].id);
       } catch (error) {
@@ -612,7 +618,7 @@ export default function App() {
         setIsStarting(false);
       }
     },
-    [fetchTicketFor, reset, start]
+    [fetchTicketFor, getQuestionSeconds, reset, resetWithSeconds, start]
   );
 
   const startDailyChallenge = useCallback(async () => {
@@ -633,13 +639,14 @@ export default function App() {
     setRevealInfo(null);
     setCurrentBet(0);
     setScreen("question");
-    reset();
+    resetWithSeconds(getQuestionSeconds(questions[0]));
     timerStartedRef.current = false;
     fetchTicketFor(questions[0].id);
-  }, [dailyInfo, fetchTicketFor, reset]);
+  }, [dailyInfo, fetchTicketFor, getQuestionSeconds, reset, resetWithSeconds]);
 
   async function handleQuestionSubmit(answer: string) {
-    const timeTaken = (TIMER_SECONDS - timeLeft) * 1000;
+    const qSecs = getQuestionSeconds(currentQuestion);
+    const timeTaken = (qSecs - timeLeft) * 1000;
     await handleSubmitAnswer(answer, timeTaken);
   }
 

@@ -42,6 +42,9 @@ def _map_question_public(q: Question) -> dict[str, Any]:
         # body'da yo'q, lekin `wrongAnswers` ko'rinsa kim noto'g'ri ekanini
         # bilib qoladi. Buning o'rniga `options` (aralashtirilgan, 4 ta).
         "options": options,
+        # Savol uchun vaqt limiti — frontend taymerini moslashtiradi.
+        # NULL = standart (15s).
+        "timeLimitSeconds": q.time_limit_seconds,
     }
 
 

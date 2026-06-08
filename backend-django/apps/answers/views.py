@@ -30,8 +30,8 @@ from .scoring import ScoreInput, calculate_answer_score
 from .tickets import consume_answer_ticket, issue_answer_ticket, verify_answer_ticket
 
 
-ANSWER_TIMEOUT_MS = 15_000
-TIMEOUT_GRACE_MS  = 2_000
+DEFAULT_ANSWER_TIMEOUT_MS = 15_000   # savol darajasida qiymat yo'q bo'lsa
+TIMEOUT_GRACE_MS          = 2_000    # tarmoq kechikishi uchun marja
 
 # Streak limit: klient yuborgan streak qiymatiga ishonmaymiz —
 # faqat bonus hisoblashda ishlatamiz (max +1 ball ta'sir qiladi).
@@ -155,7 +155,9 @@ def submit_answer(request):
     now_ms = int(time.time() * 1000)
     time_taken_ms = max(0, now_ms - payload.issued_at_ms)
 
-    if time_taken_ms > ANSWER_TIMEOUT_MS + TIMEOUT_GRACE_MS:
+    # Savol darajasidagi vaqt limiti — NULL bo'lsa standart 15s ishlatiladi
+    question_time_limit_ms = int(question.get("timeLimitSeconds") or 15) * 1000
+    if time_taken_ms > question_time_limit_ms + TIMEOUT_GRACE_MS:
         # Bet yechilmagan holda "incorrect" qaytaramiz
         return _timeout_response(question["correctAnswer"])
 
@@ -185,7 +187,7 @@ def submit_answer(request):
     score = calculate_answer_score(
         ScoreInput(
             status=grading.status,
-            time_taken_ms=min(time_taken_ms, ANSWER_TIMEOUT_MS),
+            time_taken_ms=min(time_taken_ms, question_time_limit_ms),
             streak_before=streak_before,
         )
     )

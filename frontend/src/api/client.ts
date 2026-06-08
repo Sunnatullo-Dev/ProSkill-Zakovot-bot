@@ -69,6 +69,7 @@ type RemoteQuestion = {
   category: string | null;
   difficulty: string | null;
   options?: string[] | null;
+  timeLimitSeconds?: number | null;
 };
 
 type SubmitAnswerApiResponse = {
@@ -867,6 +868,7 @@ function normalizeQuestion(question: RemoteQuestion): Question {
     text: question.text,
     category: question.category ?? null,
     difficulty: question.difficulty ?? null,
-    options
+    options,
+    timeLimitSeconds: question.timeLimitSeconds ?? null,
   };
 }

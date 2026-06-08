@@ -11,6 +11,8 @@ const TICK_INTERVAL_MS = 250; // tez yangilanish, lekin Date.now() bilan drift's
  * deb yozib qo'yamiz va har tick'da `Math.ceil((deadline - Date.now()) / 1000)`
  * bilan qoldiqni hisoblaymiz. Page hidden'dan keyin qaytsa ham to'g'ri
  * bo'ladi — visibility'ni alohida tutmaymiz, Date.now() o'zi ishonchli.
+ *
+ * `resetWithSeconds(n)` — yangi savol uchun turli vaqt bilan qayta boshlash.
  */
 export function useTimer(initialSeconds = DEFAULT_SECONDS, onExpire?: () => void) {
   const [timeLeft, setTimeLeft] = useState(initialSeconds);
@@ -19,6 +21,8 @@ export function useTimer(initialSeconds = DEFAULT_SECONDS, onExpire?: () => void
   const onExpireRef = useRef(onExpire);
   const deadlineRef = useRef<number | null>(null);
   const expiredFiredRef = useRef(false);
+  // Joriy aktiv savol uchun sekund soni — resetWithSeconds() orqali yangilanadi
+  const currentSecondsRef = useRef(initialSeconds);
 
   useEffect(() => {
     onExpireRef.current = onExpire;
@@ -51,15 +55,15 @@ export function useTimer(initialSeconds = DEFAULT_SECONDS, onExpire?: () => void
 
   const start = useCallback(() => {
     expiredFiredRef.current = false;
+    const secs = currentSecondsRef.current;
     // Faqat yangi deadline o'rnatamiz, agar ilgari to'xtatilgan bo'lsa.
-    // Davom etish (pause/resume) holatlar uchun deadline saqlanib qoladi.
     if (deadlineRef.current === null || timeLeft <= 0) {
-      deadlineRef.current = Date.now() + initialSeconds * 1000;
-      setTimeLeft(initialSeconds);
+      deadlineRef.current = Date.now() + secs * 1000;
+      setTimeLeft(secs);
     }
     setIsExpired(false);
     setIsRunning(true);
-  }, [initialSeconds, timeLeft]);
+  }, [timeLeft]);
 
   const stop = useCallback(() => {
     setIsRunning(false);
@@ -68,16 +72,27 @@ export function useTimer(initialSeconds = DEFAULT_SECONDS, onExpire?: () => void
   const reset = useCallback(() => {
     deadlineRef.current = null;
     expiredFiredRef.current = false;
-    setTimeLeft(initialSeconds);
+    setTimeLeft(currentSecondsRef.current);
     setIsExpired(false);
     setIsRunning(false);
-  }, [initialSeconds]);
+  }, []);
+
+  /** Yangi savol uchun vaqt bilan reset — timer to'xtatiladi, yangi qiymat o'rnatiladi. */
+  const resetWithSeconds = useCallback((seconds: number) => {
+    currentSecondsRef.current = seconds;
+    deadlineRef.current = null;
+    expiredFiredRef.current = false;
+    setTimeLeft(seconds);
+    setIsExpired(false);
+    setIsRunning(false);
+  }, []);
 
   return {
     timeLeft,
     isExpired,
     start,
     stop,
-    reset
+    reset,
+    resetWithSeconds,
   };
 }

@@ -102,6 +102,10 @@ export type Question = {
    * server tasdiqlaydi.
    */
   options: string[];
+  /**
+   * Savol uchun vaqt limiti (soniya). null yoki undefined = standart (15s).
+   */
+  timeLimitSeconds?: number | null;
 };
 
 export type RevealInfo = {

@@ -783,6 +783,56 @@ function fromQuestion(question: AdminQuestion): EditFields {
 }
 
 
+const TIME_PRESETS_Q = [15, 30, 45, 60, 90, 120] as const;
+
+function TimeLimitPicker({
+  value,
+  onChange
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div style={labelStyle}>Vaqt limiti</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+        {TIME_PRESETS_Q.map((s) => {
+          const active = value === s;
+          const mins = s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : `${s}s`;
+          return (
+            <button
+              key={s}
+              type="button"
+              style={{
+                padding: "7px 14px",
+                borderRadius: "999px",
+                border: active ? "1.5px solid #22C55E" : "1.5px solid var(--border)",
+                background: active
+                  ? "linear-gradient(135deg, #22C55E22, #16A34A18)"
+                  : "var(--surface)",
+                color: active ? "#22C55E" : "var(--muted)",
+                fontSize: "12px",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                boxShadow: active ? "0 0 0 2px #22C55E33" : "none",
+              }}
+              onClick={() => onChange(s)}
+            >
+              ⏱ {mins}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px" }}>
+        Tanlangan: <strong style={{ color: "var(--text)" }}>
+          {value >= 60 ? `${Math.floor(value / 60)} daqiqa ${value % 60 ? `${value % 60} soniya` : ""}` : `${value} soniya`}
+        </strong>
+      </div>
+    </div>
+  );
+}
+
 function DifficultyBadge({ value }: { value: string | null }) {
   const meta = DIFFICULTIES.find((item) => item.value === value);
 
@@ -1208,23 +1258,11 @@ function QuestionsSection() {
 
             {/* A/B/C/D variantlar olib tashlandi — erkin matn rejimi ishlatiladi */}
 
-            {/* Vaqt limiti */}
-            {renderField(
-              "Vaqt limiti (soniya)",
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <input
-                  type="number"
-                  min={5}
-                  max={120}
-                  style={{ ...inputStyle, width: "100px" }}
-                  value={createFields.timeLimitSeconds}
-                  onChange={(event) =>
-                    setCreateFields((value) => ({ ...value, timeLimitSeconds: Math.max(5, Math.min(120, Number(event.target.value))) }))
-                  }
-                />
-                <span style={{ fontSize: "12px", color: "var(--muted)" }}>soniya (5–120)</span>
-              </div>
-            )}
+            {/* Vaqt limiti — preset pill tugmalar */}
+            <TimeLimitPicker
+              value={createFields.timeLimitSeconds}
+              onChange={(v) => setCreateFields((f) => ({ ...f, timeLimitSeconds: v }))}
+            />
 
             {createError ? (
               <div style={{ fontSize: "12px", color: "var(--error)" }}>{createError}</div>
@@ -1406,23 +1444,11 @@ function QuestionsSection() {
 
                   {/* A/B/C/D variantlar olib tashlandi — erkin matn rejimi */}
 
-                  {/* Vaqt limiti */}
-                  {renderField(
-                    "Vaqt limiti (soniya)",
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <input
-                        type="number"
-                        min={5}
-                        max={120}
-                        style={{ ...inputStyle, width: "100px" }}
-                        value={editFields.timeLimitSeconds}
-                        onChange={(event) =>
-                          setEditFields((value) => ({ ...value, timeLimitSeconds: Math.max(5, Math.min(120, Number(event.target.value))) }))
-                        }
-                      />
-                      <span style={{ fontSize: "12px", color: "var(--muted)" }}>soniya (5–120)</span>
-                    </div>
-                  )}
+                  {/* Vaqt limiti — preset pill tugmalar */}
+                  <TimeLimitPicker
+                    value={editFields.timeLimitSeconds}
+                    onChange={(v) => setEditFields((f) => ({ ...f, timeLimitSeconds: v }))}
+                  />
 
                   {editError ? (
                     <div style={{ fontSize: "12px", color: "var(--error)" }}>{editError}</div>
