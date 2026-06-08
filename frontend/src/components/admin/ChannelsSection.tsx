@@ -1,10 +1,6 @@
 /**
- * ChannelsSection — Admin panel ichidagi majburiy kanallar boshqaruvi.
- *
- * Imkoniyatlar:
- *  - Kanallar ro'yxati (aktiv + o'chirilgan) + qachon, kim qo'shgani
- *  - Yangi kanal qo'shish formasi
- *  - Soft delete (o'chirish) va qayta faollashtirish
+ * ChannelsSection — Majburiy kanallar boshqaruvi.
+ * Faqat 2 maydon: @username + kanal nomi.
  */
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
@@ -18,7 +14,7 @@ import type { RequiredChannel } from "../../api/client";
 
 const ACCENT = "#4DA6FF";
 
-const cardStyle: CSSProperties = {
+const card: CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--border)",
   borderRadius: "16px",
@@ -26,302 +22,235 @@ const cardStyle: CSSProperties = {
   marginBottom: "12px",
 };
 
-const sectionTitle: CSSProperties = {
-  fontSize: "13px",
-  fontWeight: 800,
-  color: "var(--text)",
-  marginBottom: "14px",
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-};
-
 const inputStyle: CSSProperties = {
   width: "100%",
-  padding: "12px 14px",
+  padding: "13px 14px",
   background: "var(--bg)",
   border: "1.5px solid var(--border)",
-  borderRadius: "10px",
-  fontSize: "14px",
+  borderRadius: "11px",
+  fontSize: "15px",
   color: "var(--text)",
   outline: "none",
   boxSizing: "border-box",
-  marginBottom: "8px",
+  fontFamily: "inherit",
 };
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("uz-UZ", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
 
 export default function ChannelsSection() {
   const [channels, setChannels] = useState<RequiredChannel[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [toast, setToast] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
 
-  // Forma holati
-  const [form, setForm] = useState({
-    channelId: "",
-    channelUsername: "",
-    channelTitle: "",
-    channelUrl: "",
-  });
-  const [formError, setFormError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-
-  // Amal bajarish holatini saqlaymiz (qaysi kanal)
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [username, setUsername] = useState("");
+  const [title, setTitle] = useState("");
+  const [formErr, setFormErr] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [actionId, setActionId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError("");
     const list = await adminListChannels();
     setChannels(list);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  function showSuccess(msg: string) {
-    setSuccess(msg);
-    setTimeout(() => setSuccess(""), 3000);
+  function notify(type: "ok" | "err", msg: string) {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
   }
 
   async function handleAdd() {
-    setFormError("");
-    const { channelId, channelTitle, channelUrl } = form;
-    if (!channelId.trim()) return setFormError("Kanal ID kerak");
-    if (!channelTitle.trim()) return setFormError("Kanal nomi kerak");
-    if (!channelUrl.trim()) return setFormError("Kanal havolasi kerak");
-
-    setSubmitting(true);
-    const result = await adminAddChannel({
-      channelId: channelId.trim(),
-      channelUsername: form.channelUsername.trim().replace(/^@/, ""),
-      channelTitle: channelTitle.trim(),
-      channelUrl: channelUrl.trim(),
-    });
-    setSubmitting(false);
-
-    if (result.ok) {
-      setForm({ channelId: "", channelUsername: "", channelTitle: "", channelUrl: "" });
-      setShowForm(false);
-      showSuccess("Kanal muvaffaqiyatli qo'shildi ✓");
+    setFormErr("");
+    const u = username.trim().replace(/^@/, "");
+    const t = title.trim();
+    if (!u) return setFormErr("@username kiriting");
+    if (!t) return setFormErr("Kanal nomini kiriting");
+    setSaving(true);
+    const res = await adminAddChannel({ channelUsername: u, channelTitle: t });
+    setSaving(false);
+    if (res.ok) {
+      setUsername(""); setTitle("");
+      notify("ok", "Kanal qo'shildi ✓");
       await load();
     } else {
-      setFormError(result.error);
+      setFormErr(res.error);
     }
   }
 
   async function handleDeactivate(id: number) {
-    setActionLoading(id);
-    const result = await adminDeactivateChannel(id);
-    setActionLoading(null);
-    if (result.ok) {
-      showSuccess("Kanal o'chirildi");
-      await load();
-    } else {
-      setError(result.error);
-    }
+    setActionId(id);
+    const res = await adminDeactivateChannel(id);
+    setActionId(null);
+    if (res.ok) { notify("ok", "O'chirildi"); await load(); }
+    else notify("err", res.error);
   }
 
   async function handleActivate(id: number) {
-    setActionLoading(id);
-    const result = await adminActivateChannel(id);
-    setActionLoading(null);
-    if (result.ok) {
-      showSuccess("Kanal qayta faollashtirildi ✓");
-      await load();
-    } else {
-      setError(result.error);
-    }
+    setActionId(id);
+    const res = await adminActivateChannel(id);
+    setActionId(null);
+    if (res.ok) { notify("ok", "Faollashtirildi ✓"); await load(); }
+    else notify("err", res.error);
   }
 
   const active = channels.filter((c) => c.isActive);
   const inactive = channels.filter((c) => !c.isActive);
 
-  if (loading) {
-    return (
-      <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>
-        Yuklanmoqda...
-      </div>
-    );
-  }
+  if (loading) return (
+    <div style={{ padding: "40px", textAlign: "center", color: "var(--muted)" }}>Yuklanmoqda...</div>
+  );
 
   return (
     <div>
-      {/* Xabarlar */}
-      {error && (
-        <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "10px", color: "#EF4444", fontSize: "12px", marginBottom: "12px" }}>
-          {error}
-        </div>
-      )}
-      {success && (
-        <div style={{ padding: "10px 14px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "#22C55E", fontSize: "12px", marginBottom: "12px", fontWeight: 700 }}>
-          {success}
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          padding: "10px 14px", borderRadius: "10px", marginBottom: "12px",
+          fontSize: "13px", fontWeight: 700,
+          background: toast.type === "ok" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+          border: `1px solid ${toast.type === "ok" ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+          color: toast.type === "ok" ? "#22c55e" : "#ef4444",
+        }}>
+          {toast.msg}
         </div>
       )}
 
-      {/* Umumiy holat */}
-      <div style={cardStyle}>
-        <div style={sectionTitle}>📢 Majburiy kanallar holati</div>
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
-          <div style={{ flex: 1, minWidth: "100px", padding: "14px", background: "rgba(34,197,94,0.08)", borderRadius: "12px", border: "1px solid rgba(34,197,94,0.2)", textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: 900, color: "#22c55e" }}>{active.length}</div>
-            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>Aktiv kanal</div>
+      {/* Qo'shish formasi */}
+      <div style={card}>
+        <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)", marginBottom: "14px" }}>
+          ➕ Kanal qo'shish
+        </div>
+
+        <div style={{ marginBottom: "10px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", marginBottom: "5px", letterSpacing: "0.5px" }}>
+            KANAL USERNAME
           </div>
-          <div style={{ flex: 1, minWidth: "100px", padding: "14px", background: "rgba(239,68,68,0.08)", borderRadius: "12px", border: "1px solid rgba(239,68,68,0.2)", textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: 900, color: "#ef4444" }}>{inactive.length}</div>
-            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>O'chirilgan</div>
+          <div style={{ position: "relative" }}>
+            <span style={{
+              position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)",
+              fontSize: "15px", fontWeight: 700, color: ACCENT, userSelect: "none",
+            }}>@</span>
+            <input
+              style={{ ...inputStyle, paddingLeft: "30px" }}
+              placeholder="channelname"
+              value={username}
+              onChange={(e) => { setUsername(e.target.value.replace(/^@+/, "")); setFormErr(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
+            />
           </div>
-          <div style={{ flex: 1, minWidth: "100px", padding: "14px", background: "rgba(77,166,255,0.08)", borderRadius: "12px", border: "1px solid rgba(77,166,255,0.2)", textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: 900, color: ACCENT }}>{channels.length}</div>
-            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>Jami</div>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "4px" }}>
+            Kanal username'i (@ belgisiz) · Masalan: <code style={{ color: ACCENT }}>zakovot_uz</code>
           </div>
         </div>
 
-        <div style={{ fontSize: "12px", color: "var(--muted)", lineHeight: 1.6 }}>
-          ℹ️ Foydalanuvchi ilovani ochganda barcha aktiv kanallarga obuna bo'lmaguncha o'ynay olmaydi.
-          Bot <b>getChatMember</b> API orqali obunani tekshiradi.
+        <div style={{ marginBottom: "12px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", marginBottom: "5px", letterSpacing: "0.5px" }}>
+            KANAL NOMI (TUGMADA YOZILADI)
+          </div>
+          <input
+            style={inputStyle}
+            placeholder="Masalan: Zakovat Rasmiy Kanal"
+            value={title}
+            onChange={(e) => { setTitle(e.target.value); setFormErr(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") void handleAdd(); }}
+          />
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "4px" }}>
+            Foydalanuvchi ko'radigan kanal nomi (inline tugmada)
+          </div>
         </div>
+
+        {/* Preview */}
+        {(username || title) && (
+          <div style={{
+            padding: "10px 12px", borderRadius: "10px", marginBottom: "12px",
+            background: "rgba(77,166,255,0.07)", border: "1px solid rgba(77,166,255,0.2)",
+            fontSize: "12px", color: "var(--muted)",
+          }}>
+            <span style={{ color: ACCENT, fontWeight: 700 }}>Ko'rinishi: </span>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "4px 10px", borderRadius: "8px",
+              background: "linear-gradient(135deg,#4DA6FF,#7B61FF)", color: "#fff",
+              fontWeight: 700, fontSize: "13px", marginLeft: "6px",
+            }}>
+              📢 {title || "@" + username} →
+            </span>
+            {username && (
+              <span style={{ marginLeft: "8px" }}>
+                t.me/<code style={{ color: ACCENT }}>{username}</code>
+              </span>
+            )}
+          </div>
+        )}
+
+        {formErr && (
+          <div style={{ padding: "8px 12px", borderRadius: "8px", background: "rgba(239,68,68,0.10)", color: "#ef4444", fontSize: "12px", marginBottom: "10px" }}>
+            {formErr}
+          </div>
+        )}
+
+        <button
+          type="button"
+          disabled={saving || !username.trim() || !title.trim()}
+          onClick={() => void handleAdd()}
+          style={{
+            width: "100%", padding: "13px", borderRadius: "12px", border: "none",
+            background: (saving || !username.trim() || !title.trim())
+              ? "var(--border)"
+              : `linear-gradient(135deg, ${ACCENT}, #7B61FF)`,
+            color: (saving || !username.trim() || !title.trim()) ? "var(--muted)" : "#fff",
+            fontSize: "15px", fontWeight: 800,
+            cursor: (saving || !username.trim() || !title.trim()) ? "not-allowed" : "pointer",
+            opacity: (saving || !username.trim() || !title.trim()) ? 0.5 : 1,
+          }}
+        >
+          {saving ? "Qo'shilmoqda..." : "➕ Qo'shish"}
+        </button>
       </div>
 
-      {/* Yangi kanal qo'shish */}
-      <div style={cardStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showForm ? "14px" : 0 }}>
-          <div style={sectionTitle}>➕ Yangi kanal qo'shish</div>
-          <button
-            type="button"
-            onClick={() => { setShowForm((v) => !v); setFormError(""); }}
-            style={{
-              padding: "6px 12px",
-              borderRadius: "8px",
-              border: `1px solid ${showForm ? "rgba(239,68,68,0.4)" : "rgba(77,166,255,0.4)"}`,
-              background: showForm ? "rgba(239,68,68,0.08)" : "rgba(77,166,255,0.08)",
-              color: showForm ? "#ef4444" : ACCENT,
-              fontSize: "12px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            {showForm ? "✕ Bekor" : "+ Qo'shish"}
-          </button>
+      {/* Aktiv kanallar */}
+      <div style={card}>
+        <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)", marginBottom: active.length ? "12px" : 0 }}>
+          ✅ Aktiv kanallar
+          <span style={{ marginLeft: "8px", fontSize: "13px", fontWeight: 700, color: "#22c55e" }}>
+            {active.length}
+          </span>
         </div>
 
-        {showForm && (
-          <div>
-            {/* Yordam */}
-            <div style={{ padding: "10px 12px", background: "rgba(77,166,255,0.08)", borderRadius: "10px", border: "1px solid rgba(77,166,255,0.2)", fontSize: "12px", color: "var(--muted)", marginBottom: "12px", lineHeight: 1.6 }}>
-              <b style={{ color: ACCENT }}>Kanal ID</b> — Raqamli ID (masalan: <code>-1001234567890</code>) yoki username (<code>@mychannel</code>).
-              Raqamli ID ishlatish tavsiya etiladi — kanal username o'zgarsa ham ishlaydi.
-              Botni kanalga admin sifatida qo'shing!
-            </div>
-
-            <input
-              style={inputStyle}
-              placeholder="Kanal ID * (masalan: -1001234567890)"
-              value={form.channelId}
-              onChange={(e) => setForm((f) => ({ ...f, channelId: e.target.value }))}
-            />
-            <input
-              style={inputStyle}
-              placeholder="Kanal nomi * (masalan: Zakovat Rasmiy)"
-              value={form.channelTitle}
-              onChange={(e) => setForm((f) => ({ ...f, channelTitle: e.target.value }))}
-            />
-            <input
-              style={inputStyle}
-              placeholder="Kanal havolasi * (masalan: https://t.me/mychannel)"
-              value={form.channelUrl}
-              onChange={(e) => setForm((f) => ({ ...f, channelUrl: e.target.value }))}
-            />
-            <input
-              style={{ ...inputStyle, marginBottom: "12px" }}
-              placeholder="Username (ixtiyoriy, masalan: mychannel)"
-              value={form.channelUsername}
-              onChange={(e) => setForm((f) => ({ ...f, channelUsername: e.target.value }))}
-            />
-
-            {formError && (
-              <div style={{ padding: "8px 12px", background: "rgba(239,68,68,0.10)", borderRadius: "8px", color: "#ef4444", fontSize: "12px", marginBottom: "10px" }}>
-                {formError}
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => void handleAdd()}
-              style={{
-                width: "100%",
-                padding: "13px",
-                borderRadius: "12px",
-                border: "none",
-                background: submitting ? "var(--border)" : `linear-gradient(135deg, ${ACCENT}, #7B61FF)`,
-                color: submitting ? "var(--muted)" : "#fff",
-                fontSize: "15px",
-                fontWeight: 800,
-                cursor: submitting ? "not-allowed" : "pointer",
-                opacity: submitting ? 0.6 : 1,
-              }}
-            >
-              {submitting ? "Qo'shilmoqda..." : "➕ Kanalni qo'shish"}
-            </button>
+        {active.length === 0 ? (
+          <div style={{ textAlign: "center", color: "var(--muted)", padding: "20px 0", fontSize: "13px" }}>
+            Hozircha majburiy kanal yo'q
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {active.map((ch) => (
+              <ChannelRow
+                key={ch.id}
+                channel={ch}
+                loading={actionId === ch.id}
+                onRemove={() => void handleDeactivate(ch.id)}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Aktiv kanallar */}
-      {active.length > 0 && (
-        <div style={cardStyle}>
-          <div style={sectionTitle}>✅ Aktiv kanallar ({active.length})</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {active.map((ch) => (
-              <ChannelCard
-                key={ch.id}
-                channel={ch}
-                loading={actionLoading === ch.id}
-                onDeactivate={() => void handleDeactivate(ch.id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {active.length === 0 && (
-        <div style={{ ...cardStyle, textAlign: "center", color: "var(--muted)", padding: "28px" }}>
-          <div style={{ fontSize: "32px", marginBottom: "8px" }}>📭</div>
-          <div style={{ fontSize: "14px" }}>Hozircha majburiy kanallar yo'q</div>
-          <div style={{ fontSize: "12px", marginTop: "4px" }}>Yuqoridagi forma orqali qo'shing</div>
-        </div>
-      )}
-
       {/* O'chirilgan kanallar */}
       {inactive.length > 0 && (
-        <div style={cardStyle}>
-          <div style={{ ...sectionTitle, color: "var(--muted)" }}>🗑 O'chirilgan kanallar ({inactive.length})</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={card}>
+          <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--muted)", marginBottom: "12px" }}>
+            🗑 O'chirilgan
+            <span style={{ marginLeft: "8px", fontSize: "13px", fontWeight: 700 }}>{inactive.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {inactive.map((ch) => (
-              <ChannelCard
+              <ChannelRow
                 key={ch.id}
                 channel={ch}
-                loading={actionLoading === ch.id}
-                onActivate={() => void handleActivate(ch.id)}
-                isInactive
+                loading={actionId === ch.id}
+                onRestore={() => void handleActivate(ch.id)}
+                inactive
               />
             ))}
           </div>
@@ -331,145 +260,82 @@ export default function ChannelsSection() {
   );
 }
 
-// ── Kanal kartochkasi ─────────────────────────────────────────────────────────
-
-function ChannelCard({
-  channel,
-  loading,
-  onDeactivate,
-  onActivate,
-  isInactive,
+function ChannelRow({
+  channel, loading, onRemove, onRestore, inactive,
 }: {
   channel: RequiredChannel;
   loading: boolean;
-  onDeactivate?: () => void;
-  onActivate?: () => void;
-  isInactive?: boolean;
+  onRemove?: () => void;
+  onRestore?: () => void;
+  inactive?: boolean;
 }) {
+  const date = channel.createdAt
+    ? new Date(channel.createdAt).toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit", year: "2-digit" })
+    : "—";
+
   return (
-    <div
-      style={{
-        padding: "14px",
-        borderRadius: "14px",
-        background: isInactive ? "var(--bg)" : "rgba(34,197,94,0.06)",
-        border: `1px solid ${isInactive ? "var(--border)" : "rgba(34,197,94,0.2)"}`,
-        opacity: isInactive ? 0.7 : 1,
-      }}
-    >
-      {/* Kanal nomi va ID */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "8px" }}>
-        <div
-          style={{
-            width: "38px",
-            height: "38px",
-            borderRadius: "10px",
-            background: isInactive ? "var(--border)" : "rgba(34,197,94,0.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "20px",
-            flexShrink: 0,
-          }}
-        >
-          {isInactive ? "📵" : "📢"}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "15px", fontWeight: 800, color: "var(--text)", marginBottom: "2px" }}>
-            {channel.channelTitle}
-          </div>
-          <div style={{ fontSize: "12px", color: "var(--muted)", wordBreak: "break-all" }}>
-            ID: <code style={{ color: "#4DA6FF" }}>{channel.channelId}</code>
-            {channel.channelUsername && (
-              <span> · @{channel.channelUsername}</span>
-            )}
-          </div>
-        </div>
-      </div>
+    <div style={{
+      display: "flex", alignItems: "center", gap: "10px",
+      padding: "11px 13px", borderRadius: "12px",
+      background: inactive ? "var(--bg)" : "rgba(34,197,94,0.06)",
+      border: `1px solid ${inactive ? "var(--border)" : "rgba(34,197,94,0.18)"}`,
+      opacity: inactive ? 0.7 : 1,
+    }}>
+      {/* Ikon */}
+      <span style={{ fontSize: "20px", flexShrink: 0 }}>{inactive ? "📵" : "📢"}</span>
 
-      {/* Havola */}
-      <div
-        style={{
-          fontSize: "12px",
-          color: "var(--muted)",
-          padding: "6px 10px",
-          background: "var(--bg)",
-          borderRadius: "8px",
-          marginBottom: "10px",
-          wordBreak: "break-all",
-          border: "1px solid var(--border)",
-        }}
-      >
-        🔗 {channel.channelUrl}
-      </div>
-
-      {/* Audit trail */}
-      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "11px", color: "var(--muted)", marginBottom: "10px" }}>
-        <span>👤 {channel.addedByName || "Noma'lum"}</span>
-        <span>🕐 {channel.createdAt ? new Date(channel.createdAt).toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {channel.channelTitle}
+        </div>
+        <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "1px" }}>
+          @{channel.channelUsername || channel.channelId.replace(/^@/, "")}
+          <span style={{ marginLeft: "8px", color: "var(--border-2, #2a3a5c)" }}>· {date}</span>
+          {channel.addedByName && (
+            <span style={{ marginLeft: "6px" }}>· {channel.addedByName}</span>
+          )}
+        </div>
       </div>
 
       {/* Tugmalar */}
-      <div style={{ display: "flex", gap: "8px" }}>
+      <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
         <a
           href={channel.channelUrl}
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            flex: 1,
-            padding: "8px",
-            borderRadius: "9px",
-            border: "1px solid rgba(77,166,255,0.3)",
-            background: "rgba(77,166,255,0.08)",
-            color: "#4DA6FF",
-            fontSize: "12px",
-            fontWeight: 700,
-            textAlign: "center" as const,
-            textDecoration: "none",
-            display: "block",
+            padding: "6px 10px", borderRadius: "8px",
+            background: "rgba(77,166,255,0.10)", border: "1px solid rgba(77,166,255,0.25)",
+            color: "#4DA6FF", fontSize: "12px", fontWeight: 700,
+            textDecoration: "none", display: "block",
           }}
         >
-          🔗 Ko'rish
+          🔗
         </a>
-
-        {isInactive ? (
+        {inactive ? (
           <button
-            type="button"
-            disabled={loading}
-            onClick={onActivate}
+            type="button" disabled={loading} onClick={onRestore}
             style={{
-              flex: 1,
-              padding: "8px",
-              borderRadius: "9px",
-              border: "1px solid rgba(34,197,94,0.3)",
-              background: "rgba(34,197,94,0.08)",
-              color: "#22c55e",
-              fontSize: "12px",
-              fontWeight: 700,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.5 : 1,
+              padding: "6px 10px", borderRadius: "8px",
+              background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.25)",
+              color: "#22c55e", fontSize: "12px", fontWeight: 700,
+              cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1,
             }}
           >
-            {loading ? "..." : "✓ Faollashtirish"}
+            {loading ? "..." : "↩"}
           </button>
         ) : (
           <button
-            type="button"
-            disabled={loading}
-            onClick={onDeactivate}
+            type="button" disabled={loading} onClick={onRemove}
             style={{
-              flex: 1,
-              padding: "8px",
-              borderRadius: "9px",
-              border: "1px solid rgba(239,68,68,0.3)",
-              background: "rgba(239,68,68,0.08)",
-              color: "#ef4444",
-              fontSize: "12px",
-              fontWeight: 700,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.5 : 1,
+              padding: "6px 10px", borderRadius: "8px",
+              background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)",
+              color: "#ef4444", fontSize: "12px", fontWeight: 700,
+              cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1,
             }}
           >
-            {loading ? "..." : "✕ O'chirish"}
+            {loading ? "..." : "✕"}
           </button>
         )}
       </div>

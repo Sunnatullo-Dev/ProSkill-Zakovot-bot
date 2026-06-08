@@ -442,30 +442,27 @@ def channels_collection(request):
     if request.method == "POST":
         body = request.data if isinstance(request.data, dict) else {}
 
-        channel_id = (body.get("channelId") or "").strip()
-        if not channel_id:
-            raise AppError(400, "channelId kerak (masalan: -1001234567890 yoki @username)")
+        # Faqat username va nom kerak — qolganini avtomatik hisoblaymiz
+        raw_username = (body.get("channelUsername") or "").strip().lstrip("@")
+        if not raw_username:
+            raise AppError(400, "Kanal username kerak (masalan: mychannel yoki @mychannel)")
+        # Faqat harf, raqam va _ bo'lsin
+        import re as _re
+        if not _re.match(r'^[A-Za-z0-9_]{4,}$', raw_username):
+            raise AppError(400, "Username noto'g'ri (faqat harf, raqam, _ — kamida 4 belgi)")
 
         channel_title = (body.get("channelTitle") or "").strip()
         if not channel_title:
-            raise AppError(400, "channelTitle kerak")
+            raise AppError(400, "Kanal nomi kerak")
 
-        channel_url = (body.get("channelUrl") or "").strip()
-        if not channel_url:
-            raise AppError(400, "channelUrl kerak (masalan: https://t.me/mychannel)")
-
-        # channelUsername — ixtiyoriy, @ siz saqlanadi
-        raw_username = (body.get("channelUsername") or "").strip()
-        channel_username = raw_username.lstrip("@")
-
-        # Agar channelId "@..." formatida berilsa, username sifatida ham qo'shamiz
-        if channel_id.startswith("@") and not channel_username:
-            channel_username = channel_id.lstrip("@")
+        # channel_id = @username formatida, URL avtomatik
+        channel_id = f"@{raw_username}"
+        channel_url = f"https://t.me/{raw_username}"
 
         user = request.current_user
         result = channel_repo.add_channel(
             channel_id=channel_id,
-            channel_username=channel_username,
+            channel_username=raw_username,
             channel_title=channel_title,
             channel_url=channel_url,
             added_by_telegram_id=user.telegram_id,
