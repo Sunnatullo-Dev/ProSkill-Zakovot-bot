@@ -31,7 +31,7 @@ const PAGE = {
 export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
   const { data, error } = useSvoyakRoom(code);
   const appSettings = useAppSettings();
-  const timePerQuestion = appSettings.svoyakTimePerQuestion ?? 30;
+  const timePerQuestion = appSettings.svoyakTimePerQuestion ?? 70;
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [localSec, setLocalSec] = useState(timePerQuestion);

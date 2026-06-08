@@ -71,8 +71,8 @@ class AppSettings(models.Model):
 
     # ── Svoyak vaqt sozlamalari ─────────────────────────────────────────────
     svoyak_time_per_question = models.PositiveIntegerField(
-        default=30,
-        help_text="Svoyak'da har savol uchun vaqt (soniya, 5-60)"
+        default=70,
+        help_text="Svoyak'da har savol uchun vaqt (soniya, 5-120)"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

@@ -154,8 +154,8 @@ def app_settings(request):
             secs = int(body["svoyakTimePerQuestion"])
         except (TypeError, ValueError):
             raise AppError(400, "svoyakTimePerQuestion raqam bo'lishi kerak")
-        if not (5 <= secs <= 60):
-            raise AppError(400, "svoyakTimePerQuestion 5-60 soniya oralig'ida bo'lishi kerak")
+        if not (5 <= secs <= 120):
+            raise AppError(400, "svoyakTimePerQuestion 5-120 soniya oralig'ida bo'lishi kerak")
         settings.svoyak_time_per_question = secs
         updated_fields.append("svoyak_time_per_question")
 

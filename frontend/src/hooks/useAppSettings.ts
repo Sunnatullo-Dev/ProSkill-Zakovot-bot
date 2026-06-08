@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   difficultyMediumEnabled: true,
   difficultyHardEnabled: true,
   svoyakCoordinatorEnabled: true,
-  svoyakTimePerQuestion: 30,
+  svoyakTimePerQuestion: 70,
 };
 
 function readCache(): AppSettings | null {

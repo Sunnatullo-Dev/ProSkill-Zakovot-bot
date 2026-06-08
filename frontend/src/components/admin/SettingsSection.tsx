@@ -314,10 +314,10 @@ export default function SettingsSection() {
             ⏱ Har savol uchun vaqt
           </div>
           <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "10px" }}>
-            Standart: 15 soniya · Minimal: 5 · Maksimal: 60
+            Standart: 70s (1:10) · Minimal: 15s · Maksimal: 2 daqiqa
           </div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {[5, 10, 15, 20, 30, 45, 60].map((secs) => (
+            {[15, 30, 45, 60, 70, 90, 120].map((secs) => (
               <button
                 key={secs}
                 type="button"
@@ -335,7 +335,7 @@ export default function SettingsSection() {
                   opacity: saving === "svoyakTimePerQuestion" ? 0.5 : 1,
                 }}
               >
-                {secs}s
+                {secs >= 60 ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : `${secs}s`}
               </button>
             ))}
           </div>
