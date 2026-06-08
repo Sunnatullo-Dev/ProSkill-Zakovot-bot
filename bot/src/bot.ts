@@ -10,6 +10,13 @@ const SUPER_ADMIN_ID = Number(process.env.ADMIN_ID || "0");
 const MINI_APP_URL = process.env.MINI_APP_URL || "";
 const BACKEND_URL = (process.env.BACKEND_URL || "").replace(/\/$/, "");
 
+// Majburiy obuna kanali.
+//   REQUIRED_CHANNEL      — getChatMember uchun: "@kanalusername" yoki "-100XXXXXXXXX"
+//   REQUIRED_CHANNEL_LINK — foydalanuvchiga ko'rsatiladigan havola (https://t.me/...)
+// Agar bo'sh qoldirilsa, obuna tekshiruvi o'chiriladi.
+const REQUIRED_CHANNEL      = (process.env.REQUIRED_CHANNEL      || "").trim();
+const REQUIRED_CHANNEL_LINK = (process.env.REQUIRED_CHANNEL_LINK || "").trim();
+
 // Backendning admin API'siga kirish kaliti. Tartibi:
 //   1) BOT_INTERNAL_API_KEY — afzal (alohida server-internal kalit)
 //   2) TELEGRAM_BOT_TOKEN — backward compat (eski sozlama)
@@ -252,11 +259,46 @@ async function doBroadcast(
 // ─── Bot ──────────────────────────────────────────────────────────────────────
 const bot = new Bot(token);
 
-// /start
-bot.command("start", async ctx => {
-  const uid = ctx.from!.id;
-  clearState(uid);
-  const name = ctx.from?.first_name || "do'st";
+// ─── Subscription check ───────────────────────────────────────────────────────
+
+/** Foydalanuvchi REQUIRED_CHANNEL ga obuna bo'lganini tekshiradi.
+ *  Kanal sozlanmagan bo'lsa — har doim true qaytaradi (tekshiruv o'chirilgan). */
+async function isSubscribed(userId: number): Promise<boolean> {
+  if (!REQUIRED_CHANNEL) return true;
+  try {
+    const member = await bot.api.getChatMember(REQUIRED_CHANNEL, userId);
+    return ["creator", "administrator", "member", "restricted"].includes(member.status);
+  } catch {
+    // Kanal topilmasa yoki bot admin emas bo'lsa — o'tkazib yuboramiz
+    return true;
+  }
+}
+
+/** Kanalga ulanish tugmasi bilan "Obuna bo'ling" xabarini yuboradi. */
+async function sendSubscribePrompt(ctx: any): Promise<void> {
+  // Havola: explicit REQUIRED_CHANNEL_LINK yoki @username dan hosil qilinadi
+  const link =
+    REQUIRED_CHANNEL_LINK ||
+    (REQUIRED_CHANNEL.startsWith("@")
+      ? `https://t.me/${REQUIRED_CHANNEL.slice(1)}`
+      : `https://t.me/+placeholder`);  // ID bilan foydalanilsa REQUIRED_CHANNEL_LINK majburiy
+
+  await ctx.reply(
+    "📢 *Zakovat O'yiniga kirish uchun avval kanalga obuna bo'ling!*\n\n" +
+    "Obuna bo'lgach *\"✅ Obuna bo'ldim\"* tugmasini bosing.",
+    {
+      parse_mode: "Markdown",
+      reply_markup: new InlineKeyboard()
+        .row().url("📢 Kanalga o'tish", link)
+        .row().text("✅ Obuna bo'ldim", "check_sub"),
+    }
+  );
+}
+
+/** Xush kelibsiz xabarini va mini-app tugmasini yuboradi. */
+async function sendWelcome(ctx: any): Promise<void> {
+  const uid: number = ctx.from!.id;
+  const name: string = ctx.from?.first_name || "do'st";
 
   const welcomeText =
     `🎯 *Zakovat O'yiniga Xush Kelibsiz, ${name}!*\n\n` +
@@ -279,6 +321,20 @@ bot.command("start", async ctx => {
   if (isAdmin(uid)) {
     await ctx.reply("👨‍💼 Admin sifatida kirgansiz:", { reply_markup: ADMIN_KB });
   }
+}
+
+// /start
+bot.command("start", async ctx => {
+  const uid = ctx.from!.id;
+  clearState(uid);
+
+  // Kanal obunasini tekshirish — admin bo'lsa tekshirmaymiz
+  if (!isAdmin(uid) && REQUIRED_CHANNEL && !(await isSubscribed(uid))) {
+    await sendSubscribePrompt(ctx);
+    return;
+  }
+
+  await sendWelcome(ctx);
 });
 
 // 🔧 Admin panel — /admin slash buyrug'i va "🔧 Admin panel" tugmasi orqali
@@ -704,8 +760,26 @@ async function handleSkip(ctx: any) {
 // ─── Callback query handler ────────────────────────────────────────────────────
 bot.on("callback_query:data", async ctx => {
   const uid = ctx.from.id;
-  if (!isAdmin(uid)) { await ctx.answerCallbackQuery(); return; }
   const data = ctx.callbackQuery.data;
+
+  // ✅ Obuna tekshiruvi — har qanday foydalanuvchi bosa oladi (admin chekisiz)
+  if (data === "check_sub") {
+    if (await isSubscribed(uid)) {
+      await ctx.answerCallbackQuery({ text: "✅ Rahmat! Xush kelibsiz!", show_alert: false });
+      // Eski "obuna bo'ling" xabarini o'chiramiz
+      try { await ctx.deleteMessage(); } catch { /* e'tiborsiz */ }
+      await sendWelcome(ctx);
+    } else {
+      await ctx.answerCallbackQuery({
+        text: "❌ Siz hali kanalga obuna bo'lmadingiz. Obuna bo'lib, qaytadan bosing.",
+        show_alert: true,
+      });
+    }
+    return;
+  }
+
+  // Qolgan barcha callbacklar faqat adminlar uchun
+  if (!isAdmin(uid)) { await ctx.answerCallbackQuery(); return; }
 
   if (data === "noop") { await ctx.answerCallbackQuery(); return; }
 
