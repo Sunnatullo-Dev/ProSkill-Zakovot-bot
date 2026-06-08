@@ -31,7 +31,7 @@ const PAGE = {
 export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
   const { data, error } = useSvoyakRoom(code);
   const appSettings = useAppSettings();
-  const timePerQuestion = appSettings.svoyakTimePerQuestion ?? 15;
+  const timePerQuestion = appSettings.svoyakTimePerQuestion ?? 30;
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [localSec, setLocalSec] = useState(timePerQuestion);
@@ -202,7 +202,7 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
             {(() => {
               const r = 28;
               const circ = 2 * Math.PI * r;
-              const progress = localSec / 15;
+              const progress = localSec / timePerQuestion;
               return (
                 <svg width="70" height="70" viewBox="0 0 70 70">
                   <circle cx="35" cy="35" r={r} fill="none" stroke="var(--svoyak-border,#1f3a6e)" strokeWidth="5" />
