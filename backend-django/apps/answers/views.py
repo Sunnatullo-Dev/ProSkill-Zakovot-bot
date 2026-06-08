@@ -31,7 +31,10 @@ from .tickets import consume_answer_ticket, issue_answer_ticket, verify_answer_t
 
 
 DEFAULT_ANSWER_TIMEOUT_MS = 15_000   # savol darajasida qiymat yo'q bo'lsa
-TIMEOUT_GRACE_MS          = 2_000    # tarmoq kechikishi uchun marja
+# Grace: tarmoq kechikishi (≤1s) + TTS o'ynatish vaqti (2-5s).
+# Bilet TTS dan OLDIN chiqariladi, shuning uchun server tomonidagi
+# o'lchangan vaqt: TTS_dur + savol_vaqti. 10s xavfsiz marja.
+TIMEOUT_GRACE_MS          = 10_000
 
 # Streak limit: klient yuborgan streak qiymatiga ishonmaymiz —
 # faqat bonus hisoblashda ishlatamiz (max +1 ball ta'sir qiladi).

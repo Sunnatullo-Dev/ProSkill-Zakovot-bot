@@ -980,6 +980,7 @@ export default function App() {
             questionNumber={questionIndex + 1}
             streak={streak}
             timeLeft={timeLeft}
+            totalTimeSeconds={getQuestionSeconds(currentQuestion)}
             totalQuestions={totalQuestions}
             reveal={revealInfo}
             isRevealing={isRevealing}

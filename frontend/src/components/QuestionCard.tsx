@@ -17,6 +17,8 @@ type QuestionCardProps = {
   questionNumber: number;
   totalQuestions: number;
   timeLeft: number;
+  /** Joriy savol uchun umumiy vaqt (soniya) — doira progress uchun (default: 15). */
+  totalTimeSeconds?: number;
   streak: number;
   reveal: RevealInfo | null;
   isRevealing: boolean;
@@ -59,6 +61,7 @@ export default function QuestionCard({
   questionNumber,
   totalQuestions,
   timeLeft,
+  totalTimeSeconds = 15,
   streak,
   reveal,
   isRevealing,
@@ -81,8 +84,10 @@ export default function QuestionCard({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const timerColor = timeLeft > 10 ? "var(--accent)" : timeLeft > 5 ? "var(--warning)" : "var(--error)";
-  const progress = timeLeft / 15;
+  // Rang: qolgan vaqt foiziga qarab (>50% yashil, 25–50% sariq, <25% qizil)
+  const timeRatio = totalTimeSeconds > 0 ? timeLeft / totalTimeSeconds : 0;
+  const timerColor = timeRatio > 0.5 ? "var(--accent)" : timeRatio > 0.25 ? "var(--warning)" : "var(--error)";
+  const progress = timeRatio;
   const circumference = 2 * Math.PI * 34;
   const strokeDashoffset = circumference * (1 - progress);
 
