@@ -36,6 +36,7 @@ def _now_ms() -> int:
 AUTO_GRACE_MS = 2_000                # vaqt tugaganda grace period
 AUTO_RESULT_MS = 3_000               # natija ko'rsatish vaqti
 _DEFAULT_TIME_PER_QUESTION_S = 15    # standart (admin o'zgartirmasa)
+READING_TIME_MS = 10_000             # O'qish fazasi: 10 soniya (bloklangan)
 
 
 def _get_time_per_question_ms() -> int:
@@ -824,7 +825,10 @@ def submit_auto_answer(*, code: str, telegram_id: int, answer_text: str) -> dict
         started_at_ms = int(settings.get("question_started_at_ms", 0))
         now = _now_ms()
 
-        if started_at_ms > 0 and now - started_at_ms > _get_time_per_question_ms() + AUTO_GRACE_MS:
+        elapsed_ms = now - started_at_ms if started_at_ms > 0 else 0
+        if elapsed_ms < READING_TIME_MS:
+            raise AppError(409, "Savol o'qilmoqda — javob berish vaqti kelmadi (10 soniya kuting)")
+        if started_at_ms > 0 and elapsed_ms > READING_TIME_MS + _get_time_per_question_ms() + AUTO_GRACE_MS:
             raise AppError(409, "Vaqt tugadi")
 
         correct_answer = settings.get("current_correct_answer", "")
@@ -913,7 +917,8 @@ def maybe_advance_auto(room: SvoyakRoom) -> None:
     if not room.settings.get("auto_mode") or room.status != "playing":
         return
     started_ms = int(room.settings.get("question_started_at_ms", 0))
-    if started_ms > 0 and _now_ms() - started_ms > _get_time_per_question_ms():
+    total_ms = READING_TIME_MS + _get_time_per_question_ms()
+    if started_ms > 0 and _now_ms() - started_ms > total_ms:
         _advance_auto_question(room)
 
 
@@ -1028,7 +1033,27 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
         total = int(s.get("total_questions", 0))
         started_ms = int(s.get("question_started_at_ms", 0))
         now_ms_val = _now_ms()
-        time_remaining = max(0, _get_time_per_question_ms() - (now_ms_val - started_ms)) if started_ms > 0 else _get_time_per_question_ms()
+
+        # ── Ikki fazali taymer ───────────────────────────────────────────────
+        # O'qish fazasi: READING_TIME_MS (10s, bloklangan)
+        # Javob fazasi:  _get_time_per_question_ms() (sozlanuvchi)
+        answering_ms = _get_time_per_question_ms()
+        elapsed_ms = (now_ms_val - started_ms) if started_ms > 0 else 0
+
+        if started_ms == 0 or elapsed_ms < 0:
+            phase = "reading"
+            reading_remaining = READING_TIME_MS
+            answering_remaining = answering_ms
+        elif elapsed_ms < READING_TIME_MS:
+            phase = "reading"
+            reading_remaining = READING_TIME_MS - elapsed_ms
+            answering_remaining = answering_ms
+        else:
+            phase = "answering"
+            reading_remaining = 0
+            answering_remaining = max(0, READING_TIME_MS + answering_ms - elapsed_ms)
+
+        time_remaining = answering_remaining  # backward compat
 
         # Joriy round'dan attempts olish
         attempts: list[dict] = []
@@ -1044,6 +1069,8 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
             "totalQuestions": total,
             "questionText": s.get("current_question_text", ""),
             "correctAnswer": s.get("current_correct_answer", "") if room.status == "finished" or time_remaining == 0 else None,
+            "phase": phase,
+            "readingTimeRemainingMs": reading_remaining,
             "timeRemainingMs": time_remaining,
             "startedAtMs": started_ms,
             "attempts": attempts,

@@ -65,6 +65,11 @@ export type SvoyakAutoState = {
   totalQuestions: number;
   questionText: string;
   correctAnswer: string | null;
+  /** O'qish fazasi (bloklangan) yoki javob berish fazasi. */
+  phase: "reading" | "answering";
+  /** O'qish fazasida qolgan ms (10s dan boshlanadi). */
+  readingTimeRemainingMs: number;
+  /** Javob berish fazasida qolgan ms. */
   timeRemainingMs: number;
   startedAtMs: number;
   attempts: SvoyakAutoAttempt[];
