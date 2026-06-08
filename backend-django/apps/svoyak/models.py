@@ -80,6 +80,11 @@ class SvoyakQuestion(models.Model):
     question_type = models.CharField(
         max_length=10, choices=QUESTION_TYPE_CHOICES, default="abcd"
     )
+    # Savol uchun maxsus javob vaqti (soniya). NULL = global AppSettings'dan olinadi.
+    time_seconds = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="Savol uchun maxsus javob vaqti (soniya, 5-300). NULL = global sozlama."
+    )
     # Kelajakda audio yoki rasm qo'shish uchun.
     media_url = models.URLField(blank=True, default="")
     is_active = models.BooleanField(default=True, db_index=True)

@@ -158,6 +158,9 @@ def admin_questions(request):
         wrong = _coerce_wrong_answers(wrong_raw, correct=correct)
         question_type = "abcd" if wrong else "text"
 
+        # Ixtiyoriy: savol uchun maxsus vaqt (NULL = global sozlama)
+        time_seconds = _parse_time_seconds(body.get("timeSeconds"))
+
         q = SvoyakQuestion.objects.create(
             category=cat,
             value_tier=value_tier,
@@ -165,6 +168,7 @@ def admin_questions(request):
             correct_answer=correct,
             wrong_answers=wrong,
             question_type=question_type,
+            time_seconds=time_seconds,
             is_active=True,
             created_by=getattr(request.current_user, "telegram_id", None),
         )
@@ -249,6 +253,8 @@ def admin_question_detail(request, question_id: int):
         _coerce_wrong_answers(q.wrong_answers, correct=q.correct_answer)
     if "isActive" in body:
         q.is_active = bool(body.get("isActive"))
+    if "timeSeconds" in body:
+        q.time_seconds = _parse_time_seconds(body.get("timeSeconds"))
 
     q.save()
     return Response(_serialize_question(q))
@@ -279,8 +285,28 @@ def _serialize_question(q: SvoyakQuestion) -> dict:
         "correctAnswer": q.correct_answer,
         "wrongAnswers": q.wrong_answers if isinstance(q.wrong_answers, list) else [],
         "questionType": q.question_type,
+        "timeSeconds": q.time_seconds,   # NULL = global sozlama
         "isActive": q.is_active,
     }
+
+
+def _parse_time_seconds(raw) -> int | None:
+    """timeSeconds maydonini validatsiya qiladi.
+
+    None / null → None (global sozlama ishlatiladi)
+    Raqam → 5-300 oralig'ida bo'lishi kerak
+    """
+    if raw is None:
+        return None
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        from apps.core.exceptions import AppError
+        raise AppError(400, "timeSeconds raqam bo'lishi kerak")
+    if not (5 <= val <= 300):
+        from apps.core.exceptions import AppError
+        raise AppError(400, "timeSeconds 5-300 soniya oralig'ida bo'lishi kerak")
+    return val
 
 
 def _coerce_wrong_answers(raw, *, correct: str) -> list[str]:

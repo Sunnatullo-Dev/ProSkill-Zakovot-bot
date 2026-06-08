@@ -911,6 +911,11 @@ function QuestionCard(props: {
         ) : (
           <span style={{ color: "#FFAA1C" }}> · erkin matn</span>
         )}
+        {q.timeSeconds != null ? (
+          <span style={{ color: SVOYAK_ACCENT, fontWeight: 700 }}>
+            {" "}· ⏱ {formatSecs(q.timeSeconds)}
+          </span>
+        ) : null}
       </div>
       <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
         <button type="button" onClick={onEdit} style={ghostButton}>{t("svoyak_admin_edit")}</button>
@@ -920,6 +925,8 @@ function QuestionCard(props: {
   );
 }
 
+
+const TIME_PRESETS_Q = [15, 30, 45, 60, 70, 90, 120, 180] as const;
 
 function QuestionForm(props: {
   initial: AdminSvoyakQuestion | null;
@@ -943,8 +950,18 @@ function QuestionForm(props: {
     if (!initial) return false;
     return initial.questionType === "text";
   });
+  // Vaqt sozlamasi: null = global, raqam = maxsus
+  const [useCustomTime, setUseCustomTime] = useState<boolean>(
+    initial?.timeSeconds != null
+  );
+  const [customTimeSecs, setCustomTimeSecs] = useState<string>(
+    initial?.timeSeconds != null ? String(initial.timeSeconds) : "70"
+  );
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const parsedTime = parseInt(customTimeSecs, 10);
+  const timeValid = !isNaN(parsedTime) && parsedTime >= 5 && parsedTime <= 300;
 
   async function handleSave() {
     setErr(null);
@@ -961,6 +978,12 @@ function QuestionForm(props: {
         seen.add(k);
       }
     }
+    if (useCustomTime && !timeValid) {
+      setErr("Vaqt 5-300 soniya oralig'ida bo'lishi kerak");
+      return;
+    }
+
+    const timeSeconds = useCustomTime ? parsedTime : null;
 
     setSaving(true);
     try {
@@ -970,6 +993,7 @@ function QuestionForm(props: {
         text: text.trim(),
         correctAnswer: correct.trim(),
         wrongAnswers: textMode ? [] : wrongs.map((s) => s.trim()),
+        timeSeconds,
       };
       if (initial) {
         await adminUpdateQuestion(initial.id, payload);
@@ -1045,6 +1069,84 @@ function QuestionForm(props: {
             {t("svoyak_admin_question_text_mode")}
           </span>
         </label>
+
+        {/* ── Savol vaqti ──────────────────────────────────────────────── */}
+        <div
+          style={{
+            padding: "12px",
+            background: "rgba(245,200,66,0.07)",
+            border: "1px solid rgba(245,200,66,0.25)",
+            borderRadius: "10px",
+          }}
+        >
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginBottom: useCustomTime ? "10px" : "0" }}>
+            <input
+              type="checkbox"
+              checked={useCustomTime}
+              onChange={(e) => setUseCustomTime(e.target.checked)}
+            />
+            <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text)" }}>
+              ⏱ Bu savolga maxsus vaqt belgilash
+            </span>
+          </label>
+
+          {useCustomTime ? (
+            <>
+              {/* Preset tugmalar */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "8px" }}>
+                {TIME_PRESETS_Q.map((s) => {
+                  const active = parseInt(customTimeSecs, 10) === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setCustomTimeSecs(String(s))}
+                      style={{
+                        padding: "5px 11px",
+                        borderRadius: "8px",
+                        border: `1.5px solid ${active ? SVOYAK_ACCENT : "var(--border)"}`,
+                        background: active ? `rgba(245,200,66,0.18)` : "transparent",
+                        color: active ? SVOYAK_ACCENT : "var(--muted)",
+                        fontSize: "12px",
+                        fontWeight: active ? 900 : 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {formatSecs(s)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Raqam input */}
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <input
+                  type="number"
+                  min={5}
+                  max={300}
+                  value={customTimeSecs}
+                  onChange={(e) => setCustomTimeSecs(e.target.value)}
+                  style={{
+                    ...inputStyle,
+                    flex: 1,
+                    borderColor: timeValid || customTimeSecs === "" ? "var(--border)" : "rgba(239,68,68,0.6)",
+                  }}
+                  placeholder="5–300 soniya"
+                />
+                <span style={{ fontSize: "12px", color: SVOYAK_ACCENT, fontWeight: 700, flexShrink: 0 }}>
+                  {timeValid ? `= ${formatSecs(parsedTime)}` : ""}
+                </span>
+              </div>
+              <div style={{ fontSize: "10px", color: "var(--muted)", marginTop: "4px" }}>
+                Global sozlama (Svoyak tabida) o'rniga faqat shu savol uchun ishlatiladi
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "4px" }}>
+              Global vaqt ishlatiladi (Svoyak tabida o'rnatilgan)
+            </div>
+          )}
+        </div>
 
         {!textMode ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>

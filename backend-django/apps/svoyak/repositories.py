@@ -39,8 +39,14 @@ _DEFAULT_TIME_PER_QUESTION_S = 15    # standart (admin o'zgartirmasa)
 READING_TIME_MS = 10_000             # O'qish fazasi: 10 soniya (bloklangan)
 
 
-def _get_time_per_question_ms() -> int:
-    """Admin sozlamasidan vaqtni o'qiydi (keshlanadi)."""
+def _get_time_per_question_ms(time_seconds: int | None = None) -> int:
+    """Savol uchun javob vaqtini ms da qaytaradi.
+
+    time_seconds berilsa — shu qiymatni ishlatadi (savol darajasida sozlama).
+    None bo'lsa — global AppSettings.svoyak_time_per_question ishlatiladi.
+    """
+    if time_seconds is not None:
+        return int(time_seconds) * 1000
     try:
         from apps.core.models import AppSettings
         s = AppSettings.get()
@@ -799,6 +805,8 @@ def _start_auto_question(room: SvoyakRoom) -> None:
     settings["question_started_at_ms"] = _now_ms()
     settings["current_question_text"] = question.text
     settings["current_correct_answer"] = question.correct_answer
+    # Savolning maxsus vaqti (NULL bo'lsa global sozlama ishlatiladi)
+    settings["question_time_seconds"] = question.time_seconds
     room.settings = settings
     room.save(update_fields=["current_round", "settings"])
 
@@ -828,7 +836,8 @@ def submit_auto_answer(*, code: str, telegram_id: int, answer_text: str) -> dict
         elapsed_ms = now - started_at_ms if started_at_ms > 0 else 0
         if elapsed_ms < READING_TIME_MS:
             raise AppError(409, "Savol o'qilmoqda — javob berish vaqti kelmadi (10 soniya kuting)")
-        if started_at_ms > 0 and elapsed_ms > READING_TIME_MS + _get_time_per_question_ms() + AUTO_GRACE_MS:
+        q_time_s = settings.get("question_time_seconds")
+        if started_at_ms > 0 and elapsed_ms > READING_TIME_MS + _get_time_per_question_ms(q_time_s) + AUTO_GRACE_MS:
             raise AppError(409, "Vaqt tugadi")
 
         correct_answer = settings.get("current_correct_answer", "")
@@ -917,7 +926,8 @@ def maybe_advance_auto(room: SvoyakRoom) -> None:
     if not room.settings.get("auto_mode") or room.status != "playing":
         return
     started_ms = int(room.settings.get("question_started_at_ms", 0))
-    total_ms = READING_TIME_MS + _get_time_per_question_ms()
+    q_time_s = room.settings.get("question_time_seconds")
+    total_ms = READING_TIME_MS + _get_time_per_question_ms(q_time_s)
     if started_ms > 0 and _now_ms() - started_ms > total_ms:
         _advance_auto_question(room)
 
@@ -1036,8 +1046,9 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
 
         # ── Ikki fazali taymer ───────────────────────────────────────────────
         # O'qish fazasi: READING_TIME_MS (10s, bloklangan)
-        # Javob fazasi:  _get_time_per_question_ms() (sozlanuvchi)
-        answering_ms = _get_time_per_question_ms()
+        # Javob fazasi:  savol darajasidagi vaqt yoki global sozlama
+        q_time_s = s.get("question_time_seconds")  # None = global sozlama
+        answering_ms = _get_time_per_question_ms(q_time_s)
         elapsed_ms = (now_ms_val - started_ms) if started_ms > 0 else 0
 
         if started_ms == 0 or elapsed_ms < 0:

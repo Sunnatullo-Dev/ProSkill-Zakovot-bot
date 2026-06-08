@@ -86,6 +86,8 @@ export type AdminSvoyakQuestion = {
   correctAnswer: string;
   wrongAnswers: string[];
   questionType: "abcd" | "text";
+  /** Savol uchun maxsus vaqt (soniya). null = global sozlama. */
+  timeSeconds: number | null;
   isActive: boolean;
 };
 
@@ -157,6 +159,7 @@ export async function adminCreateQuestion(input: {
   text: string;
   correctAnswer: string;
   wrongAnswers?: string[]; // 3 ta yoki bo'sh (text mode)
+  timeSeconds?: number | null; // null = global sozlama
 }): Promise<AdminSvoyakQuestion> {
   return request<AdminSvoyakQuestion>("/svoyak/admin/questions", {
     method: "POST",
@@ -172,6 +175,7 @@ export async function adminUpdateQuestion(
     text: string;
     correctAnswer: string;
     wrongAnswers: string[];
+    timeSeconds: number | null;
     isActive: boolean;
   }>
 ): Promise<AdminSvoyakQuestion> {
