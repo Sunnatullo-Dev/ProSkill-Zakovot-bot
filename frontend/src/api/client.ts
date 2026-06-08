@@ -307,9 +307,9 @@ export async function getTopUsers(limit = 3): Promise<LeaderboardUser[]> {
   }
 }
 
-export async function getLeaderboard(): Promise<LeaderboardData> {
+export async function getLeaderboard(limit: 10 | 20 | 50 | 100 = 10): Promise<LeaderboardData> {
   try {
-    const response = await request<LeaderboardData>("/users/leaderboard");
+    const response = await request<LeaderboardData>(`/users/leaderboard?limit=${limit}`);
 
     return response ?? { users: [], rank: 0 };
   } catch (error) {

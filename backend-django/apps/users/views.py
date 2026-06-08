@@ -33,9 +33,17 @@ def get_top(request):
 @require_auth
 def get_leaderboard(request):
     user = request.current_user
-    users = repositories.get_top_users(limit=100)
+    # ?limit=10|20|50|100 — standart 10, maksimum 100
+    ALLOWED = {10, 20, 50, 100}
+    try:
+        limit = int(request.query_params.get("limit", 10))
+    except (TypeError, ValueError):
+        limit = 10
+    if limit not in ALLOWED:
+        limit = 10
+    users = repositories.get_top_users(limit=limit)
     rank = repositories.get_user_rank(user.telegram_id)
-    return Response({"users": users, "rank": rank})
+    return Response({"users": users, "rank": rank, "limit": limit})
 
 
 @api_view(["GET"])
