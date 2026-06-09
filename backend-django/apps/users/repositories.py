@@ -195,12 +195,20 @@ def list_users(page: int = 1, limit: int = 20, search: str | None = None) -> dic
     return {"items": [_map_user(u) for u in qs[offset : offset + limit]], "total": total}
 
 
-def get_all_users_for_export() -> list[dict]:
-    return [_map_user(u) for u in User.objects.order_by("-score").all()]
+_EXPORT_HARD_LIMIT = 10_000
+
+
+def get_all_users_for_export() -> dict:
+    total = User.objects.count()
+    qs = User.objects.order_by("-score")[:_EXPORT_HARD_LIMIT]
+    items = [_map_user(u) for u in qs.iterator(chunk_size=500)]
+    return {"items": items, "total": total, "truncated": total > _EXPORT_HARD_LIMIT}
 
 
 def get_all_telegram_ids() -> list[int]:
-    return list(User.objects.values_list("telegram_id", flat=True))
+    return list(
+        User.objects.values_list("telegram_id", flat=True).iterator(chunk_size=1000)
+    )
 
 
 def list_admins() -> list[dict]:

@@ -401,8 +401,7 @@ def list_users(request):
 @api_view(["GET"])
 @require_admin
 def export_users(request):
-    users = user_repo.get_all_users_for_export()
-    return Response({"items": users, "total": len(users)})
+    return Response(user_repo.get_all_users_for_export())
 
 
 @api_view(["GET"])

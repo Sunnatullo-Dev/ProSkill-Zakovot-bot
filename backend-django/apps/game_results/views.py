@@ -24,6 +24,9 @@ def save_result(request):
         raise AppError(400, "totalCount kamida 1 bo'lishi kerak")
     if correct > total:
         raise AppError(400, "correctCount totalCount dan katta bo'la olmaydi")
+    # Max 3 ball/savol (tez + streak bonus). Bundan yuqori — cheating.
+    if round_score > total * 3:
+        raise AppError(400, "roundScore mumkin bo'lgan maksimaldan oshib ketdi")
 
     repositories.create_game_result(user.telegram_id, correct, total, round_score)
     return Response({"ok": True}, status=201)

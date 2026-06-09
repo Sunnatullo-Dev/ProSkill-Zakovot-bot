@@ -295,9 +295,9 @@ def _smart_local_check(correct_answer: str, user_answer: str) -> CheckAnswerResu
     if len(correct) >= 2 and correct in user:
         return CheckAnswerResult(status="correct", explanation="")
 
-    # 4. Foydalanuvchi javobi to'g'ri javob ichida (qisqartma)
-    #    "navoiy" → "alisher navoiy" ichida
-    if len(user) >= 3 and user in correct:
+    # 4. Foydalanuvchi javobi to'g'ri javob so'zlari ichida (qisqartma)
+    #    "navoiy" → "alisher navoiy" ichida, lekin "kent" ≠ "toshkent"
+    if len(user) >= 3 and user in correct.split():
         return CheckAnswerResult(status="correct", explanation="")
 
     # 5. Faqat raqamlarni solishtirish: "2026-yil" → "2026" vs "2026"

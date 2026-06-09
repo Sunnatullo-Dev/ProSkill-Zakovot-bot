@@ -251,6 +251,14 @@ if IS_PRODUCTION:
             "Netlify/Render subdomain'larining CORS regex'lari qabul qilinadi.",
             file=sys.stderr,
         )
+    # HTTPS xavfsizlik headerlar — Render reverse proxy orqali ishlaydi
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 else:
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOW_CREDENTIALS = True
