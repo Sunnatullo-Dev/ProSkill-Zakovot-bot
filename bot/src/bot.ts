@@ -106,7 +106,8 @@ type State =
   | { t: "broadcast_text" }
   | { t: "broadcast_confirm"; text: string; total: number }
   | { t: "add_admin_id" }
-  | { t: "add_admin_note"; telegramId: number };
+  | { t: "add_admin_note"; telegramId: number }
+  | { t: "ch_add_username" };
 
 const states = new Map<number, State>();
 const getState = (id: number): State => states.get(id) ?? { t: "idle" };
@@ -198,7 +199,8 @@ const ADMIN_KB = new Keyboard()
   .text("📋 Savollar").text("➕ Qo'shish").row()
   .text("📄 PDF yuklash").text("📊 Statistika").row()
   .text("👥 Foydalanuvchilar").text("📢 Reklama").row()
-  .text("👨‍💼 Adminlar").text("🏠 Asosiy menyu")
+  .text("👨‍💼 Adminlar").text("📢 Majburiy kanallar").row()
+  .text("🏠 Asosiy menyu")
   .resized().persistent();
 
 function listKb(items: Question[], page: number, total: number, limit = 5): InlineKeyboard {
@@ -580,6 +582,47 @@ async function showAdminsList(ctx: any) {
   }
 }
 
+// 📢 Majburiy kanallar
+bot.hears("📢 Majburiy kanallar", async ctx => {
+  if (!isAdmin(ctx.from!.id)) return;
+  clearState(ctx.from!.id);
+  await showChannelsList(ctx);
+});
+
+async function showChannelsList(ctx: any) {
+  try {
+    const data = await apiGet("/api/admin/channels");
+    const channels: Array<{ id: number; channelTitle: string; channelUsername: string; isActive: boolean }> =
+      (data.channels ?? []).filter((ch: any) => ch.isActive);
+
+    const kb = new InlineKeyboard();
+    if (channels.length === 0) {
+      kb.text("➕ Kanal qo'shish", "ch_add");
+      await ctx.reply(
+        "📢 *Majburiy kanallar*\n\n_Hozircha majburiy kanallar yo'q._",
+        { parse_mode: "Markdown", reply_markup: kb }
+      );
+      return;
+    }
+
+    const list = channels.map((ch, i) =>
+      `${i + 1}. *${ch.channelTitle}* — @${ch.channelUsername || ch.channelTitle}`
+    ).join("\n");
+
+    for (const ch of channels) {
+      kb.row().text(`🗑 ${ch.channelTitle}`, `ch_del:${ch.id}`);
+    }
+    kb.row().text("➕ Kanal qo'shish", "ch_add");
+
+    await ctx.reply(
+      `📢 *Majburiy kanallar* (${channels.length} ta)\n\n${list}\n\nO'chirish uchun tugmani bosing:`,
+      { parse_mode: "Markdown", reply_markup: kb }
+    );
+  } catch (e: any) {
+    await ctx.reply(`❌ Kanallarni olib bo'lmadi: ${e?.message}`);
+  }
+}
+
 // /cancel
 bot.command("cancel", async ctx => {
   clearState(ctx.from!.id);
@@ -766,6 +809,39 @@ bot.on("message:text", async ctx => {
       await ctx.reply(`✅ Admin qo'shildi: ID ${st.telegramId}`, { reply_markup: ADMIN_KB });
     } catch (e: any) {
       clearState(uid);
+      await ctx.reply(`❌ Qo'shib bo'lmadi: ${e?.message}`, { reply_markup: ADMIN_KB });
+    }
+    return;
+  }
+
+  // ── Add channel ──
+  if (st.t === "ch_add_username") {
+    // "@mychannel Kanal nomi" yoki faqat "@mychannel" formatini qabul qilamiz.
+    // Agar nom berilmasa, username'ni nom sifatida ishlatamiz.
+    const parts = text.replace(/^@/, "").split(/\s+/);
+    const username = parts[0];
+    const title = parts.slice(1).join(" ").trim() || username;
+
+    if (!username || username.length < 4) {
+      await ctx.reply(
+        "❌ Noto'g'ri username. Kamida 4 belgili bo'lishi kerak.\n\nQaytadan kiriting yoki /cancel"
+      );
+      return;
+    }
+
+    const loadMsg = await ctx.reply("⏳ Tekshirilmoqda...");
+    try {
+      await apiPost("/api/admin/channels", { channelUsername: username, channelTitle: title });
+      invalidateChannelsCache();
+      clearState(uid);
+      try { await ctx.api.deleteMessage(ctx.chat!.id, loadMsg.message_id); } catch { /**/ }
+      await ctx.reply(
+        `✅ *Kanal qo'shildi!*\n\n📢 @${username} — ${title}`,
+        { parse_mode: "Markdown", reply_markup: ADMIN_KB }
+      );
+    } catch (e: any) {
+      clearState(uid);
+      try { await ctx.api.deleteMessage(ctx.chat!.id, loadMsg.message_id); } catch { /**/ }
       await ctx.reply(`❌ Qo'shib bo'lmadi: ${e?.message}`, { reply_markup: ADMIN_KB });
     }
     return;
@@ -1097,6 +1173,54 @@ bot.on("callback_query:data", async ctx => {
       await ctx.answerCallbackQuery("❌ Xatolik");
       await ctx.reply(`❌ O'chirib bo'lmadi: ${e?.message}`);
     }
+    return;
+  }
+
+  // ── Channel management ──
+  if (data === "ch_add") {
+    setState(uid, { t: "ch_add_username" });
+    await ctx.answerCallbackQuery();
+    await ctx.reply(
+      "📢 *Kanal qo'shish*\n\n" +
+      "Kanal username va nomini kiriting:\n" +
+      "`@username Kanal nomi`\n\n" +
+      "_Agar nom kiritmasangiz, username nom sifatida ishlatiladi._\n\n" +
+      "/cancel — bekor qilish",
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+
+  if (data.startsWith("ch_del:")) {
+    const pk = parseInt(data.slice(7), 10);
+    await ctx.answerCallbackQuery();
+    await ctx.reply("⚠️ Bu kanalni majburiy ro'yxatdan o'chirishni tasdiqlaysizmi?", {
+      reply_markup: new InlineKeyboard()
+        .text("✅ Ha, o'chir", `ch_delc:${pk}`)
+        .text("❌ Yo'q", "ch_delcancel"),
+    });
+    return;
+  }
+
+  if (data.startsWith("ch_delc:")) {
+    const pk = parseInt(data.slice(8), 10);
+    try {
+      await apiDelete(`/api/admin/channels/${pk}`);
+      invalidateChannelsCache();
+      await ctx.answerCallbackQuery("✅ O'chirildi!");
+      await ctx.editMessageText("✅ Kanal majburiy ro'yxatdan o'chirildi.");
+      await bot.api.sendMessage(uid, "Admin panel:", { reply_markup: ADMIN_KB });
+    } catch (e: any) {
+      await ctx.answerCallbackQuery("❌ Xatolik");
+      await ctx.editMessageText(`❌ O'chirib bo'lmadi: ${e?.message}`);
+    }
+    return;
+  }
+
+  if (data === "ch_delcancel") {
+    await ctx.answerCallbackQuery("Bekor qilindi");
+    await ctx.editMessageText("❌ O'chirish bekor qilindi.");
+    await bot.api.sendMessage(uid, "Admin panel:", { reply_markup: ADMIN_KB });
     return;
   }
 
