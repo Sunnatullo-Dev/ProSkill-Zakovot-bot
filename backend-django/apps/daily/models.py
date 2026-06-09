@@ -28,6 +28,21 @@ class DailyChallengeEntry(models.Model):
         indexes = [models.Index(fields=["telegram_id", "date"])]
 
 
+class DailyAnswer(models.Model):
+    """Foydalanuvchi kunlik topshiriq savollariga bergan javoblar."""
+
+    telegram_id = models.BigIntegerField(db_index=True)
+    date = models.DateField()
+    question_id = models.CharField(max_length=36)
+    is_correct = models.BooleanField()
+    points_earned = models.IntegerField(default=0)
+    answered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "daily_answers"
+        unique_together = [["telegram_id", "date", "question_id"]]
+
+
 class UserDailyStreak(models.Model):
     """Foydalanuvchining ketma-ket kunlar (streak) statistikasi."""
 

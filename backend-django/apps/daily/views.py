@@ -37,20 +37,5 @@ def complete(request):
     if user.telegram_id <= 0:
         raise AppError(403, "Mehmon foydalanuvchi kunlik topshiriq bajarishi mumkin emas")
 
-    body = request.data if isinstance(request.data, dict) else {}
-    try:
-        correct_count = max(0, int(body.get("correctCount", 0)))
-        score_earned = max(0, int(body.get("scoreEarned", 0)))
-    except (TypeError, ValueError):
-        raise AppError(400, "correctCount va scoreEarned raqam bo'lishi kerak")
-
-    # Xavfsizlik: max mumkin ball = 5 savol × (2 ball tez + 1 streak) = 15
-    # Bundan 3 barobar oshsa — manipulyatsiya deb hisoblash
-    MAX_EXPECTED_SCORE = repositories.DAILY_QUESTION_COUNT * 20
-    if score_earned > MAX_EXPECTED_SCORE:
-        raise AppError(400, "scoreEarned qiymati noto'g'ri")
-    if correct_count > repositories.DAILY_QUESTION_COUNT:
-        raise AppError(400, "correctCount savollar sonidan oshib ketdi")
-
-    result = repositories.complete_daily(user.telegram_id, correct_count, score_earned)
+    result = repositories.complete_daily(user.telegram_id)
     return Response(result, status=201)

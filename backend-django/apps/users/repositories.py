@@ -89,6 +89,15 @@ def set_unlocked_achievements(telegram_id: int, ids: list[str]) -> None:
     User.objects.filter(telegram_id=telegram_id).update(unlocked_achievements=ids)
 
 
+def get_streak(telegram_id: int) -> int:
+    user = User.objects.filter(telegram_id=telegram_id).only("current_streak").first()
+    return user.current_streak if user else 0
+
+
+def set_streak(telegram_id: int, streak: int) -> None:
+    User.objects.filter(telegram_id=telegram_id).update(current_streak=max(0, streak))
+
+
 def add_score(telegram_id: int, amount: int) -> dict[str, Any]:
     """Foydalanuvchi balliga musbat miqdor qo'shadi.
 

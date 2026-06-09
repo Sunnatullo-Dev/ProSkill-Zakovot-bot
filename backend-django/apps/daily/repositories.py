@@ -8,7 +8,7 @@ from django.db import transaction
 from apps.core.exceptions import AppError
 from apps.questions.repositories import get_round_questions, get_questions_by_ids
 
-from .models import DailyChallenge, DailyChallengeEntry, UserDailyStreak
+from .models import DailyChallenge, DailyChallengeEntry, DailyAnswer, UserDailyStreak
 
 
 DAILY_QUESTION_COUNT = 5
@@ -50,19 +50,72 @@ def get_user_streak(telegram_id: int) -> dict[str, int]:
     return {"current": streak.current_streak, "longest": streak.longest_streak}
 
 
+def get_today_question_ids() -> list[str]:
+    """Bugungi daily challenge savol ID'larini qaytaradi."""
+    challenge = DailyChallenge.objects.filter(date=date.today()).first()
+    return list(challenge.question_ids) if challenge else []
+
+
+def record_daily_answer(
+    telegram_id: int,
+    question_id: str,
+    is_correct: bool,
+    points_earned: int,
+) -> None:
+    """Daily javobni yozadi. Takroriy yuborishda (unique_together) jimgina o'tib ketadi."""
+    try:
+        DailyAnswer.objects.get_or_create(
+            telegram_id=telegram_id,
+            date=date.today(),
+            question_id=question_id,
+            defaults={"is_correct": is_correct, "points_earned": points_earned},
+        )
+    except Exception:
+        pass
+
+
+def get_daily_answers(telegram_id: int) -> list[dict]:
+    """Foydalanuvchining bugungi daily javoblari."""
+    rows = DailyAnswer.objects.filter(telegram_id=telegram_id, date=date.today())
+    return [
+        {"question_id": r.question_id, "is_correct": r.is_correct, "points_earned": r.points_earned}
+        for r in rows
+    ]
+
+
 def has_completed_today(telegram_id: int) -> bool:
     return DailyChallengeEntry.objects.filter(
         telegram_id=telegram_id, date=date.today()
     ).exists()
 
 
-def complete_daily(telegram_id: int, correct_count: int, score_earned: int) -> dict[str, Any]:
+def complete_daily(telegram_id: int) -> dict[str, Any]:
+    """Kunlik topshiriqni yakunlaydi.
+
+    correct_count va score_earned kliyentdan qabul qilinmaydi —
+    DailyAnswer jadvalidan hisoblanadi.
+    Foydalanuvchi hech bo'lmasa bitta daily javob yubormagan bo'lsa,
+    403 xatosi qaytariladi.
+    """
     from apps.users.repositories import add_score
 
     today = date.today()
 
     if DailyChallengeEntry.objects.filter(telegram_id=telegram_id, date=today).exists():
         raise AppError(409, "Bugun allaqachon yakunlangansiz")
+
+    today_ids = get_today_question_ids()
+    if not today_ids:
+        raise AppError(500, "Bugungi topshiriq topilmadi")
+
+    answers = get_daily_answers(telegram_id)
+    valid_answers = [a for a in answers if a["question_id"] in set(today_ids)]
+
+    if not valid_answers:
+        raise AppError(403, "Savollarni yechmasdan topshiriqni yakunlab bo'lmaydi")
+
+    correct_count = sum(1 for a in valid_answers if a["is_correct"])
+    score_earned = sum(a["points_earned"] for a in valid_answers)
 
     with transaction.atomic():
         streak_obj, _ = UserDailyStreak.objects.select_for_update().get_or_create(

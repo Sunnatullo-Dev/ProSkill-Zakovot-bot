@@ -5,9 +5,7 @@ Qoidalar:
   to'g'ri              → 4s yoki tezroq: 2 ball; 4s dan sekin: 1 ball
   streak bonus         → 3+ ketma-ket to'g'rida: +1 qo'shimcha ball
 
-Cheklovlar (client ma'lumotlariga ishonmaslik):
-  streak_before 0..100 oralig'ida bo'lishi kerak.
-  Agar klient kattaroq qiymat yuborsa, caller tomonida `min(streak, MAX_CLIENT_STREAK)` kesadi.
+streak_before DB'dan o'qiladi — kliyent qiymatiga ishonilmaydi.
 """
 from __future__ import annotations
 

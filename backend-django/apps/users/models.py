@@ -16,6 +16,7 @@ class User(models.Model):
     # yozadi (offline'da ishlashi uchun), ammo qurilmalararo sinxron uchun
     # ushbu maydon manba haqiqat hisoblanadi.
     language = models.CharField(max_length=10, default="uz-latn")
+    current_streak = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

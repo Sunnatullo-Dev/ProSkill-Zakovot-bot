@@ -21,7 +21,7 @@ from rest_framework.response import Response
 from apps.core.decorators import require_auth
 from apps.core.exceptions import AppError
 from apps.questions.repositories import get_question_by_id
-from apps.users.repositories import add_score, deduct_score_if_sufficient
+from apps.users.repositories import add_score, deduct_score_if_sufficient, get_streak, set_streak
 
 from .gemini import check_answer, explain_question, generate_tts
 from .models import TtsCache
@@ -35,11 +35,6 @@ DEFAULT_ANSWER_TIMEOUT_MS = 15_000   # savol darajasida qiymat yo'q bo'lsa
 # Bilet TTS dan OLDIN chiqariladi, shuning uchun server tomonidagi
 # o'lchangan vaqt: TTS_dur + savol_vaqti. 10s xavfsiz marja.
 TIMEOUT_GRACE_MS          = 10_000
-
-# Streak limit: klient yuborgan streak qiymatiga ishonmaymiz —
-# faqat bonus hisoblashda ishlatamiz (max +1 ball ta'sir qiladi).
-# 100 dan katta qiymatlarni kesib tashlaymiz.
-MAX_CLIENT_STREAK = 100
 
 VALID_BETS = frozenset({5, 10, 20, 50})
 
@@ -117,13 +112,7 @@ def submit_answer(request):
         user_answer_raw = ""
     user_answer = user_answer_raw.strip()
 
-    streak_raw = body.get("streak", 0)
-    try:
-        # MAX_CLIENT_STREAK chegarasi: klient streak ni oshirib +1 bonus
-        # olmasligi uchun. 100 dan katta qiymatlar kesiladi.
-        streak_before = max(0, min(int(streak_raw), MAX_CLIENT_STREAK))
-    except (TypeError, ValueError):
-        raise AppError(400, "streak noto'g'ri")
+    streak_before = get_streak(user.telegram_id)
 
     # Svoyak bet — ixtiyoriy. Faqat 0 | 5 | 10 | 20 | 50 qabul qilinadi.
     bet_amount = 0
@@ -161,7 +150,7 @@ def submit_answer(request):
     # Savol darajasidagi vaqt limiti — NULL bo'lsa standart 15s ishlatiladi
     question_time_limit_ms = int(question.get("timeLimitSeconds") or 15) * 1000
     if time_taken_ms > question_time_limit_ms + TIMEOUT_GRACE_MS:
-        # Bet yechilmagan holda "incorrect" qaytaramiz
+        set_streak(user.telegram_id, 0)
         return _timeout_response(question["correctAnswer"])
 
     # ── 4. Bet yechish — vaqt o'tmaganligiga ishonch hosil bo'lgandan keyin ──
@@ -179,6 +168,7 @@ def submit_answer(request):
         all_options = [question["correctAnswer"], *wrong_answers]
         valid_set = {opt.strip().casefold() for opt in all_options if isinstance(opt, str)}
         if user_answer.casefold() not in valid_set:
+            set_streak(user.telegram_id, 0)
             return _invalid_option_response(question["correctAnswer"], bet_amount)
         grading = exact_match_grade(user_answer, question["correctAnswer"])
     else:
@@ -201,13 +191,20 @@ def submit_answer(request):
     if bet_amount > 0:
         bet_won = bet_amount if grading.status == "correct" else -bet_amount
 
-    # ── 7. Ball yozish — bitta atomik tranzaksiyada ───────────────────────────
-    # Normal ball va bet mukofotini bitta DB yazuvida qo'shamiz:
-    # bu oraliqda boshqa thread noto'g'ri qiymat ko'rmasligini kafolatlaydi.
+    # ── 7. Ball va streak yozish — bitta atomik tranzaksiyada ───────────────────
     total_add = score.points_earned + (2 * bet_amount if bet_won > 0 else 0)
-    if total_add > 0:
-        with transaction.atomic():
+    with transaction.atomic():
+        if total_add > 0:
             add_score(user.telegram_id, total_add)
+        set_streak(user.telegram_id, score.streak_after)
+
+    # ── 8. Daily javobni yozish (bu savol daily topshiriqqa tegishli bo'lsa) ───
+    _maybe_record_daily_answer(
+        telegram_id=user.telegram_id,
+        question_id=payload.question_id,
+        is_correct=(grading.status == "correct"),
+        points_earned=score.points_earned,
+    )
 
     return Response({
         "status": grading.status,
@@ -279,3 +276,18 @@ def reveal_answer(request):
 
     explanation = explain_question(question["text"], question["correctAnswer"])
     return Response({"correctAnswer": question["correctAnswer"], "explanation": explanation})
+
+
+def _maybe_record_daily_answer(
+    telegram_id: int,
+    question_id: str,
+    is_correct: bool,
+    points_earned: int,
+) -> None:
+    """Savol bugungi daily topshiriqqa tegishli bo'lsa DailyAnswer'ga yozadi."""
+    try:
+        from apps.daily.repositories import get_today_question_ids, record_daily_answer
+        if question_id in get_today_question_ids():
+            record_daily_answer(telegram_id, question_id, is_correct, points_earned)
+    except Exception:
+        pass
