@@ -250,8 +250,10 @@ export default function QuestionCard({
     <div
       className="animate-fadeInUp"
       style={{
-        // `100dvh` — klaviatura ochilganda viewport bilan birga kichrayadi
-        minHeight: "100dvh",
+        // `100dvh` — klaviatura ochilganda viewport bilan birga kichrayadi.
+        // `height` (not just minHeight) creates a true bounded container so
+        // content can never push the page taller than the viewport.
+        height: "100dvh",
         display: "flex",
         flexDirection: "column",
         background: "var(--bg)",
@@ -262,7 +264,8 @@ export default function QuestionCard({
         paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
         maxWidth: "430px",
         margin: "0 auto",
-        boxSizing: "border-box"
+        boxSizing: "border-box",
+        overflow: "hidden"
       }}
     >
       <div
@@ -359,23 +362,26 @@ export default function QuestionCard({
           alignItems: "center",
           justifyContent: "flex-start",
           paddingTop: "12px",
-          minHeight: 0   // flex child'ni qisqartirish uchun muhim
+          minHeight: 0,   // flex child'ni qisqartirish uchun muhim
+          overflow: "hidden"  // savol kartasi bu chegaradan tashqariga chiqa olmaydi
         }}
       >
-        {/* ── Savol kartasi — maksimal balandlik + scroll ── */}
+        {/* ── Savol kartasi — flex:1 bilan qolgan joyni egallaydi, zarur bo'lsa ichida scroll ── */}
         <div
           style={{
             width: "100%",
             background: "var(--card)",
             border: "1px solid var(--border)",
             borderRadius: "20px",
-            marginBottom: "14px",
+            marginBottom: "10px",
             display: "flex",
             flexDirection: "column",
-            // Uzoq savollar ekrandan chiqmasin: maksimal 38% viewport
-            maxHeight: "38dvh",
-            minHeight: "72px",
-            flexShrink: 0
+            // flex:1 + minHeight:0 — bu karta mavjud bo'sh joyni egallaydi.
+            // Timer va javob elementlari flexShrink:0 bo'lgani uchun ular
+            // doim ko'rinadi; karta qisqartiriladi (shrink), ichidagi matn scroll bo'ladi.
+            flex: 1,
+            minHeight: "64px",
+            overflow: "hidden"
           }}
         >
           {/* Scrollable matn qismi */}
@@ -483,7 +489,7 @@ export default function QuestionCard({
         </div>
 
         {/* ── Timer doirasi ── */}
-        <svg height="72" style={{ marginBottom: "14px", flexShrink: 0 }} viewBox="0 0 80 80" width="72">
+        <svg height="60" style={{ marginBottom: "8px", flexShrink: 0 }} viewBox="0 0 80 80" width="60">
           <circle cx="40" cy="40" fill="none" r="34" stroke="var(--border)" strokeWidth="6" />
           <circle
             cx="40"
@@ -577,7 +583,7 @@ export default function QuestionCard({
             Ma'lumot yuklanmoqda...
           </div>
         ) : isMultipleChoice ? (
-          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "8px", flexShrink: 0 }}>
             {options.map((option, index) => {
               const isSelected = selectedOption === option;
               const disabled = isSubmitting || selectedOption !== null;
@@ -589,7 +595,7 @@ export default function QuestionCard({
                   onClick={() => handlePickOption(option)}
                   style={{
                     width: "100%",
-                    padding: "11px 14px",
+                    padding: "9px 12px",
                     borderRadius: "14px",
                     border: isSelected ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
                     background: isSelected ? "rgba(77,166,255,0.16)" : "var(--card)",
@@ -647,7 +653,7 @@ export default function QuestionCard({
             </button>
           </div>
         ) : (
-          <>
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", flexShrink: 0 }}>
             <input
               placeholder="Javobingizni yozing..."
               style={{
@@ -712,8 +718,8 @@ export default function QuestionCard({
             <button
               style={{
                 width: "100%",
-                marginTop: "10px",
-                padding: "11px",
+                marginTop: "8px",
+                padding: "9px",
                 background: "transparent",
                 border: "none",
                 fontSize: "13px",
@@ -727,7 +733,7 @@ export default function QuestionCard({
             >
               Javobni bilmayman
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>
