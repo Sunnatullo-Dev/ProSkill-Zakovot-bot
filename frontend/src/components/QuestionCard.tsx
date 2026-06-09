@@ -250,27 +250,27 @@ export default function QuestionCard({
     <div
       className="animate-fadeInUp"
       style={{
-        // `100dvh` (dynamic viewport height) — klaviatura ochilganda viewport
-        // bilan birga kichrayadi, shuning uchun pastdagi tugma har doim
-        // ko'rinadigan joyda qoladi. Eski `100vh` qattiq qiymat edi, klaviatura
-        // ochilganda quyi qism ko'rinmay qolar edi.
+        // `100dvh` — klaviatura ochilganda viewport bilan birga kichrayadi
         minHeight: "100dvh",
-        // Pastki padding klaviatura/safe-area uchun marja qoldiradi.
-        paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
         display: "flex",
         flexDirection: "column",
         background: "var(--bg)",
-        padding: "20px",
+        paddingTop: "16px",
+        paddingLeft: "16px",
+        paddingRight: "16px",
+        // safe-area: notch va home-indicator uchun qo'shimcha joy
+        paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
         maxWidth: "430px",
-        margin: "0 auto"
+        margin: "0 auto",
+        boxSizing: "border-box"
       }}
     >
       <div
         style={{
-          height: "4px",
+          height: "3px",
           background: "var(--border)",
           borderRadius: "2px",
-          marginBottom: "16px",
+          marginBottom: "10px",
           overflow: "hidden"
         }}
       >
@@ -290,7 +290,7 @@ export default function QuestionCard({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "16px"
+          marginBottom: "10px"
         }}
       >
         <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -358,29 +358,56 @@ export default function QuestionCard({
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "flex-start",
-          paddingTop: "24px"
+          paddingTop: "12px",
+          minHeight: 0   // flex child'ni qisqartirish uchun muhim
         }}
       >
+        {/* ── Savol kartasi — maksimal balandlik + scroll ── */}
         <div
           style={{
             width: "100%",
             background: "var(--card)",
             border: "1px solid var(--border)",
             borderRadius: "20px",
-            padding: "28px 24px 16px",
-            fontSize: "20px",
-            fontWeight: 600,
-            color: "var(--text)",
-            textAlign: "center",
-            lineHeight: 1.6,
-            userSelect: "none",
-            WebkitUserSelect: "none",
-            marginBottom: "24px",
-            position: "relative"
+            marginBottom: "14px",
+            display: "flex",
+            flexDirection: "column",
+            // Uzoq savollar ekrandan chiqmasin: maksimal 38% viewport
+            maxHeight: "38dvh",
+            minHeight: "72px",
+            flexShrink: 0
           }}
         >
-          {question.text}
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "8px", marginTop: "14px" }}>
+          {/* Scrollable matn qismi */}
+          <div
+            style={{
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              flex: 1,
+              padding: "16px 18px 0",
+              fontSize: "15px",
+              fontWeight: 600,
+              color: "var(--text)",
+              textAlign: "center",
+              lineHeight: 1.55,
+              userSelect: "none",
+              WebkitUserSelect: "none",
+            }}
+          >
+            {question.text}
+          </div>
+
+          {/* TTS tugmalari — doim kartaning pastida ko'rinadi */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 14px 12px",
+              flexShrink: 0
+            }}
+          >
             {/* Ovoz o'chirish/yoqish toggle */}
             <button
               type="button"
@@ -389,7 +416,6 @@ export default function QuestionCard({
                 setTtsIsMuted((prev) => {
                   const next = !prev;
                   try { localStorage.setItem("zakovat:tts:muted", next ? "1" : "0"); } catch { /* ignore */ }
-                  // Agar o'chirilsa — hozir o'ynalyotgan audio to'xtasin
                   if (next && activeSourceRef.current) {
                     try { activeSourceRef.current.stop(); } catch { /* ignore */ }
                     setIsPlayingTTS(false);
@@ -398,8 +424,8 @@ export default function QuestionCard({
                 });
               }}
               style={{
-                width: "36px",
-                height: "36px",
+                width: "32px",
+                height: "32px",
                 borderRadius: "50%",
                 border: `1.5px solid ${ttsIsMuted ? "var(--error)" : "var(--border)"}`,
                 background: ttsIsMuted ? "rgba(239,68,68,0.12)" : "var(--bg)",
@@ -408,7 +434,7 @@ export default function QuestionCard({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "16px",
+                fontSize: "14px",
                 transition: "all 0.2s",
                 flexShrink: 0
               }}
@@ -421,8 +447,8 @@ export default function QuestionCard({
               disabled={isLoadingTTS || !hasAudio || ttsIsMuted}
               onClick={() => playBuffer()}
               style={{
-                width: "36px",
-                height: "36px",
+                width: "32px",
+                height: "32px",
                 borderRadius: "50%",
                 border: `1.5px solid ${isPlayingTTS ? "var(--accent)" : "var(--border)"}`,
                 background: isPlayingTTS ? "rgba(77,166,255,0.15)" : "var(--bg)",
@@ -439,26 +465,25 @@ export default function QuestionCard({
               {isLoadingTTS ? (
                 <svg
                   fill="none"
-                  height="15"
+                  height="13"
                   stroke="currentColor"
                   strokeLinecap="round"
                   strokeWidth="2"
                   viewBox="0 0 24 24"
-                  width="15"
-                  style={{
-                    animation: "spin 1s linear infinite"
-                  }}
+                  width="13"
+                  style={{ animation: "spin 1s linear infinite" }}
                 >
                   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                 </svg>
               ) : (
-                <SpeakerIcon size={15} />
+                <SpeakerIcon size={13} />
               )}
             </button>
           </div>
         </div>
 
-        <svg height="80" style={{ marginBottom: "24px" }} viewBox="0 0 80 80" width="80">
+        {/* ── Timer doirasi ── */}
+        <svg height="72" style={{ marginBottom: "14px", flexShrink: 0 }} viewBox="0 0 80 80" width="72">
           <circle cx="40" cy="40" fill="none" r="34" stroke="var(--border)" strokeWidth="6" />
           <circle
             cx="40"
@@ -476,7 +501,7 @@ export default function QuestionCard({
           <text
             dominantBaseline="central"
             fill={timerColor}
-            fontSize="22"
+            fontSize="20"
             fontWeight="800"
             style={{ transition: "fill 0.5s" }}
             textAnchor="middle"
@@ -552,7 +577,7 @@ export default function QuestionCard({
             Ma'lumot yuklanmoqda...
           </div>
         ) : isMultipleChoice ? (
-          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
             {options.map((option, index) => {
               const isSelected = selectedOption === option;
               const disabled = isSubmitting || selectedOption !== null;
@@ -564,33 +589,33 @@ export default function QuestionCard({
                   onClick={() => handlePickOption(option)}
                   style={{
                     width: "100%",
-                    padding: "14px 16px",
+                    padding: "11px 14px",
                     borderRadius: "14px",
                     border: isSelected ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
                     background: isSelected ? "rgba(77,166,255,0.16)" : "var(--card)",
                     color: "var(--text)",
-                    fontSize: "15px",
-                    fontWeight: 700,
+                    fontSize: "14px",
+                    fontWeight: 600,
                     textAlign: "left",
                     cursor: disabled ? "not-allowed" : "pointer",
                     opacity: disabled && !isSelected ? 0.55 : 1,
                     display: "flex",
                     alignItems: "center",
-                    gap: "12px",
+                    gap: "10px",
                     transition: "all 0.15s"
                   }}
                 >
                   <span
                     style={{
-                      width: "32px",
-                      height: "32px",
+                      width: "28px",
+                      height: "28px",
                       borderRadius: "50%",
                       background: isSelected ? "var(--accent)" : "rgba(255,255,255,0.05)",
                       color: isSelected ? "white" : "var(--accent)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "14px",
+                      fontSize: "13px",
                       fontWeight: 900,
                       flex: "0 0 auto"
                     }}
@@ -604,8 +629,8 @@ export default function QuestionCard({
             <button
               style={{
                 width: "100%",
-                marginTop: "8px",
-                padding: "11px",
+                marginTop: "4px",
+                padding: "9px",
                 background: "transparent",
                 border: "none",
                 fontSize: "13px",
@@ -627,15 +652,16 @@ export default function QuestionCard({
               placeholder="Javobingizni yozing..."
               style={{
                 width: "100%",
-                padding: "16px 18px",
+                padding: "13px 16px",
                 background: "var(--card)",
                 border: "1.5px solid var(--border)",
                 borderRadius: "14px",
-                fontSize: "16px",
+                fontSize: "15px",
                 color: "var(--text)",
                 outline: "none",
-                marginBottom: "12px",
-                transition: "border-color 0.2s, box-shadow 0.2s"
+                marginBottom: "10px",
+                transition: "border-color 0.2s, box-shadow 0.2s",
+                boxSizing: "border-box"
               }}
               type="text"
               value={answer}
@@ -667,11 +693,11 @@ export default function QuestionCard({
               disabled={!answer.trim()}
               style={{
                 width: "100%",
-                padding: "15px",
+                padding: "13px",
                 background: answer.trim() ? "var(--accent)" : "var(--border)",
                 border: "none",
                 borderRadius: "14px",
-                fontSize: "16px",
+                fontSize: "15px",
                 fontWeight: 700,
                 color: "white",
                 cursor: answer.trim() ? "pointer" : "not-allowed",
