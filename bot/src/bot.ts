@@ -10,12 +10,43 @@ const SUPER_ADMIN_ID = Number(process.env.ADMIN_ID || "0");
 const MINI_APP_URL = process.env.MINI_APP_URL || "";
 const BACKEND_URL = (process.env.BACKEND_URL || "").replace(/\/$/, "");
 
-// Majburiy obuna kanali.
-//   REQUIRED_CHANNEL      — getChatMember uchun: "@kanalusername" yoki "-100XXXXXXXXX"
-//   REQUIRED_CHANNEL_LINK — foydalanuvchiga ko'rsatiladigan havola (https://t.me/...)
-// Agar bo'sh qoldirilsa, obuna tekshiruvi o'chiriladi.
-const REQUIRED_CHANNEL      = (process.env.REQUIRED_CHANNEL      || "").trim();
-const REQUIRED_CHANNEL_LINK = (process.env.REQUIRED_CHANNEL_LINK || "").trim();
+// Majburiy kanallar — backenddan dinamik yuklanadi.
+// REQUIRED_CHANNEL / REQUIRED_CHANNEL_LINK env o'zgaruvchilari endi ishlatilmaydi.
+interface RequiredChannel {
+  channelId: string;
+  channelTitle: string;
+  channelUrl: string;
+}
+
+let cachedChannels: RequiredChannel[] = [];
+let channelsCachedAt = 0;
+const CHANNELS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 daqiqa
+
+async function getRequiredChannels(): Promise<RequiredChannel[]> {
+  const now = Date.now();
+  if (now - channelsCachedAt < CHANNELS_CACHE_TTL_MS && cachedChannels.length >= 0 && channelsCachedAt > 0) {
+    return cachedChannels;
+  }
+  try {
+    const data = await apiGet("/api/channels/");
+    const channels: RequiredChannel[] = (data.channels ?? []).map((ch: any) => ({
+      channelId: ch.channelId,
+      channelTitle: ch.channelTitle,
+      channelUrl: ch.channelUrl,
+    }));
+    cachedChannels = channels;
+    channelsCachedAt = now;
+    return channels;
+  } catch (e: any) {
+    console.warn("[bot] Majburiy kanallar yuklanmadi:", e?.message);
+    // Xato bo'lsa — eski keshni yoki bo'sh ro'yxatni qaytaramiz
+    return cachedChannels;
+  }
+}
+
+function invalidateChannelsCache() {
+  channelsCachedAt = 0;
+}
 
 // Backendning admin API'siga kirish kaliti. Tartibi:
 //   1) BOT_INTERNAL_API_KEY — afzal (alohida server-internal kalit)
@@ -261,36 +292,49 @@ const bot = new Bot(token);
 
 // ─── Subscription check ───────────────────────────────────────────────────────
 
-/** Foydalanuvchi REQUIRED_CHANNEL ga obuna bo'lganini tekshiradi.
- *  Kanal sozlanmagan bo'lsa — har doim true qaytaradi (tekshiruv o'chirilgan). */
-async function isSubscribed(userId: number): Promise<boolean> {
-  if (!REQUIRED_CHANNEL) return true;
+/** Foydalanuvchi bitta kanalga obuna ekanligini tekshiradi. */
+async function checkOneChannel(userId: number, channelId: string): Promise<boolean> {
   try {
-    const member = await bot.api.getChatMember(REQUIRED_CHANNEL, userId);
+    const member = await bot.api.getChatMember(channelId, userId);
     return ["creator", "administrator", "member", "restricted"].includes(member.status);
   } catch {
-    // Kanal topilmasa yoki bot admin emas bo'lsa — o'tkazib yuboramiz
+    // Kanal topilmasa yoki bot kanalda emas — o'tkazib yuboramiz (fail-open)
     return true;
   }
 }
 
-/** Kanalga ulanish tugmasi bilan "Obuna bo'ling" xabarini yuboradi. */
-async function sendSubscribePrompt(ctx: any): Promise<void> {
-  // Havola: explicit REQUIRED_CHANNEL_LINK yoki @username dan hosil qilinadi
-  const link =
-    REQUIRED_CHANNEL_LINK ||
-    (REQUIRED_CHANNEL.startsWith("@")
-      ? `https://t.me/${REQUIRED_CHANNEL.slice(1)}`
-      : `https://t.me/+placeholder`);  // ID bilan foydalanilsa REQUIRED_CHANNEL_LINK majburiy
+/** Foydalanuvchi barcha majburiy kanallarga obuna ekanligini tekshiradi.
+ *  Kanal ro'yxati bo'sh bo'lsa — true qaytaradi. */
+async function checkAllSubscriptions(userId: number): Promise<{
+  allSubscribed: boolean;
+  unsubscribed: RequiredChannel[];
+}> {
+  const channels = await getRequiredChannels();
+  if (channels.length === 0) return { allSubscribed: true, unsubscribed: [] };
+
+  const unsubscribed: RequiredChannel[] = [];
+  for (const ch of channels) {
+    const ok = await checkOneChannel(userId, ch.channelId);
+    if (!ok) unsubscribed.push(ch);
+  }
+  return { allSubscribed: unsubscribed.length === 0, unsubscribed };
+}
+
+/** Obuna bo'linmagan kanallar uchun inline keyboard bilan xabar yuboradi. */
+async function sendSubscribePrompt(ctx: any, unsubscribed: RequiredChannel[]): Promise<void> {
+  const kb = new InlineKeyboard();
+  for (const ch of unsubscribed) {
+    kb.row().url(`📢 ${ch.channelTitle}`, ch.channelUrl);
+  }
+  kb.row().text("✅ Tekshirish", "check_sub");
 
   await ctx.reply(
-    "📢 *Zakovat O'yiniga kirish uchun avval kanalga obuna bo'ling!*\n\n" +
-    "Obuna bo'lgach *\"✅ Obuna bo'ldim\"* tugmasini bosing.",
+    "📢 *Zakovat O'yiniga kirish uchun quyidagi kanallarga obuna bo'ling!*\n\n" +
+    unsubscribed.map((ch) => `• ${ch.channelTitle}`).join("\n") +
+    "\n\nObuna bo'lgach *\"✅ Tekshirish\"* tugmasini bosing.",
     {
       parse_mode: "Markdown",
-      reply_markup: new InlineKeyboard()
-        .row().url("📢 Kanalga o'tish", link)
-        .row().text("✅ Obuna bo'ldim", "check_sub"),
+      reply_markup: kb,
     }
   );
 }
@@ -329,9 +373,12 @@ bot.command("start", async ctx => {
   clearState(uid);
 
   // Kanal obunasini tekshirish — admin bo'lsa tekshirmaymiz
-  if (!isAdmin(uid) && REQUIRED_CHANNEL && !(await isSubscribed(uid))) {
-    await sendSubscribePrompt(ctx);
-    return;
+  if (!isAdmin(uid)) {
+    const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);
+    if (!allSubscribed) {
+      await sendSubscribePrompt(ctx, unsubscribed);
+      return;
+    }
   }
 
   await sendWelcome(ctx);
@@ -764,16 +811,31 @@ bot.on("callback_query:data", async ctx => {
 
   // ✅ Obuna tekshiruvi — har qanday foydalanuvchi bosa oladi (admin chekisiz)
   if (data === "check_sub") {
-    if (await isSubscribed(uid)) {
+    const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);
+    if (allSubscribed) {
       await ctx.answerCallbackQuery({ text: "✅ Rahmat! Xush kelibsiz!", show_alert: false });
-      // Eski "obuna bo'ling" xabarini o'chiramiz
+      // Eski "obuna bo'ling" xabarini yangilaymiz yoki o'chiramiz
       try { await ctx.deleteMessage(); } catch { /* e'tiborsiz */ }
       await sendWelcome(ctx);
     } else {
       await ctx.answerCallbackQuery({
-        text: "❌ Siz hali kanalga obuna bo'lmadingiz. Obuna bo'lib, qaytadan bosing.",
+        text: `❌ Hali ${unsubscribed.length} ta kanalga obuna bo'lmadingiz.`,
         show_alert: true,
       });
+      // Xabarni yangi ro'yxat bilan yangilaymiz (yangi kanallar qo'shilgan bo'lishi mumkin)
+      try {
+        const kb = new InlineKeyboard();
+        for (const ch of unsubscribed) {
+          kb.row().url(`📢 ${ch.channelTitle}`, ch.channelUrl);
+        }
+        kb.row().text("✅ Tekshirish", "check_sub");
+        await ctx.editMessageText(
+          "📢 *Zakovat O'yiniga kirish uchun quyidagi kanallarga obuna bo'ling!*\n\n" +
+          unsubscribed.map((ch) => `• ${ch.channelTitle}`).join("\n") +
+          "\n\nObuna bo'lgach *\"✅ Tekshirish\"* tugmasini bosing.",
+          { parse_mode: "Markdown", reply_markup: kb }
+        );
+      } catch { /* xabarni o'zgartirish imkoni bo'lmasa — jim o'tamiz */ }
     }
     return;
   }

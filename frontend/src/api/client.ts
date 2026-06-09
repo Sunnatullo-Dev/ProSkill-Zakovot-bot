@@ -771,10 +771,8 @@ export async function adminListChannels(): Promise<RequiredChannel[]> {
 
 /** Admin: yangi kanal qo'shish. */
 export async function adminAddChannel(data: {
-  channelId: string;
-  channelUsername?: string;
+  channelUsername: string;
   channelTitle: string;
-  channelUrl: string;
 }): Promise<ApiResult<{ ok: boolean; channel: RequiredChannel }>> {
   return requestResult<{ ok: boolean; channel: RequiredChannel }>("/admin/channels", {
     method: "POST",
