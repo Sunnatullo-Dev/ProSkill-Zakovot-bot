@@ -193,17 +193,19 @@ TEMPLATES = [
     },
 ]
 
-# Render Disk yoki lokal SQLite
-_db_path = os.environ.get("DATABASE_PATH", str(BASE_DIR / "db.sqlite3"))
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": _db_path,
-        "OPTIONS": {
-            "timeout": 20,
-        },
+_database_url = os.environ.get("DATABASE_URL", "")
+if _database_url:
+    import dj_database_url
+    DATABASES = {"default": dj_database_url.parse(_database_url, conn_max_age=600)}
+else:
+    _db_path = os.environ.get("DATABASE_PATH", str(BASE_DIR / "db.sqlite3"))
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": _db_path,
+            "OPTIONS": {"timeout": 20},
+        }
     }
-}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
