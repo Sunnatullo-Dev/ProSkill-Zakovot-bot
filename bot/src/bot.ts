@@ -294,32 +294,28 @@ const bot = new Bot(token);
 
 // ─── Subscription check ───────────────────────────────────────────────────────
 
-/** Foydalanuvchi bitta kanalga obuna ekanligini tekshiradi. */
-async function checkOneChannel(userId: number, channelId: string): Promise<boolean> {
-  try {
-    const member = await bot.api.getChatMember(channelId, userId);
-    return ["creator", "administrator", "member", "restricted"].includes(member.status);
-  } catch {
-    // Kanal topilmasa yoki bot kanalda emas — o'tkazib yuboramiz (fail-open)
-    return true;
-  }
-}
-
-/** Foydalanuvchi barcha majburiy kanallarga obuna ekanligini tekshiradi.
- *  Kanal ro'yxati bo'sh bo'lsa — true qaytaradi. */
+/** Foydalanuvchi barcha majburiy kanallarga obuna ekanligini backend orqali tekshiradi.
+ *  Backend bir xil getChatMember mantiqini ishlatadi va xatolarni to'g'ri boshqaradi. */
 async function checkAllSubscriptions(userId: number): Promise<{
   allSubscribed: boolean;
   unsubscribed: RequiredChannel[];
 }> {
-  const channels = await getRequiredChannels();
-  if (channels.length === 0) return { allSubscribed: true, unsubscribed: [] };
-
-  const unsubscribed: RequiredChannel[] = [];
-  for (const ch of channels) {
-    const ok = await checkOneChannel(userId, ch.channelId);
-    if (!ok) unsubscribed.push(ch);
+  try {
+    const data = await apiGet(`/api/channels/check/${userId}`);
+    const allSubscribed: boolean = data.allSubscribed ?? true;
+    const unsubscribed: RequiredChannel[] = (data.channels ?? [])
+      .filter((ch: any) => !ch.subscribed)
+      .map((ch: any) => ({
+        channelId: ch.channelId,
+        channelTitle: ch.channelTitle,
+        channelUrl: ch.channelUrl,
+      }));
+    return { allSubscribed, unsubscribed };
+  } catch (e: any) {
+    console.warn("[bot] Obuna tekshiruvi xatosi:", e?.message);
+    // Backend yetib bo'lmasa — fail-open (bloklashdan saqlaymiz)
+    return { allSubscribed: true, unsubscribed: [] };
   }
-  return { allSubscribed: unsubscribed.length === 0, unsubscribed };
 }
 
 /** Obuna bo'linmagan kanallar uchun inline keyboard bilan xabar yuboradi. */

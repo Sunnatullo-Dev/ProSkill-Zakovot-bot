@@ -4,7 +4,7 @@ from __future__ import annotations
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from apps.core.decorators import require_auth
+from apps.core.decorators import require_admin, require_auth
 from . import repositories as repo
 
 
@@ -30,5 +30,16 @@ def check_subscriptions(request):
         }
     """
     telegram_id = request.current_user.telegram_id
+    result = repo.check_user_subscriptions(telegram_id)
+    return Response(result)
+
+
+@api_view(["GET"])
+@require_admin
+def bot_check_subscriptions(request, telegram_id: int):
+    """Bot tomonidan chaqiriladigan endpoint — berilgan foydalanuvchi obunasini tekshirish.
+
+    Auth: `Authorization: bot <BOT_INTERNAL_API_KEY>`
+    """
     result = repo.check_user_subscriptions(telegram_id)
     return Response(result)
