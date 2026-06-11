@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const DEFAULT_SECONDS = 15;
+const DEFAULT_SECONDS = 90;
 const TICK_INTERVAL_MS = 250; // tez yangilanish, lekin Date.now() bilan drift'siz
 
 /**

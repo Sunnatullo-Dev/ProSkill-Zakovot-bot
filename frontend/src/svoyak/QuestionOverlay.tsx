@@ -3,7 +3,7 @@
  *
  * Spec'dan:
  *   - Minimalizm: faqat markazda chiroyli savol matni (Montserrat)
- *   - Taymer vizualizatsiyasi: tepada chiziqli progress-bar (15s)
+ *   - Taymer vizualizatsiyasi: tepada chiziqli progress-bar (90s)
  *   - Mavzu va ball qiymati ham ko'rinadi
  *
  * Bu komponent BOARD ekrani ustiga overlay sifatida ko'rinadi
@@ -24,7 +24,7 @@ type Props = {
   questionText: string;
   /** Round boshlangan vaqt (server ISO timestamp) — taymerni ushbu vaqtdan hisoblash. */
   startedAt?: string | null;
-  /** Umumiy vaqt limiti soniyalarda (default: 15). */
+  /** Umumiy vaqt limiti soniyalarda (default: 90). */
   timeLimitSeconds?: number;
   /** Ostida ko'rinadigan slot (BUZZ tugma, javob input va h.k.). */
   children?: ReactNode;
@@ -36,7 +36,7 @@ type Props = {
   visible?: boolean;
 };
 
-const TIMER_DEFAULT_SECONDS = 15;
+const TIMER_DEFAULT_SECONDS = 90;
 
 const PAGE: CSSProperties = {
   position: "fixed",
