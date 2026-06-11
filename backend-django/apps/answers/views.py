@@ -148,7 +148,7 @@ def submit_answer(request):
     time_taken_ms = max(0, now_ms - payload.issued_at_ms)
 
     # Savol darajasidagi vaqt limiti — NULL bo'lsa standart 15s ishlatiladi
-    question_time_limit_ms = int(question.get("timeLimitSeconds") or 15) * 1000
+    question_time_limit_ms = int(question.get("timeLimitSeconds") or 90) * 1000
     if time_taken_ms > question_time_limit_ms + TIMEOUT_GRACE_MS:
         set_streak(user.telegram_id, 0)
         return _timeout_response(question["correctAnswer"])
@@ -189,7 +189,7 @@ def submit_answer(request):
     #         noto'g'ri/partial → net -bet_amount (yechilgan, qaytarilmaydi)
     bet_won = 0
     if bet_amount > 0:
-        bet_won = bet_amount if grading.status == "correct" else -bet_amount
+        bet_won = bet_amount if grading.status in ("correct", "partial") else -bet_amount
 
     # ── 7. Ball va streak yozish — bitta atomik tranzaksiyada ───────────────────
     # Server-side cap: bir javob uchun max 3 ball (tez+streak bonus), bet bundan tashqari.
@@ -210,7 +210,7 @@ def submit_answer(request):
 
     return Response({
         "status": grading.status,
-        "isCorrect": grading.status == "correct",
+        "isCorrect": grading.status in ("correct", "partial"),
         "explanation": grading.explanation,
         "correctAnswer": question["correctAnswer"],
         "pointsEarned": capped_points,

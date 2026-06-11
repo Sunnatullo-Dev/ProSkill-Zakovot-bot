@@ -37,17 +37,18 @@ class ScoreResult:
 def calculate_answer_score(inp: ScoreInput) -> ScoreResult:
     """Ball va yangi streak'ni hisoblaydi.
 
-    Partial va incorrect uchun:  0 ball, streak = 0
-    Correct uchun:
-      base   = 2 (tez) | 1 (oddiy)
-      bonus  = +1 agar streak_after >= 3
-      total  = base + bonus
-      streak_after = streak_before + 1
+    incorrect:  0 ball, streak = 0
+    partial:    1 ball (fast bonus yo'q), streak oshadi
+    correct:    2 ball (tez) | 1 ball (oddiy) + streak bonus
     """
-    if inp.status != "correct":
+    if inp.status == "incorrect":
         return ScoreResult(points_earned=0, streak_after=0)
 
-    base = FAST_POINTS if inp.time_taken_ms <= FAST_ANSWER_MS else BASE_POINTS
     streak_after = inp.streak_before + 1
     bonus = STREAK_BONUS if streak_after >= STREAK_THRESHOLD else 0
+
+    if inp.status == "partial":
+        return ScoreResult(points_earned=BASE_POINTS + bonus, streak_after=streak_after)
+
+    base = FAST_POINTS if inp.time_taken_ms <= FAST_ANSWER_MS else BASE_POINTS
     return ScoreResult(points_earned=base + bonus, streak_after=streak_after)
