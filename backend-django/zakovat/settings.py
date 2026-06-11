@@ -27,6 +27,16 @@ def env_list(name: str, default: str = "") -> list[str]:
 NODE_ENV = os.environ.get("NODE_ENV", "development").lower()
 IS_PRODUCTION = NODE_ENV == "production"
 
+# Guest auth — faqat ALLOW_GUEST_AUTH=true bo'lsa ruxsat etiladi.
+# Production'da bu o'rnatilgan bo'lsa — xavfsizlik xatosi, darhol to'xtatamiz.
+ALLOW_GUEST_AUTH = os.environ.get("ALLOW_GUEST_AUTH", "").lower() == "true"
+if IS_PRODUCTION and ALLOW_GUEST_AUTH:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "ALLOW_GUEST_AUTH=true production'da ishlatib bo'lmaydi! "
+        "Bu sozlamani Render env'dan o'chiring."
+    )
+
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
@@ -280,12 +290,25 @@ TIME_ZONE = "UTC"
 
 PORT = int(os.environ.get("PORT", "3000"))
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "zakovat-ratelimit",
+# Cache backend — REDIS_URL mavjud bo'lsa Redis, aks holda DatabaseCache.
+# DatabaseCache barcha Gunicorn worker'lar o'rtasida umumiy va restartdan
+# keyin ham saqlanadi (LocMemCache har worker'da alohida — replay bug!).
+# Birinchi deploy'dan oldin bir marta ishga tushirish shart:
+#   python manage.py createcachetable
+if os.environ.get("REDIS_URL"):
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": os.environ["REDIS_URL"],
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "django_cache_table",
+        }
+    }
 
 LOGGING = {
     "version": 1,

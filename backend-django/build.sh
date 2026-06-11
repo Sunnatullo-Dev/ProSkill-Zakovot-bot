@@ -27,4 +27,10 @@ echo "[build] === Django collectstatic ==="
 cd ../backend-django
 python manage.py collectstatic --noinput
 
+echo "[build] === Django cache table (DatabaseCache uchun) ==="
+# DatabaseCache backend uchun jadval kerak — bir marta yaratilsa keyingi
+# runlarda ham xavfsiz (idempotent). Redis ishlatilayotgan bo'lsa bu buyruq
+# ham xavfsiz — faqat jadval mavjud emasligini tekshiradi.
+python manage.py createcachetable
+
 echo "[build] === Tugadi ==="

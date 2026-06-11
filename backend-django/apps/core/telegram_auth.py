@@ -43,17 +43,20 @@ def verify_init_data(init_data: str) -> Optional[TelegramUser]:
         return None
 
     if init_data.strip() == "guest":
-        # Guest fallback faqat dev/test rejimda — production'da rad etiladi.
-        # Ism bo'sh — frontend Telegram'dan first_name ko'rsatadi yoki "Foydalanuvchi" placeholder.
-        if getattr(settings, "IS_PRODUCTION", False):
+        # Guest fallback faqat ALLOW_GUEST_AUTH=true bo'lganida ishlaydi.
+        # Production'da bu env var o'rnatilgan bo'lsa settings.py ImproperlyConfigured
+        # tashlaydi — bu yerga yetib kelmaslik kerak.
+        allow_guest = getattr(settings, "ALLOW_GUEST_AUTH", False)
+        if not allow_guest:
             logger.warning(
-                "verify_init_data: 'guest' rejected in production "
-                "(frontend sent guest token; check VITE_API_URL and Mini App URL)"
+                "verify_init_data: 'guest' rad etildi — ALLOW_GUEST_AUTH=true "
+                "o'rnatilmagan. (frontend guest token yubordi; VITE_API_URL va "
+                "Mini App URL'ni tekshiring)"
             )
             return None
-        logger.info(
-            "verify_init_data: guest fallback accepted (dev mode). "
-            "If you see this in production, set NODE_ENV=production on Render."
+        logger.warning(
+            "verify_init_data: DIQQAT — guest auth qabul qilindi! "
+            "ALLOW_GUEST_AUTH=true faqat local dev uchun ishlatilsin."
         )
         return TelegramUser(telegram_id=0, first_name=None, last_name=None, username=None)
 

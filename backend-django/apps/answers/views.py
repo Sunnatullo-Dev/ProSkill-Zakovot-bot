@@ -192,7 +192,9 @@ def submit_answer(request):
         bet_won = bet_amount if grading.status == "correct" else -bet_amount
 
     # ── 7. Ball va streak yozish — bitta atomik tranzaksiyada ───────────────────
-    total_add = score.points_earned + (2 * bet_amount if bet_won > 0 else 0)
+    # Server-side cap: bir javob uchun max 3 ball (tez+streak bonus), bet bundan tashqari.
+    capped_points = min(score.points_earned, 3)
+    total_add = capped_points + (2 * bet_amount if bet_won > 0 else 0)
     with transaction.atomic():
         if total_add > 0:
             add_score(user.telegram_id, total_add)
@@ -211,7 +213,7 @@ def submit_answer(request):
         "isCorrect": grading.status == "correct",
         "explanation": grading.explanation,
         "correctAnswer": question["correctAnswer"],
-        "pointsEarned": score.points_earned,
+        "pointsEarned": capped_points,
         "streak": score.streak_after,
         "betAmount": bet_amount,
         "betWon": bet_won,

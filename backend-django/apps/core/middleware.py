@@ -16,9 +16,6 @@ from .telegram_auth import TelegramUser, verify_init_data
 
 logger = logging.getLogger(__name__)
 
-# Bot fallback warning — bir martagina log yozish uchun bayroq.
-_bot_token_fallback_warned = False
-
 
 class TelegramAuthMiddleware:
     def __init__(self, get_response: Callable):
@@ -36,42 +33,24 @@ class TelegramAuthMiddleware:
 
         # Server-internal admin auth: "bot <key>" — Telegram boti serverdagi
         # admin endpoint'larini chaqirishi uchun.
-        #
-        # Backward compat: ikki kalit ham qabul qilinadi (qaysi tekshiruv
-        # mos kelsa). Bu foydalanuvchining bot va backend Render env'larida
-        # qaysi kalit sozlangan bo'lsa ham ishlashini ta'minlaydi:
-        #
-        #   1) BOT_INTERNAL_API_KEY — afzal (alohida server-internal kalit;
-        #      Telegram bot tokeni emas, log'larda ko'rinmaydi)
-        #   2) TELEGRAM_BOT_TOKEN — fallback (eski sozlama yoki migratsiyada)
-        #
-        # Backend ikkalasini ham sinaydi. Bot tokenga qaytganda warning
-        # log yoziladi (xavfsizlik uchun BOT_INTERNAL_API_KEY tavsiya).
+        # BOT_INTERNAL_API_KEY o'rnatilmagan bo'lsa — bot auth ishlamaydi (401).
+        # Bot tokeniga fallback YO'Q: bot tokeni log'larda ko'rinishi mumkin.
         if header.lower().startswith("bot "):
             provided_key = header[4:].strip()
             if not provided_key or not settings.ADMIN_TELEGRAM_IDS:
                 return None
 
             internal_key = getattr(settings, "BOT_INTERNAL_API_KEY", "") or ""
-            bot_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "") or ""
+            if not internal_key:
+                # BOT_INTERNAL_API_KEY sozlanmagan — bot auth ishlamaydi.
+                # Xavfsiz: bot tokeniga hech qachon fallback qilinmaydi.
+                logger.error(
+                    "Bot admin auth rad etildi: BOT_INTERNAL_API_KEY o'rnatilmagan. "
+                    "Render env'ga BOT_INTERNAL_API_KEY qo'ying."
+                )
+                return None
 
-            # 1) Internal kalitni sinash — afzal yo'l
-            if internal_key and hmac.compare_digest(provided_key, internal_key):
-                return _bot_admin_user()
-
-            # 2) Bot tokenga qaytish — FAQAT BOT_INTERNAL_API_KEY sozlanmagan
-            # bo'lsa. Agar internal kalit sozlangan bo'lsa, bot token fallback'i
-            # o'chiriladi: production'da bot tokeni log'larda ko'rinishi mumkin
-            # va uni bilgan har kim admin huquqiga ega bo'lib qolmasligi kerak.
-            if bot_token and not internal_key and hmac.compare_digest(provided_key, bot_token):
-                global _bot_token_fallback_warned
-                if not _bot_token_fallback_warned:
-                    logger.warning(
-                        "Bot admin auth using TELEGRAM_BOT_TOKEN as fallback — "
-                        "set BOT_INTERNAL_API_KEY on BOTH backend and bot for "
-                        "better security (bot token can leak in logs)."
-                    )
-                    _bot_token_fallback_warned = True
+            if hmac.compare_digest(provided_key, internal_key):
                 return _bot_admin_user()
 
             return None

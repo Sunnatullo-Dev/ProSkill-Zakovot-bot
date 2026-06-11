@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 
+from django.core.cache import cache
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -122,6 +123,14 @@ def update_language(request):
 def check_achievements(request):
     """Yutuqlarni hisoblab, yangilarini topadi, bonus ball beradi."""
     user = request.current_user
+
+    # Rate limit: daqiqasiga 10 marta (achievement farming oldini olish)
+    rate_key = f"ach_check:{user.telegram_id}"
+    calls = cache.get(rate_key, 0)
+    if calls >= 10:
+        raise AppError(429, "Juda ko'p so'rov, bir daqiqadan keyin urinib ko'ring")
+    cache.set(rate_key, calls + 1, timeout=60)
+
     stats = get_game_stats(user.telegram_id)
 
     current = repositories.find_by_telegram_id(user.telegram_id)
