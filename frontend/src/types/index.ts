@@ -220,12 +220,15 @@ export type BattleTeamMemberView = {
   firstName: string | null;
   username: string | null;
   answeredCurrentRound: boolean;
+  isCaptain: boolean;
 };
 
 export type BattleTeamView = {
   id: string;
   name: string;
   score: number;
+  /** Jamoa egasining telegram_id si (sardor). */
+  ownerId: number;
   members: BattleTeamMemberView[];
 };
 
@@ -247,6 +250,10 @@ export type BattleRoundView = {
   timeLimitSeconds: number;
   timeRemainingMs: number;
   myAnswered: boolean;
+  /** Challenger jamoa sardori shu roundga javob berganmi. */
+  challengerTeamAnswered?: boolean;
+  /** Opponent jamoa sardori shu roundga javob berganmi. */
+  opponentTeamAnswered?: boolean;
 };
 
 export type BattleState = {
@@ -255,6 +262,8 @@ export type BattleState = {
   challengerTeam: BattleTeamView;
   opponentTeam: BattleTeamView;
   myTeamId: string | null;
+  /** Joriy foydalanuvchi o'z jamoasining sardori (egasi) ekanligini bildiradi. */
+  isCaptain: boolean;
   currentRound: BattleRoundView | null;
   finished: boolean;
   winnerTeamId: string | null;

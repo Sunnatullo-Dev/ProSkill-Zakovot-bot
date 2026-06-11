@@ -104,6 +104,11 @@ function ScoreCard({
 }
 
 function MembersStatus({ team, currentUserId }: { team: BattleTeamView; currentUserId: number }) {
+  // Sardor-asosli rejimda: faqat sardor javob bera oladi.
+  // Sardor javob bersa — jamoa "javob berdi" hisoblanadi.
+  const captain = team.members.find((m) => m.isCaptain) ?? team.members[0];
+  const captainAnswered = captain?.answeredCurrentRound ?? false;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
       <div
@@ -124,15 +129,30 @@ function MembersStatus({ team, currentUserId }: { team: BattleTeamView; currentU
             alignItems: "center",
             justifyContent: "space-between",
             background: "var(--card)",
-            border: "1px solid var(--border)",
+            border: `1px solid ${member.isCaptain ? "rgba(77,166,255,0.3)" : "var(--border)"}`,
             borderRadius: "10px",
             padding: "8px 12px",
             fontSize: "13px"
           }}
         >
-          <span style={{ color: "var(--text)" }}>{memberLabel(member, currentUserId)}</span>
-          <span style={{ color: member.answeredCurrentRound ? "var(--success)" : "var(--muted)", fontWeight: 700 }}>
-            {member.answeredCurrentRound ? "✓" : "..."}
+          <span style={{ color: "var(--text)" }}>
+            {memberLabel(member, currentUserId)}
+            {member.isCaptain ? (
+              <span style={{ fontSize: "10px", color: "var(--accent)", marginLeft: "5px", fontWeight: 700 }}>
+                sardor
+              </span>
+            ) : null}
+          </span>
+          <span
+            style={{
+              color: member.isCaptain
+                ? (captainAnswered ? "var(--success)" : "var(--muted)")
+                : "var(--muted)",
+              fontWeight: 700,
+              opacity: member.isCaptain ? 1 : 0.4
+            }}
+          >
+            {member.isCaptain ? (captainAnswered ? "✓" : "...") : "—"}
           </span>
         </div>
       ))}
@@ -841,7 +861,27 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
         </div>
       ) : null}
 
-      {round && !round.myAnswered ? (
+      {/* Sardor bo'lmagan a'zolar uchun kutish holati */}
+      {round && !state.isCaptain && !round.myAnswered ? (
+        <div
+          style={{
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "14px",
+            padding: "18px 14px",
+            marginBottom: "16px",
+            textAlign: "center"
+          }}
+        >
+          <div style={{ fontSize: "22px", marginBottom: "8px" }}>⏳</div>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text)", marginBottom: "4px" }}>
+            Sardor javob bermoqda...
+          </div>
+          <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+            Faqat sardor (jamoa egasi) javob bera oladi
+          </div>
+        </div>
+      ) : round && state.isCaptain && !round.myAnswered ? (
         <div style={{ marginBottom: "16px" }}>
           {/* A/B/C/D rejimi: aniq 4 ta options bo'lsa tugmalar, aks holda input */}
           {Array.isArray(round.options) && round.options.length === 4 ? (
@@ -1043,7 +1083,9 @@ export default function BattlePage({ battleId, currentUserId, onExit }: BattlePa
             </div>
           ) : null}
           <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
-            Boshqalarni kuting yoki vaqt tugashini kuting
+            {round.challengerTeamAnswered && round.opponentTeamAnswered
+              ? "Ikki jamoa ham javob berdi — keyingi savol..."
+              : "Raqib sardorini kuting..."}
           </div>
         </div>
       ) : null}

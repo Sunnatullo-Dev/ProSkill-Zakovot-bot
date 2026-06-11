@@ -225,6 +225,11 @@ def process_answer(
     ):
         raise AppError(403, "Siz bu bellashuvda emassiz")
 
+    # Faqat sardor (jamoa egasi) javob bera oladi.
+    team = get_team_by_id(membership["team_id"])
+    if not team or team["ownerId"] != telegram_id:
+        raise AppError(403, "Faqat sardor javob bera oladi")
+
     round_row = battle_repo.get_round_by_number(battle_id, challenge["currentRoundNumber"])
     if not round_row or round_row["id"] != round_id:
         raise AppError(409, "Bu round aktiv emas")
@@ -330,11 +335,21 @@ def maybe_advance_round(battle_id: str) -> None:
 
     all_answered = False
     if not time_up:
-        challenger = get_team_with_members(challenge["challengerTeamId"])
-        opponent = get_team_with_members(challenge["opponentTeamId"])
+        # Har jamoadan faqat sardor (ownerId) javob berishi kerak.
+        # Ikki jamoa sardorlari javob bergandan keyin darhol keyingi roundga o'tamiz.
+        challenger_team = get_team_by_id(challenge["challengerTeamId"])
+        opponent_team = get_team_by_id(challenge["opponentTeamId"])
         round_answers = battle_repo.get_answers_for_round(round_row["id"])
-        total_members = len(challenger.get("members", [])) + len(opponent.get("members", []))
-        all_answered = total_members > 0 and len(round_answers) >= total_members
+        answered_ids = {ans["telegram_id"] for ans in round_answers}
+        challenger_captain_answered = (
+            challenger_team is not None
+            and challenger_team["ownerId"] in answered_ids
+        )
+        opponent_captain_answered = (
+            opponent_team is not None
+            and opponent_team["ownerId"] in answered_ids
+        )
+        all_answered = challenger_captain_answered and opponent_captain_answered
 
     if time_up or all_answered:
         advance_round(battle_id)
@@ -422,6 +437,10 @@ def get_battle_state(battle_id: str, telegram_id: int) -> dict[str, Any]:
 
     challenger = get_team_with_members(challenge["challengerTeamId"])
     opponent = get_team_with_members(challenge["opponentTeamId"])
+    # get_team_by_id ham kerak — ownerId uchun (get_team_with_members ham ownerId qaytaradi)
+    challenger_owner_id: int = challenger.get("ownerId", 0)
+    opponent_owner_id: int = opponent.get("ownerId", 0)
+
     answers = battle_repo.get_answers_for_battle(battle_id)
     rounds = battle_repo.get_rounds(battle_id)
 
@@ -433,6 +452,12 @@ def get_battle_state(battle_id: str, telegram_id: int) -> dict[str, Any]:
         my_team_id = challenger["id"]
     elif any(m["telegramId"] == telegram_id for m in opponent.get("members", [])):
         my_team_id = opponent["id"]
+
+    # Joriy foydalanuvchi o'z jamoasining sardori (egasi) ekanligini aniqlash.
+    is_captain = (
+        (my_team_id == challenger["id"] and challenger_owner_id == telegram_id)
+        or (my_team_id == opponent["id"] and opponent_owner_id == telegram_id)
+    )
 
     current_round: Optional[dict[str, Any]] = None
     current_round_id: Optional[str] = None
@@ -462,6 +487,16 @@ def get_battle_state(battle_id: str, telegram_id: int) -> dict[str, Any]:
             reveal_answer = None
             if my_answered or remaining <= 0:
                 reveal_answer = (question or {}).get("correctAnswer")
+
+            # Har bir jamoa uchun sardor javob berganini aniqlash (round ko'rsatkichi uchun).
+            round_answer_ids = {
+                ans["telegram_id"]
+                for ans in answers
+                if ans.get("round_id") == round_row["id"]
+            }
+            challenger_team_answered = challenger_owner_id in round_answer_ids
+            opponent_team_answered = opponent_owner_id in round_answer_ids
+
             current_round = {
                 "roundId": round_row["id"],
                 "roundNumber": round_row["roundNumber"],
@@ -472,28 +507,40 @@ def get_battle_state(battle_id: str, telegram_id: int) -> dict[str, Any]:
                 "timeLimitSeconds": round_row["timeLimitSeconds"],
                 "timeRemainingMs": int(remaining),
                 "myAnswered": my_answered,
+                # Har bir jamoa (sardor) javob berganmi?
+                "challengerTeamAnswered": challenger_team_answered,
+                "opponentTeamAnswered": opponent_team_answered,
             }
             current_round_id = round_row["id"]
 
-    def team_view(team: dict[str, Any], score: int) -> dict[str, Any]:
+    def team_view(team: dict[str, Any], score: int, owner_id: int) -> dict[str, Any]:
+        # Sardor-asosli yondashuv: faqat sardor javob berishi mumkin.
+        # answeredCurrentRound = ushbu jamoa sardori shu round'ga javob berganmi.
+        captain_answered_round = (
+            any(
+                ans.get("round_id") == current_round_id
+                and ans.get("telegram_id") == owner_id
+                for ans in answers
+            )
+            if current_round_id
+            else False
+        )
         return {
             "id": team["id"],
             "name": team["name"],
             "score": score,
+            "ownerId": owner_id,
             "members": [
                 {
                     "telegramId": m["telegramId"],
                     "firstName": m.get("firstName"),
                     "username": m.get("username"),
+                    # Sardor bo'lsa — captain_answered_round ko'rsatiladi.
+                    # Oddiy a'zo bo'lsa — har doim False (javob bera olmaydi).
                     "answeredCurrentRound": (
-                        any(
-                            ans.get("round_id") == current_round_id
-                            and ans.get("telegram_id") == m["telegramId"]
-                            for ans in answers
-                        )
-                        if current_round_id
-                        else False
+                        captain_answered_round if m["telegramId"] == owner_id else False
                     ),
+                    "isCaptain": m["telegramId"] == owner_id,
                 }
                 for m in team.get("members", [])
             ],
@@ -509,9 +556,10 @@ def get_battle_state(battle_id: str, telegram_id: int) -> dict[str, Any]:
     return {
         "battleId": challenge["id"],
         "status": challenge["status"],
-        "challengerTeam": team_view(challenger, challenger_score),
-        "opponentTeam": team_view(opponent, opponent_score),
+        "challengerTeam": team_view(challenger, challenger_score, challenger_owner_id),
+        "opponentTeam": team_view(opponent, opponent_score, opponent_owner_id),
         "myTeamId": my_team_id,
+        "isCaptain": is_captain,
         "currentRound": current_round,
         "finished": challenge["status"] == "finished",
         "winnerTeamId": winner_team_id,
