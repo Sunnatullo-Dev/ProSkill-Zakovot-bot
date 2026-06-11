@@ -33,7 +33,7 @@ class BattleRound(models.Model):
     )
     question_id = models.UUIDField()
     round_number = models.IntegerField()
-    time_limit_seconds = models.IntegerField(default=30)
+    time_limit_seconds = models.IntegerField(default=60)
     started_at = models.DateTimeField(null=True, blank=True)
     ended_at = models.DateTimeField(null=True, blank=True)
 
