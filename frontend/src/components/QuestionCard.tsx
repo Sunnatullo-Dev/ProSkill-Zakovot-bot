@@ -17,7 +17,7 @@ type QuestionCardProps = {
   questionNumber: number;
   totalQuestions: number;
   timeLeft: number;
-  /** Joriy savol uchun umumiy vaqt (soniya) — doira progress uchun (default: 15). */
+  /** Joriy savol uchun umumiy vaqt (soniya) — doira progress uchun (default: 90). */
   totalTimeSeconds?: number;
   streak: number;
   reveal: RevealInfo | null;
@@ -61,7 +61,7 @@ export default function QuestionCard({
   questionNumber,
   totalQuestions,
   timeLeft,
-  totalTimeSeconds = 15,
+  totalTimeSeconds = 90,
   streak,
   reveal,
   isRevealing,

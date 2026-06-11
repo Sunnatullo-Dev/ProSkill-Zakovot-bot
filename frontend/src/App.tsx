@@ -111,8 +111,8 @@ function writeCachedName(name: string): void {
 // Admin alohida to'liq oyna sifatida ochiladi — foydalanuvchi navigatsiyasiga aralashmaydi.
 const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "leaderboard", "svoyak"];
 
-const TIMER_SECONDS = 15;
-const ANSWER_TIMEOUT_MS = 15000;
+const TIMER_SECONDS = 90;
+const ANSWER_TIMEOUT_MS = 90000;
 const RESULT_AUTO_DELAY_MS = 3000;
 const PARTIAL_RESULT_AUTO_DELAY_MS = 3500;
 const DEFAULT_FILTER: RoundFilter = { category: null, difficulty: null };
@@ -210,7 +210,7 @@ export default function App() {
   const currentQuestion = roundQuestions[questionIndex] ?? null;
   const totalQuestions = roundQuestions.length;
 
-  /** Savol uchun to'g'ri sekund: savoldagi time_limit yoki standart 15s. */
+  /** Savol uchun to'g'ri sekund: savoldagi time_limit yoki standart 90s. */
   const getQuestionSeconds = useCallback((q: { timeLimitSeconds?: number | null } | null) =>
     (q?.timeLimitSeconds && q.timeLimitSeconds >= 5 ? q.timeLimitSeconds : TIMER_SECONDS),
     []
