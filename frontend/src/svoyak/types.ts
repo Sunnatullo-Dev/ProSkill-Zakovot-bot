@@ -55,8 +55,10 @@ export type SvoyakCurrentRound = {
 export type SvoyakAutoAttempt = {
   telegramId: number;
   displayName: string;
-  answer: string;
-  isCorrect: boolean;
+  /** Raund ochiq paytda boshqa o'yinchilar uchun null (yashirilgan). */
+  answer: string | null;
+  /** Raund ochiq paytda boshqa o'yinchilar uchun null (yashirilgan). */
+  isCorrect: boolean | null;
   atMs: number;
 };
 

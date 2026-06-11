@@ -1075,6 +1075,31 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
 
         my_attempt = next((a for a in attempts if a.get("telegramId") == viewer), None)
 
+        # Raund hali ochiq (vaqt tugamagan) bo'lsa, boshqa o'yinchilarning
+        # javob matni va to'g'ri/noto'g'ri belgisi yashiriladi — aldamchilik oldini olish.
+        # Faqat "javob berdi / bermadi" holati ko'rsatiladi.
+        # Raund yopiq (vaqt tugagan yoki finished) bo'lsa to'liq ma'lumot beriladi.
+        round_is_open = room.status == "playing" and time_remaining > 0
+
+        def _redact_attempt_for_others(a: dict) -> dict:
+            """Boshqa o'yinchining urinishini raund ochiq paytda yashiradi."""
+            if a.get("telegramId") == viewer:
+                # O'zining javobi — to'liq ko'rsatiladi
+                return a
+            # Boshqasiniki — faqat kim javob berganini ko'rsatish
+            return {
+                "telegramId": a.get("telegramId"),
+                "displayName": a.get("displayName"),
+                "answer": None,
+                "isCorrect": None,
+                "atMs": a.get("atMs"),
+            }
+
+        if round_is_open:
+            safe_attempts = [_redact_attempt_for_others(a) for a in attempts]
+        else:
+            safe_attempts = attempts
+
         auto_state = {
             "questionIndex": q_idx,
             "totalQuestions": total,
@@ -1084,7 +1109,7 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
             "readingTimeRemainingMs": reading_remaining,
             "timeRemainingMs": time_remaining,
             "startedAtMs": started_ms,
-            "attempts": attempts,
+            "attempts": safe_attempts,
             "myAttempt": my_attempt,
             "isPlaying": room.status == "playing" and started_ms > 0 and q_idx < total,
         }

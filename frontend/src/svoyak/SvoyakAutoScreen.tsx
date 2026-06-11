@@ -142,7 +142,7 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
       const result = await autoAnswer({ code, answer: answer.trim() });
       const myAttempt = result.autoState?.myAttempt;
       if (myAttempt) {
-        hapticResult(myAttempt.isCorrect ? "correct" : "incorrect");
+        hapticResult(myAttempt.isCorrect === true ? "correct" : "incorrect");
       }
     } catch {
       /* silent */
@@ -334,18 +334,18 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
               </div>
 
               {myAttempt ? (
-                /* Allaqachon javob berildi */
+                /* Allaqachon javob berildi — bu FAQAT o'zining javobi, isCorrect hech qachon null emas */
                 <div style={{
                   padding: "18px", borderRadius: "14px",
-                  background: myAttempt.isCorrect ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.12)",
-                  border: `1px solid ${myAttempt.isCorrect ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.3)"}`,
+                  background: myAttempt.isCorrect === true ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.12)",
+                  border: `1px solid ${myAttempt.isCorrect === true ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.3)"}`,
                   textAlign: "center", marginBottom: "14px",
                 }}>
                   <div style={{ fontSize: "24px", marginBottom: "6px" }}>
-                    {myAttempt.isCorrect ? "✅" : "❌"}
+                    {myAttempt.isCorrect === true ? "✅" : "❌"}
                   </div>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: myAttempt.isCorrect ? "var(--success, #22c55e)" : "var(--error, #ef4444)" }}>
-                    {myAttempt.isCorrect ? "To'g'ri javob!" : "Noto'g'ri"}
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: myAttempt.isCorrect === true ? "var(--success, #22c55e)" : "var(--error, #ef4444)" }}>
+                    {myAttempt.isCorrect === true ? "To'g'ri javob!" : "Noto'g'ri"}
                   </div>
                   <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
                     Boshqalarni kuting...
@@ -403,26 +403,39 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
               {attempts.length > 0 && (
                 <div style={{ marginTop: "14px" }}>
                   <div style={{ fontSize: "11px", color: "var(--muted)", marginBottom: "6px", letterSpacing: "1px" }}>
-                    JAVOBLAR
+                    O'YINCHILAR
                   </div>
-                  {attempts.map((a) => (
-                    <div
-                      key={a.telegramId}
-                      style={{
-                        display: "flex", alignItems: "center", gap: "8px",
-                        padding: "7px 10px", borderRadius: "10px",
-                        background: "var(--svoyak-surface, #0f1f3a)",
-                        border: "1px solid var(--svoyak-border, #1f3a6e)",
-                        marginBottom: "5px", fontSize: "13px",
-                      }}
-                    >
-                      <span style={{ color: a.isCorrect ? "var(--success, #22c55e)" : "var(--error, #ef4444)", fontWeight: 800 }}>
-                        {a.isCorrect ? "✓" : "✗"}
-                      </span>
-                      <span style={{ fontWeight: 700, color: "var(--text)" }}>{a.displayName}</span>
-                      <span style={{ color: "var(--muted)", marginLeft: "auto" }}>{a.answer}</span>
-                    </div>
-                  ))}
+                  {attempts.map((a) => {
+                    // Backend raund ochiq paytda boshqalar uchun answer/isCorrect=null qaytaradi.
+                    // Faqat o'zining javobi to'liq ko'rinadi.
+                    const isRevealed = a.answer !== null && a.isCorrect !== null;
+                    return (
+                      <div
+                        key={a.telegramId}
+                        style={{
+                          display: "flex", alignItems: "center", gap: "8px",
+                          padding: "7px 10px", borderRadius: "10px",
+                          background: "var(--svoyak-surface, #0f1f3a)",
+                          border: "1px solid var(--svoyak-border, #1f3a6e)",
+                          marginBottom: "5px", fontSize: "13px",
+                        }}
+                      >
+                        {isRevealed ? (
+                          <span style={{ color: a.isCorrect === true ? "var(--success, #22c55e)" : "var(--error, #ef4444)", fontWeight: 800 }}>
+                            {a.isCorrect === true ? "✓" : "✗"}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--svoyak-gold, #f5c842)", fontWeight: 800, fontSize: "15px" }}>
+                            ✓
+                          </span>
+                        )}
+                        <span style={{ fontWeight: 700, color: "var(--text)" }}>{a.displayName}</span>
+                        <span style={{ color: "var(--muted)", marginLeft: "auto", fontSize: "12px" }}>
+                          {isRevealed ? a.answer : "javob berdi"}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </>
