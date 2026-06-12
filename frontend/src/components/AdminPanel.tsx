@@ -759,7 +759,7 @@ type EditFields = {
   correctAnswer: string;
   category: string;
   difficulty: "" | Difficulty;
-  timeLimitSeconds: number;
+  timeLimitSeconds: number | null;
 };
 
 function emptyFields(): EditFields {
@@ -778,7 +778,7 @@ function fromQuestion(question: AdminQuestion): EditFields {
     correctAnswer: question.correctAnswer,
     category: question.category ?? "",
     difficulty: (question.difficulty as Difficulty | null) ?? "",
-    timeLimitSeconds: question.timeLimitSeconds ?? 90,
+    timeLimitSeconds: question.timeLimitSeconds ?? null,
   };
 }
 
@@ -789,8 +789,8 @@ function TimeLimitPicker({
   value,
   onChange
 }: {
-  value: number;
-  onChange: (v: number) => void;
+  value: number | null;
+  onChange: (v: number | null) => void;
 }) {
   return (
     <div>
@@ -826,7 +826,11 @@ function TimeLimitPicker({
       </div>
       <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px" }}>
         Tanlangan: <strong style={{ color: "var(--text)" }}>
-          {value >= 60 ? `${Math.floor(value / 60)} daqiqa ${value % 60 ? `${value % 60} soniya` : ""}` : `${value} soniya`}
+          {value == null
+            ? "Belgilanmagan (o'yin standartida)"
+            : value >= 60
+            ? `${Math.floor(value / 60)} daqiqa ${value % 60 ? `${value % 60} soniya` : ""}`
+            : `${value} soniya`}
         </strong>
       </div>
     </div>
