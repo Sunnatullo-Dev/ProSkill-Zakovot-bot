@@ -61,7 +61,7 @@ if not SECRET_KEY:
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
 
 # DJANGO_ALLOWED_HOSTS — bo'sh bo'lsa FRONTEND_URL'dan derive qilamiz +
