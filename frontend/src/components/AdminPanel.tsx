@@ -778,7 +778,7 @@ function fromQuestion(question: AdminQuestion): EditFields {
     correctAnswer: question.correctAnswer,
     category: question.category ?? "",
     difficulty: (question.difficulty as Difficulty | null) ?? "",
-    timeLimitSeconds: question.timeLimitSeconds ?? 15,
+    timeLimitSeconds: question.timeLimitSeconds ?? 90,
   };
 }
 
