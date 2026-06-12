@@ -768,7 +768,7 @@ function emptyFields(): EditFields {
     correctAnswer: "",
     category: "",
     difficulty: "",
-    timeLimitSeconds: 15,
+    timeLimitSeconds: 90,
   };
 }
 
