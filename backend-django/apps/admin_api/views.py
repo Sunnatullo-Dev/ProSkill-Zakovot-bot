@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import re
 
+from django.conf import settings
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -27,6 +28,12 @@ DEFAULT_PAGE_LIMIT = 20
 BULK_LIMIT = 500
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
+
+
+def _require_super_admin(request) -> None:
+    telegram_id = getattr(request.current_user, "telegram_id", 0)
+    if telegram_id not in getattr(settings, "ADMIN_TELEGRAM_IDS", []):
+        raise AppError(403, "Faqat super-admin bu amalni bajarishi mumkin")
 
 
 def _safe_count(callable_) -> int:
@@ -417,6 +424,7 @@ def all_telegram_ids(request):
 @require_admin
 def admins_collection(request):
     if request.method == "POST":
+        _require_super_admin(request)
         body = request.data if isinstance(request.data, dict) else {}
         try:
             telegram_id = int(body.get("telegramId") or 0)
@@ -441,6 +449,7 @@ def admins_collection(request):
 @api_view(["DELETE"])
 @require_admin
 def admin_detail(request, telegram_id: int):
+    _require_super_admin(request)
     removed = user_repo.remove_admin(telegram_id)
     if not removed:
         raise AppError(404, "Admin topilmadi")

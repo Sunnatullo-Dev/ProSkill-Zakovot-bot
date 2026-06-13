@@ -16,7 +16,19 @@ import {
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error("TELEGRAM_BOT_TOKEN ko'rsatilmagan");
 
-const SUPER_ADMIN_ID = Number(process.env.ADMIN_ID || "0");
+function parseTelegramIdList(raw: string): number[] {
+  return raw
+    .split(/[,\s;]+/)
+    .map((value) => Number(value.trim().replace(/^["']|["']$/g, "")))
+    .filter((value) => Number.isSafeInteger(value) && value > 0);
+}
+
+const LEGACY_ADMIN_ID = Number(process.env.ADMIN_ID || "0");
+const SUPER_ADMIN_IDS = new Set<number>(parseTelegramIdList(process.env.ADMIN_TELEGRAM_IDS || ""));
+if (Number.isSafeInteger(LEGACY_ADMIN_ID) && LEGACY_ADMIN_ID > 0) {
+  SUPER_ADMIN_IDS.add(LEGACY_ADMIN_ID);
+}
+const SUPER_ADMIN_LABEL = Array.from(SUPER_ADMIN_IDS).join(", ") || "ko'rsatilmagan";
 const MINI_APP_URL = process.env.MINI_APP_URL || "";
 const BACKEND_URL = (process.env.BACKEND_URL || "").replace(/\/$/, "");
 
@@ -58,18 +70,10 @@ function invalidateChannelsCache() {
   channelsCachedAt = 0;
 }
 
-// Backendning admin API'siga kirish kaliti. Tartibi:
-//   1) BOT_INTERNAL_API_KEY — afzal (alohida server-internal kalit)
-//   2) TELEGRAM_BOT_TOKEN — backward compat (eski sozlama)
-// Backend ikkalasini ham qabul qiladi (BOT_INTERNAL_API_KEY birinchi
-// tekshiriladi). Yangi loyihalar BOT_INTERNAL_API_KEY ishlatishi tavsiya.
 const BOT_INTERNAL_API_KEY = process.env.BOT_INTERNAL_API_KEY || "";
-const ADMIN_API_KEY = BOT_INTERNAL_API_KEY || token;
+const ADMIN_API_KEY = BOT_INTERNAL_API_KEY;
 if (!BOT_INTERNAL_API_KEY) {
-  console.warn(
-    "[bot] BOT_INTERNAL_API_KEY o'rnatilmagan — TELEGRAM_BOT_TOKEN fallback ishlatiladi. " +
-    "Yaxshiroq xavfsizlik uchun ikkala servisga bir xil tasodifiy uzun string qo'ying."
-  );
+  throw new Error("BOT_INTERNAL_API_KEY ko'rsatilmagan. Backend bilan bir xil kalitni o'rnating.");
 }
 
 if (MINI_APP_URL && !MINI_APP_URL.startsWith("https://"))
@@ -80,14 +84,14 @@ const BROADCAST_BATCH = 25;
 const BROADCAST_DELAY_MS = 1100;
 
 // ─── Multi-admin ──────────────────────────────────────────────────────────────
-const adminIds = new Set<number>([SUPER_ADMIN_ID]);
+const adminIds = new Set<number>(SUPER_ADMIN_IDS);
 
 async function refreshAdmins() {
   try {
     const data = await apiGet("/api/admin/admins");
     const ids: number[] = (data.items ?? []).map((a: any) => Number(a.telegramId));
     adminIds.clear();
-    adminIds.add(SUPER_ADMIN_ID);
+    for (const id of SUPER_ADMIN_IDS) adminIds.add(id);
     for (const id of ids) adminIds.add(id);
   } catch (e: any) {
     console.warn("[bot] Admin ro'yxat yuklanmadi:", e?.message);
@@ -95,7 +99,7 @@ async function refreshAdmins() {
 }
 
 function isAdmin(id: number) { return adminIds.has(id); }
-function isSuperAdmin(id: number) { return id === SUPER_ADMIN_ID; }
+function isSuperAdmin(id: number) { return SUPER_ADMIN_IDS.has(id); }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Question { id: string; text: string; correctAnswer: string; category: string | null; difficulty: string | null; }
@@ -120,34 +124,51 @@ type State =
   | { t: "ch_add_username" }
   | GrState;
 
-const states = new Map<number, State>();
-const getState = (id: number): State => states.get(id) ?? { t: "idle" };
-const setState = (id: number, s: State) => states.set(id, s);
-const clearState = (id: number) => states.set(id, { t: "idle" });
+const STATE_TTL_MS = 2 * 60 * 60 * 1000;
+const states = new Map<number, { state: State; updatedAt: number }>();
+const getState = (id: number): State => {
+  const entry = states.get(id);
+  if (!entry) return { t: "idle" };
+  if (Date.now() - entry.updatedAt > STATE_TTL_MS) {
+    states.delete(id);
+    return { t: "idle" };
+  }
+  return entry.state;
+};
+const setState = (id: number, s: State) => states.set(id, { state: s, updatedAt: Date.now() });
+const clearState = (id: number) => states.delete(id);
+
+function md(value: unknown): string {
+  return String(value ?? "").replace(/([\\_*[\]()`])/g, "\\$1");
+}
 
 // ─── API Client ───────────────────────────────────────────────────────────────
-const authHeader = () => ({
-  Authorization: `bot ${ADMIN_API_KEY}`,
-  "Content-Type": "application/json"
-});
+const authHeader = (telegramId?: number, json = true) => {
+  const headers: Record<string, string> = {
+    Authorization: `bot ${ADMIN_API_KEY}`,
+  };
+  if (json) headers["Content-Type"] = "application/json";
+  if (telegramId && telegramId > 0) headers["X-On-Behalf-Of"] = String(telegramId);
+  return headers;
+};
 
-async function apiGet(path: string): Promise<any> {
-  const r = await fetch(`${BACKEND_URL}${path}`, { headers: authHeader() });
+async function apiGet(path: string, telegramId?: number): Promise<any> {
+  const r = await fetch(`${BACKEND_URL}${path}`, { headers: authHeader(telegramId, false) });
   if (!r.ok) { const t = await r.text(); throw new Error(`GET ${path} → ${r.status}: ${t.slice(0, 200)}`); }
   return r.json();
 }
-async function apiPost(path: string, body: object): Promise<any> {
-  const r = await fetch(`${BACKEND_URL}${path}`, { method: "POST", headers: authHeader(), body: JSON.stringify(body) });
+async function apiPost(path: string, body: object, telegramId?: number): Promise<any> {
+  const r = await fetch(`${BACKEND_URL}${path}`, { method: "POST", headers: authHeader(telegramId), body: JSON.stringify(body) });
   if (!r.ok) { const t = await r.text(); throw new Error(`POST ${path} → ${r.status}: ${t.slice(0, 200)}`); }
   return r.json();
 }
-async function apiPatch(path: string, body: object): Promise<any> {
-  const r = await fetch(`${BACKEND_URL}${path}`, { method: "PATCH", headers: authHeader(), body: JSON.stringify(body) });
+async function apiPatch(path: string, body: object, telegramId?: number): Promise<any> {
+  const r = await fetch(`${BACKEND_URL}${path}`, { method: "PATCH", headers: authHeader(telegramId), body: JSON.stringify(body) });
   if (!r.ok) { const t = await r.text(); throw new Error(`PATCH ${path} → ${r.status}: ${t.slice(0, 200)}`); }
   return r.json();
 }
-async function apiDelete(path: string): Promise<any> {
-  const r = await fetch(`${BACKEND_URL}${path}`, { method: "DELETE", headers: authHeader() });
+async function apiDelete(path: string, telegramId?: number): Promise<any> {
+  const r = await fetch(`${BACKEND_URL}${path}`, { method: "DELETE", headers: authHeader(telegramId, false) });
   if (!r.ok) {
     const t = await r.text();
     throw new Error(`DELETE ${path} → ${r.status}: ${t.slice(0, 200)}`);
@@ -168,25 +189,20 @@ let BOT_USERNAME = "";
 
 /** Bot ishtirokchi nomidan chaqiruv: X-On-Behalf-Of header orqali */
 async function apiPostOnBehalf(path: string, body: object, telegramId: number): Promise<any> {
-  const headers = {
-    Authorization: `bot ${ADMIN_API_KEY}`,
-    "Content-Type": "application/json",
-    "X-On-Behalf-Of": String(telegramId),
-  };
-  const r = await fetch(`${BACKEND_URL}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
-  if (!r.ok) { const t = await r.text(); throw new Error(`POST ${path} → ${r.status}: ${t.slice(0, 200)}`); }
-  return r.json();
+  return apiPost(path, body, telegramId);
 }
 
 /** apiGet on behalf of a participant (for state polling) */
 async function apiGetOnBehalf(path: string, telegramId: number): Promise<any> {
-  const headers = {
-    Authorization: `bot ${ADMIN_API_KEY}`,
-    "X-On-Behalf-Of": String(telegramId),
-  };
-  const r = await fetch(`${BACKEND_URL}${path}`, { headers });
-  if (!r.ok) { const t = await r.text(); throw new Error(`GET ${path} → ${r.status}: ${t.slice(0, 200)}`); }
-  return r.json();
+  return apiGet(path, telegramId);
+}
+
+async function apiPatchOnBehalf(path: string, body: object, telegramId: number): Promise<any> {
+  return apiPatch(path, body, telegramId);
+}
+
+async function apiDeleteOnBehalf(path: string, telegramId: number): Promise<any> {
+  return apiDelete(path, telegramId);
 }
 
 // ─── PDF Parser ───────────────────────────────────────────────────────────────
@@ -281,8 +297,8 @@ const diffKb = (suffix: string) =>
     .text("🔴 Qiyin", `diff:hard:${suffix}`).text("⏭ O'tkazish", `diff:null:${suffix}`);
 
 function formatUser(u: AppUser, i: number, offset: number): string {
-  const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.displayName || "—";
-  const uname = u.username ? `@${u.username}` : `ID: ${u.telegramId}`;
+  const name = md([u.firstName, u.lastName].filter(Boolean).join(" ") || u.displayName || "—");
+  const uname = u.username ? `@${md(u.username)}` : `ID: ${u.telegramId}`;
   return `${offset + i + 1}. *${name}* (${uname})\n   💰 Ball: ${u.score}`;
 }
 
@@ -311,7 +327,7 @@ async function doBroadcast(
     const batch = telegramIds.slice(i, i + BROADCAST_BATCH);
     await Promise.all(batch.map(async (id) => {
       try {
-        await bot.api.sendMessage(id, text, { parse_mode: "Markdown" });
+        await bot.api.sendMessage(id, text);
         sent++;
       } catch {
         failed++;
@@ -340,7 +356,10 @@ const grDeps: GrBotDeps = {
   apiPost,
   apiPatch,
   apiDelete,
+  apiGetOnBehalf,
   apiPostOnBehalf,
+  apiPatchOnBehalf,
+  apiDeleteOnBehalf,
   isAdmin,
   getState: (id: number) => getState(id) as any,
   setState: (id: number, s: any) => setState(id, s as State),
@@ -369,13 +388,18 @@ async function checkAllSubscriptions(userId: number): Promise<{
     return { allSubscribed, unsubscribed };
   } catch (e: any) {
     console.warn("[bot] Obuna tekshiruvi xatosi:", e?.message);
-    // Backend yetib bo'lmasa — fail-open (bloklashdan saqlaymiz)
-    return { allSubscribed: true, unsubscribed: [] };
+    return { allSubscribed: false, unsubscribed: cachedChannels };
   }
 }
 
 /** Obuna bo'linmagan kanallar uchun inline keyboard bilan xabar yuboradi. */
 async function sendSubscribePrompt(ctx: any, unsubscribed: RequiredChannel[]): Promise<void> {
+  if (unsubscribed.length === 0) {
+    await ctx.reply(
+      "⚠️ Obuna tekshiruvini hozir bajarib bo'lmadi. Iltimos, birozdan keyin qayta urinib ko'ring."
+    );
+    return;
+  }
   const kb = new InlineKeyboard();
   for (const ch of unsubscribed) {
     kb.row().url(`📢 ${ch.channelTitle}`, ch.channelUrl);
@@ -384,7 +408,7 @@ async function sendSubscribePrompt(ctx: any, unsubscribed: RequiredChannel[]): P
 
   await ctx.reply(
     "📢 *Zakovat O'yiniga kirish uchun quyidagi kanallarga obuna bo'ling!*\n\n" +
-    unsubscribed.map((ch) => `• ${ch.channelTitle}`).join("\n") +
+    unsubscribed.map((ch) => `• ${md(ch.channelTitle)}`).join("\n") +
     "\n\nObuna bo'lgach *\"✅ Tekshirish\"* tugmasini bosing.",
     {
       parse_mode: "Markdown",
@@ -396,7 +420,7 @@ async function sendSubscribePrompt(ctx: any, unsubscribed: RequiredChannel[]): P
 /** Xush kelibsiz xabarini va mini-app tugmasini yuboradi. */
 async function sendWelcome(ctx: any): Promise<void> {
   const uid: number = ctx.from!.id;
-  const name: string = ctx.from?.first_name || "do'st";
+  const name: string = md(ctx.from?.first_name || "do'st");
 
   const welcomeText =
     `🎯 *Zakovat O'yiniga Xush Kelibsiz, ${name}!*\n\n` +
@@ -522,7 +546,7 @@ bot.hears("🎮 O'yin xonasi", async ctx => {
 bot.hears("📊 Statistika", async ctx => {
   if (!isAdmin(ctx.from!.id)) return;
   try {
-    const data = await apiGet("/api/admin/stats");
+    const data = await apiGet("/api/admin/stats", ctx.from!.id);
     const cats = (data.categories || []).slice(0, 5)
       .map((c: any) => `  • ${c.category || "Nomsiz"}: ${c.count} ta`).join("\n");
     const today = new Date().toLocaleDateString("uz-UZ");
@@ -551,7 +575,7 @@ bot.hears("📋 Savollar", async ctx => {
 async function showQuestionsList(ctx: any, page: number) {
   const limit = 5;
   try {
-    const data = await apiGet(`/api/admin/questions?page=${page}&limit=${limit}`);
+    const data = await apiGet(`/api/admin/questions?page=${page}&limit=${limit}`, ctx.from!.id);
     const items: Question[] = data.items || [];
     const total: number = data.total || 0;
     if (total === 0) { await ctx.reply("❌ Savollar yo'q."); return; }
@@ -560,7 +584,7 @@ async function showQuestionsList(ctx: any, page: number) {
         const num = (page - 1) * limit + i + 1;
         const cat = q.category ? ` [${q.category}]` : "";
         const diff = q.difficulty ? ` ${diffLabel(q.difficulty)}` : "";
-        return `${num}. ${q.text.slice(0, 60)}${q.text.length > 60 ? "…" : ""}${cat}${diff}`;
+        return `${num}. ${md(q.text.slice(0, 60))}${q.text.length > 60 ? "…" : ""}${md(cat)}${diff}`;
       }).join("\n\n");
     await ctx.reply(text, { parse_mode: "Markdown", reply_markup: listKb(items, page, total, limit) });
   } catch (e: any) { await ctx.reply(`❌ Savollarni olib bo'lmadi: ${e?.message}`); }
@@ -600,7 +624,7 @@ bot.hears("👥 Foydalanuvchilar", async ctx => {
 async function showUsersList(ctx: any, page: number) {
   const limit = 10;
   try {
-    const data = await apiGet(`/api/admin/users?page=${page}&limit=${limit}`);
+    const data = await apiGet(`/api/admin/users?page=${page}&limit=${limit}`, ctx.from!.id);
     const items: AppUser[] = data.items || [];
     const total: number = data.total || 0;
     if (total === 0) { await ctx.reply("👥 Hozircha foydalanuvchilar yo'q."); return; }
@@ -615,7 +639,7 @@ async function showUsersList(ctx: any, page: number) {
 bot.hears("📢 Reklama", async ctx => {
   if (!isAdmin(ctx.from!.id)) return;
   try {
-    const data = await apiGet("/api/admin/users/ids");
+    const data = await apiGet("/api/admin/users/ids", ctx.from!.id);
     const total: number = data.total || 0;
     setState(ctx.from!.id, { t: "broadcast_text" });
     await ctx.reply(
@@ -639,31 +663,37 @@ bot.hears("👨‍💼 Adminlar", async ctx => {
 
 async function showAdminsList(ctx: any) {
   try {
-    const data = await apiGet("/api/admin/admins");
+    const data = await apiGet("/api/admin/admins", ctx.from!.id);
     const admins: AdminEntry[] = data.items || [];
     const uid = ctx.from!.id;
     const list = admins.length > 0
       ? admins.map((a, i) => {
-          const name = a.firstName || `ID: ${a.telegramId}`;
-          const uname = a.username ? ` (@${a.username})` : "";
-          const note = a.note ? ` — _${a.note}_` : "";
+          const name = md(a.firstName || `ID: ${a.telegramId}`);
+          const uname = a.username ? ` (@${md(a.username)})` : "";
+          const note = a.note ? ` — _${md(a.note)}_` : "";
           const date = a.addedAt.slice(0, 10);
           return `${i + 1}. *${name}*${uname}${note}\n   🆔 ${a.telegramId} | 📅 ${date}`;
         }).join("\n\n")
       : "_(Sub-adminlar yo'q)_";
 
-    const kb = new InlineKeyboard().text("➕ Admin qo'shish", "admin_add");
+    const kb = new InlineKeyboard();
+    if (isSuperAdmin(uid)) {
+      kb.text("➕ Admin qo'shish", "admin_add");
+    }
     if (isSuperAdmin(uid) && admins.length > 0) {
       for (const a of admins) {
         kb.row().text(`🗑️ ${a.firstName || a.telegramId}ni o'chirish`, `admin_del:${a.telegramId}`);
       }
     }
 
+    const replyOptions: any = { parse_mode: "Markdown" };
+    if (isSuperAdmin(uid)) replyOptions.reply_markup = kb;
+
     await ctx.reply(
       `👨‍💼 *Adminlar ro'yxati*\n\n` +
-      `👑 Super-admin: ID ${SUPER_ADMIN_ID}\n\n` +
+      `👑 Super-admin: ID ${SUPER_ADMIN_LABEL}\n\n` +
       `${list}`,
-      { parse_mode: "Markdown", reply_markup: kb }
+      replyOptions
     );
   } catch (e: any) {
     await ctx.reply(`❌ Adminlarni olib bo'lmadi: ${e?.message}`);
@@ -679,7 +709,7 @@ bot.hears("📢 Majburiy kanallar", async ctx => {
 
 async function showChannelsList(ctx: any) {
   try {
-    const data = await apiGet("/api/admin/channels");
+    const data = await apiGet("/api/admin/channels", ctx.from!.id);
     const channels: Array<{ id: number; channelTitle: string; channelUsername: string; isActive: boolean }> =
       (data.channels ?? []).filter((ch: any) => ch.isActive);
 
@@ -694,7 +724,7 @@ async function showChannelsList(ctx: any) {
     }
 
     const list = channels.map((ch, i) =>
-      `${i + 1}. *${ch.channelTitle}* — @${ch.channelUsername || ch.channelTitle}`
+      `${i + 1}. *${md(ch.channelTitle)}* — @${md(ch.channelUsername || ch.channelTitle)}`
     ).join("\n");
 
     for (const ch of channels) {
@@ -713,8 +743,10 @@ async function showChannelsList(ctx: any) {
 
 // /cancel
 bot.command("cancel", async ctx => {
-  clearState(ctx.from!.id);
-  await ctx.reply("❌ Bekor qilindi.", { reply_markup: ADMIN_KB });
+  const uid = ctx.from!.id;
+  clearState(uid);
+  const replyOptions = isAdmin(uid) ? { reply_markup: ADMIN_KB } : undefined;
+  await ctx.reply("❌ Bekor qilindi.", replyOptions);
 });
 
 // /skip
@@ -765,7 +797,7 @@ bot.on("message:document", async ctx => {
 
     setState(uid, { t: "confirm_pdf", questions });
     const preview = questions.slice(0, 5)
-      .map((q, i) => `${i + 1}. *${q.text.slice(0, 60)}*\n   ✅ ${q.correctAnswer.slice(0, 40)}`)
+      .map((q, i) => `${i + 1}. *${md(q.text.slice(0, 60))}*\n   ✅ ${md(q.correctAnswer.slice(0, 40))}`)
       .join("\n\n");
     const more = questions.length > 5 ? `\n\n_...va yana ${questions.length - 5} ta_` : "";
 
@@ -852,7 +884,7 @@ bot.on("message:text", async ctx => {
       const body: any = {};
       if (st.newText) body.text = st.newText;
       if (newAnswer) body.correctAnswer = newAnswer;
-      if (Object.keys(body).length > 0) await apiPatch(`/api/admin/questions/${st.id}`, body);
+      if (Object.keys(body).length > 0) await apiPatch(`/api/admin/questions/${st.id}`, body, uid);
       clearState(uid);
       await ctx.reply("✅ Savol yangilandi!", { reply_markup: ADMIN_KB });
     } catch (e: any) {
@@ -865,11 +897,11 @@ bot.on("message:text", async ctx => {
   // ── Broadcast ──
   if (st.t === "broadcast_text") {
     try {
-      const data = await apiGet("/api/admin/users/ids");
+      const data = await apiGet("/api/admin/users/ids", uid);
       const total: number = data.total || 0;
       setState(uid, { t: "broadcast_confirm", text, total });
       await ctx.reply(
-        `📢 *Xabar ko'rinishi:*\n\n${text}\n\n` +
+        `📢 *Xabar ko'rinishi:*\n\n${md(text)}\n\n` +
         `─────────────────\n` +
         `📬 ${total} ta foydalanuvchiga yuboriladi\n\n` +
         `Tasdiqlaysizmi?`,
@@ -894,7 +926,7 @@ bot.on("message:text", async ctx => {
       await ctx.reply("❌ Noto'g'ri Telegram ID. Raqam kiriting:");
       return;
     }
-    if (parsed === SUPER_ADMIN_ID) {
+    if (isSuperAdmin(parsed)) {
       await ctx.reply("⚠️ Bu allaqachon super-admin!");
       return;
     }
@@ -910,7 +942,7 @@ bot.on("message:text", async ctx => {
   if (st.t === "add_admin_note") {
     const note = text.startsWith("/") ? "" : text.slice(0, 100);
     try {
-      await apiPost("/api/admin/admins", { telegramId: st.telegramId, note });
+      await apiPost("/api/admin/admins", { telegramId: st.telegramId, note }, uid);
       await refreshAdmins();
       clearState(uid);
       await ctx.reply(`✅ Admin qo'shildi: ID ${st.telegramId}`, { reply_markup: ADMIN_KB });
@@ -938,12 +970,12 @@ bot.on("message:text", async ctx => {
 
     const loadMsg = await ctx.reply("⏳ Tekshirilmoqda...");
     try {
-      await apiPost("/api/admin/channels", { channelUsername: username, channelTitle: title });
+      await apiPost("/api/admin/channels", { channelUsername: username, channelTitle: title }, uid);
       invalidateChannelsCache();
       clearState(uid);
       try { await ctx.api.deleteMessage(ctx.chat!.id, loadMsg.message_id); } catch { /**/ }
       await ctx.reply(
-        `✅ *Kanal qo'shildi!*\n\n📢 @${username} — ${title}`,
+        `✅ *Kanal qo'shildi!*\n\n📢 @${md(username)} — ${md(title)}`,
         { parse_mode: "Markdown", reply_markup: ADMIN_KB }
       );
     } catch (e: any) {
@@ -971,7 +1003,7 @@ async function handleSkip(ctx: any) {
   } else if (st.t === "edit_answer") {
     try {
       const s = st as { t: "edit_answer"; id: string; newText: string | null };
-      if (s.newText) await apiPatch(`/api/admin/questions/${s.id}`, { text: s.newText });
+      if (s.newText) await apiPatch(`/api/admin/questions/${s.id}`, { text: s.newText }, uid);
       clearState(uid);
       await ctx.reply("✅ Savol yangilandi!", { reply_markup: ADMIN_KB });
     } catch (e: any) {
@@ -980,7 +1012,7 @@ async function handleSkip(ctx: any) {
     }
   } else if (st.t === "add_admin_note") {
     try {
-      await apiPost("/api/admin/admins", { telegramId: st.telegramId, note: "" });
+      await apiPost("/api/admin/admins", { telegramId: st.telegramId, note: "" }, uid);
       await refreshAdmins();
       clearState(uid);
       await ctx.reply(`✅ Admin qo'shildi: ID ${st.telegramId}`, { reply_markup: ADMIN_KB });
@@ -1079,7 +1111,7 @@ bot.on("callback_query:data", async ctx => {
   if (data.startsWith("qdc:")) {
     const id = data.slice(4);
     try {
-      await apiDelete(`/api/admin/questions/${id}`);
+      await apiDelete(`/api/admin/questions/${id}`, uid);
       await ctx.answerCallbackQuery("✅ O'chirildi!");
       await ctx.editMessageText("✅ Savol o'chirildi.");
     } catch (e: any) {
@@ -1110,14 +1142,14 @@ bot.on("callback_query:data", async ctx => {
           category: st.category || null,
           difficulty,
           wrongAnswers: [],
-        });
+        }, uid);
         clearState(uid);
         await ctx.answerCallbackQuery("✅ Saqlandi!");
         await ctx.editMessageText(
           `✅ *Savol qo'shildi!*\n\n` +
-          `📝 ${st.text}\n` +
-          `✓ Javob: *${st.answer}*\n` +
-          (st.category ? `📂 Kategoriya: ${st.category}\n` : ``) +
+          `📝 ${md(st.text)}\n` +
+          `✓ Javob: *${md(st.answer)}*\n` +
+          (st.category ? `📂 Kategoriya: ${md(st.category)}\n` : ``) +
           `🎯 Qiyinlik: ${diff === "null" ? "yo'q" : diff}`,
           { parse_mode: "Markdown" }
         );
@@ -1129,10 +1161,10 @@ bot.on("callback_query:data", async ctx => {
         const adderName = ctx.from?.first_name || `ID ${uid}`;
         const notifyText =
           `🆕 *Yangi savol qo'shildi*\n\n` +
-          `👤 Qo'shgan: ${adderName} (ID ${uid})\n` +
-          `📝 ${st.text}\n` +
-          `✓ Javob: ${st.answer}` +
-          (st.category ? `\n📂 ${st.category}` : ``) +
+          `👤 Qo'shgan: ${md(adderName)} (ID ${uid})\n` +
+          `📝 ${md(st.text)}\n` +
+          `✓ Javob: ${md(st.answer)}` +
+          (st.category ? `\n📂 ${md(st.category)}` : ``) +
           (diff !== "null" ? `\n🎯 ${diff}` : ``);
         for (const aid of adminIds) {
           if (aid === uid || aid <= 0) continue;
@@ -1164,7 +1196,7 @@ bot.on("callback_query:data", async ctx => {
       // Har bir savolga wrongAnswers: [] qo'shamiz (erkin matn rejimi).
       // Bulk PDF importida foydalanuvchi alohida wrong variantlarni kiritmaydi.
       const questionsWithWrong = st.questions.map((q) => ({ ...q, wrongAnswers: [] }));
-      const result = await apiPost("/api/admin/questions/bulk", { questions: questionsWithWrong });
+      const result = await apiPost("/api/admin/questions/bulk", { questions: questionsWithWrong }, uid);
       clearState(uid);
       await ctx.answerCallbackQuery("✅ Saqlandi!");
       await ctx.editMessageText(`✅ ${result.inserted ?? st.questions.length} ta savol saqlandi!`);
@@ -1196,7 +1228,7 @@ bot.on("callback_query:data", async ctx => {
   if (data === "uexport") {
     await ctx.answerCallbackQuery("📥 Export tayyorlanmoqda...");
     try {
-      const data2 = await apiGet("/api/admin/users/export");
+      const data2 = await apiGet("/api/admin/users/export", uid);
       const users: AppUser[] = data2.items || [];
       if (users.length === 0) {
         await ctx.reply("❌ Eksport qilish uchun foydalanuvchilar yo'q.");
@@ -1227,7 +1259,7 @@ bot.on("callback_query:data", async ctx => {
     await ctx.editMessageText("📡 *Xabar yuborilmoqda...*\nIltimos kuting.", { parse_mode: "Markdown" });
 
     try {
-      const idsData = await apiGet("/api/admin/users/ids");
+      const idsData = await apiGet("/api/admin/users/ids", uid);
       const ids: number[] = idsData.ids || [];
       if (ids.length === 0) {
         await bot.api.sendMessage(uid, "❌ Foydalanuvchilar topilmadi.", { reply_markup: ADMIN_KB });
@@ -1268,7 +1300,10 @@ bot.on("callback_query:data", async ctx => {
 
   // Admin management
   if (data === "admin_add") {
-    if (!isAdmin(uid)) { await ctx.answerCallbackQuery(); return; }
+    if (!isSuperAdmin(uid)) {
+      await ctx.answerCallbackQuery("❌ Faqat super-admin admin qo'sha oladi");
+      return;
+    }
     setState(uid, { t: "add_admin_id" });
     await ctx.answerCallbackQuery();
     await ctx.reply(
@@ -1288,7 +1323,7 @@ bot.on("callback_query:data", async ctx => {
     }
     const targetId = parseInt(data.slice(10), 10);
     try {
-      await apiDelete(`/api/admin/admins/${targetId}`);
+      await apiDelete(`/api/admin/admins/${targetId}`, uid);
       await refreshAdmins();
       await ctx.answerCallbackQuery("✅ O'chirildi!");
       await ctx.editMessageText(`✅ Admin ID ${targetId} o'chirildi.`);
@@ -1329,7 +1364,7 @@ bot.on("callback_query:data", async ctx => {
   if (data.startsWith("ch_delc:")) {
     const pk = parseInt(data.slice(8), 10);
     try {
-      await apiDelete(`/api/admin/channels/${pk}`);
+      await apiDelete(`/api/admin/channels/${pk}`, uid);
       invalidateChannelsCache();
       await ctx.answerCallbackQuery("✅ O'chirildi!");
       await ctx.editMessageText("✅ Kanal majburiy ro'yxatdan o'chirildi.");
@@ -1377,7 +1412,7 @@ async function startBot(attemptsLeft = 5): Promise<void> {
         console.log(`Zakovat bot ishga tushdi: @${info.username}`);
         console.log(`[bot] MINI_APP_URL: ${MINI_APP_URL || "(belgilanmagan)"}`);
         if (!BACKEND_URL) console.warn("⚠️  BACKEND_URL ko'rsatilmagan");
-        if (!SUPER_ADMIN_ID) console.warn("⚠️  ADMIN_ID ko'rsatilmagan");
+        if (SUPER_ADMIN_IDS.size === 0) console.warn("⚠️  ADMIN_TELEGRAM_IDS yoki ADMIN_ID ko'rsatilmagan");
         await refreshAdmins();
         if (MINI_APP_URL) {
           try {

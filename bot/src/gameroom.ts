@@ -26,8 +26,11 @@ export interface GrBotDeps {
   apiPost: (path: string, body: object) => Promise<any>;
   apiPatch: (path: string, body: object) => Promise<any>;
   apiDelete: (path: string) => Promise<any>;
+  apiGetOnBehalf: (path: string, telegramId: number) => Promise<any>;
   /** Bot ishtirokchi nomidan chaqiruv — X-On-Behalf-Of header qo'shiladi */
   apiPostOnBehalf: (path: string, body: object, telegramId: number) => Promise<any>;
+  apiPatchOnBehalf: (path: string, body: object, telegramId: number) => Promise<any>;
+  apiDeleteOnBehalf: (path: string, telegramId: number) => Promise<any>;
   isAdmin: (id: number) => boolean;
   getState: (id: number) => BotState;
   setState: (id: number, s: BotState) => void;
@@ -37,10 +40,11 @@ export interface GrBotDeps {
 
 // ─── Binary API yordamchi (xlsx uchun — JSON parse qilinmaydi) ──────────────
 
-async function apiBinaryGet(deps: GrBotDeps, path: string): Promise<Buffer> {
+async function apiBinaryGet(deps: GrBotDeps, path: string, telegramId: number): Promise<Buffer> {
   const r = await fetch(`${deps.BACKEND_URL}${path}`, {
     headers: {
       Authorization: `bot ${deps.ADMIN_API_KEY}`,
+      "X-On-Behalf-Of": String(telegramId),
     },
   });
   if (!r.ok) {
@@ -88,15 +92,50 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 
 // Ishtirokchi muloqoti (xabar yuborish uchun) — roomCode → Set<telegramId>
 // Bot qayta ishga tushganda yo'qoladi (in-memory)
-const roomParticipants = new Map<string, Set<number>>();
+const PARTICIPANT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const roomParticipants = new Map<string, Map<number, number>>();
 
 function addRoomParticipant(roomCode: string, telegramId: number) {
-  if (!roomParticipants.has(roomCode)) roomParticipants.set(roomCode, new Set());
-  roomParticipants.get(roomCode)!.add(telegramId);
+  const code = roomCode.toUpperCase();
+  if (!roomParticipants.has(code)) roomParticipants.set(code, new Map());
+  roomParticipants.get(code)!.set(telegramId, Date.now());
 }
 
-function getRoomParticipantIds(roomCode: string): number[] {
-  return Array.from(roomParticipants.get(roomCode) ?? []);
+async function getRoomParticipantIds(deps: GrBotDeps, roomCode: string): Promise<number[]> {
+  const code = roomCode.toUpperCase();
+  const now = Date.now();
+  const cached = roomParticipants.get(code);
+  const ids = new Set<number>();
+  if (cached) {
+    for (const [tid, seenAt] of cached.entries()) {
+      if (now - seenAt <= PARTICIPANT_CACHE_TTL_MS) ids.add(tid);
+      else cached.delete(tid);
+    }
+  }
+
+  try {
+    const data = await deps.apiGet(`/api/gamerooms/rooms/${code}/leaderboard`);
+    for (const p of data.leaderboard ?? []) {
+      const tid = Number(p.telegramId);
+      if (tid > 0) ids.add(tid);
+    }
+  } catch {
+    // Backend vaqtincha javob bermasa, keshdagi ishtirokchilar bilan davom etamiz.
+  }
+  return Array.from(ids);
+}
+
+function md(value: unknown): string {
+  return String(value ?? "").replace(/([\\_*[\]()`])/g, "\\$1");
+}
+
+function requireBotAdmin(ctx: any, deps: GrBotDeps): boolean {
+  const uid = Number(ctx.from?.id ?? 0);
+  if (!deps.isAdmin(uid)) {
+    void ctx.answerCallbackQuery?.({ text: "Admin huquqi kerak", show_alert: true }).catch(() => {});
+    return false;
+  }
+  return true;
 }
 
 // ─── Inline keyboard yordamchilari ──────────────────────────────────────────
@@ -139,7 +178,7 @@ function formatLeaderboard(leaderboard: any[]): string {
     .slice(0, 15)
     .map((p, i) => {
       const medal = MEDALS[i] ?? `${i + 1}.`;
-      return `${medal} *${p.displayName}* — ${p.totalPoints} ball`;
+      return `${medal} *${md(p.displayName)}* — ${p.totalPoints} ball`;
     })
     .join("\n");
 }
@@ -163,20 +202,12 @@ function formatQuestion(q: any, idx?: number): string {
   const timer = formatSeconds(q.timeLimitSeconds);
   return (
     `${typeLabel}${bonus}${quick} ${num}(${pts}, ${timer})\n\n` +
-    `${q.body}` +
-    (q.caption ? `\n\n_${q.caption}_` : "")
+    `${md(q.body)}` +
+    (q.caption ? `\n\n_${md(q.caption)}_` : "")
   );
 }
 
 // ─── Backend API yordamchilari ───────────────────────────────────────────────
-
-async function grApiPost(deps: GrBotDeps, path: string, body: object): Promise<any> {
-  return deps.apiPost(path, body);
-}
-
-async function grApiGet(deps: GrBotDeps, path: string): Promise<any> {
-  return deps.apiGet(path);
-}
 
 // ─── Xona yaratish ───────────────────────────────────────────────────────────
 
@@ -208,8 +239,8 @@ export async function handleGrPushQuestion(ctx: any, deps: GrBotDeps, roomCode: 
 
 // ─── Broadcast: savol barcha ishtirokchilarga yuborish ──────────────────────
 
-async function broadcastQuestion(bot: Bot<any>, roomCode: string, question: any) {
-  const ids = getRoomParticipantIds(roomCode);
+async function broadcastQuestion(bot: Bot<any>, deps: GrBotDeps, roomCode: string, question: any) {
+  const ids = await getRoomParticipantIds(deps, roomCode);
   if (!ids.length) return;
 
   const timer = formatSeconds(question.timeLimitSeconds);
@@ -224,16 +255,16 @@ async function broadcastQuestion(bot: Bot<any>, roomCode: string, question: any)
     try {
       if (question.questionType === "audio" && question.mediaRef) {
         await bot.api.sendAudio(tid, question.mediaRef, {
-          caption: header + question.body + (question.caption ? `\n\n_${question.caption}_` : ""),
+          caption: header + md(question.body) + (question.caption ? `\n\n_${md(question.caption)}_` : ""),
           parse_mode: "Markdown",
         });
       } else if (question.questionType === "image" && question.mediaRef) {
         await bot.api.sendPhoto(tid, question.mediaRef, {
-          caption: header + question.body + (question.caption ? `\n\n_${question.caption}_` : ""),
+          caption: header + md(question.body) + (question.caption ? `\n\n_${md(question.caption)}_` : ""),
           parse_mode: "Markdown",
         });
       } else {
-        await bot.api.sendMessage(tid, header + question.body, { parse_mode: "Markdown" });
+        await bot.api.sendMessage(tid, header + md(question.body), { parse_mode: "Markdown" });
       }
       // Javob yo'riqnomasi
       await bot.api.sendMessage(
@@ -247,8 +278,8 @@ async function broadcastQuestion(bot: Bot<any>, roomCode: string, question: any)
   }
 }
 
-async function broadcastMessage(bot: Bot<any>, roomCode: string, text: string) {
-  const ids = getRoomParticipantIds(roomCode);
+async function broadcastMessage(bot: Bot<any>, deps: GrBotDeps, roomCode: string, text: string) {
+  const ids = await getRoomParticipantIds(deps, roomCode);
   for (const tid of ids) {
     try {
       await bot.api.sendMessage(tid, text, { parse_mode: "Markdown" });
@@ -267,6 +298,25 @@ export async function handleGrText(ctx: any, deps: GrBotDeps): Promise<boolean> 
   const uid: number = ctx.from!.id;
   const text: string = ctx.message.text.trim();
   const st = deps.getState(uid) as GrState;
+  const adminState = [
+    "gr_room_name",
+    "gr_room_password",
+    "gr_q_type",
+    "gr_q_body",
+    "gr_q_audio",
+    "gr_q_photo",
+    "gr_q_caption",
+    "gr_q_answer",
+    "gr_q_timer",
+    "gr_q_points",
+    "gr_correct_answer",
+    "gr_cancel_q_confirm",
+  ].includes(st.t);
+  if (adminState && !deps.isAdmin(uid)) {
+    deps.clearState(uid);
+    await ctx.reply("⛔ Admin huquqi kerak.");
+    return true;
+  }
 
   // ── Admin: xona yaratish oqimi ──
   if (st.t === "gr_room_name") {
@@ -276,7 +326,7 @@ export async function handleGrText(ctx: any, deps: GrBotDeps): Promise<boolean> 
     }
     deps.setState(uid, { t: "gr_room_password", name: text } as GrState);
     await ctx.reply(
-      `✅ Xona nomi: *${text}*\n\n🔒 Parol o'rnating (ixtiyoriy):\n/skip — paroolsiz xona`,
+      `✅ Xona nomi: *${md(text)}*\n\n🔒 Parol o'rnating (ixtiyoriy):\n/skip — paroolsiz xona`,
       { parse_mode: "Markdown" }
     );
     return true;
@@ -351,13 +401,14 @@ export async function handleGrText(ctx: any, deps: GrBotDeps): Promise<boolean> 
       return true;
     }
     try {
-      await deps.apiPatch(
+      await deps.apiPatchOnBehalf(
         `/api/gamerooms/admin/rooms/${st.roomCode}/questions/${st.questionId}/correct-answer`,
-        { correctAnswer: text }
+        { correctAnswer: text },
+        uid
       );
       deps.clearState(uid);
       await ctx.reply(
-        `✅ To'g'ri javob o'rnatildi: *${text}*\n\nEndi avto-baholash yoki qo'lda baholash qilishingiz mumkin.`,
+        `✅ To'g'ri javob o'rnatildi: *${md(text)}*\n\nEndi avto-baholash yoki qo'lda baholash qilishingiz mumkin.`,
         { parse_mode: "Markdown", reply_markup: deps.ADMIN_KB }
       );
     } catch (e: any) {
@@ -383,7 +434,7 @@ export async function handleGrText(ctx: any, deps: GrBotDeps): Promise<boolean> 
     if (st.hasPassword) {
       deps.setState(uid, { t: "gr_join_password", roomCode: st.roomCode, roomName: st.roomName, displayName: text } as GrState);
       await ctx.reply(
-        `✅ Taxallus: *${text}*\n\n🔒 Xona paroli zarur. Parolni kiriting:`,
+        `✅ Taxallus: *${md(text)}*\n\n🔒 Xona paroli zarur. Parolni kiriting:`,
         { parse_mode: "Markdown" }
       );
     } else {
@@ -424,6 +475,11 @@ export async function handleGrMedia(ctx: any, deps: GrBotDeps, mediaType: "audio
   const st = deps.getState(uid) as GrState;
 
   if (mediaType === "audio" && (st.t === "gr_q_audio")) {
+    if (!deps.isAdmin(uid)) {
+      deps.clearState(uid);
+      await ctx.reply("⛔ Admin huquqi kerak.");
+      return true;
+    }
     const msg = ctx.message;
     const fileId: string =
       msg.audio?.file_id ?? msg.voice?.file_id ?? "";
@@ -441,6 +497,11 @@ export async function handleGrMedia(ctx: any, deps: GrBotDeps, mediaType: "audio
   }
 
   if (mediaType === "photo" && (st.t === "gr_q_photo")) {
+    if (!deps.isAdmin(uid)) {
+      deps.clearState(uid);
+      await ctx.reply("⛔ Admin huquqi kerak.");
+      return true;
+    }
     const msg = ctx.message;
     const photos = msg.photo;
     if (!photos || photos.length === 0) {
@@ -467,10 +528,20 @@ export async function handleGrSkip(ctx: any, deps: GrBotDeps): Promise<boolean> 
   const st = deps.getState(uid) as GrState;
 
   if (st.t === "gr_room_password") {
+    if (!deps.isAdmin(uid)) {
+      deps.clearState(uid);
+      await ctx.reply("⛔ Admin huquqi kerak.");
+      return true;
+    }
     await doCreateRoom(ctx, deps, uid, st.name, "");
     return true;
   }
   if (st.t === "gr_q_caption") {
+    if (!deps.isAdmin(uid)) {
+      deps.clearState(uid);
+      await ctx.reply("⛔ Admin huquqi kerak.");
+      return true;
+    }
     // Izohlarsiz — to'g'ri javob so'rash
     deps.setState(uid, { ...st, t: "gr_q_answer", caption: "" } as GrState);
     await ctx.reply(
@@ -480,6 +551,11 @@ export async function handleGrSkip(ctx: any, deps: GrBotDeps): Promise<boolean> 
     return true;
   }
   if (st.t === "gr_q_answer") {
+    if (!deps.isAdmin(uid)) {
+      deps.clearState(uid);
+      await ctx.reply("⛔ Admin huquqi kerak.");
+      return true;
+    }
     // To'g'ri javovsiz — timer tanlash
     deps.setState(uid, { ...st, t: "gr_q_timer", correctAnswer: "" } as GrState);
     await ctx.reply(
@@ -510,6 +586,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
   // ── Savol turi tanlash ──
   // gr:qtype:<roomCode>:<type>
   if (data.startsWith("gr:qtype:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const parts = data.split(":");
     const roomCode = parts[2];
     const qType = parts[3] as "text" | "audio" | "image";
@@ -531,6 +608,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
   // ── Vaqt tanlash ──
   // gr:timer:<roomCode>:<seconds>
   if (data.startsWith("gr:timer:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const parts = data.split(":");
     const roomCode = parts[2];
     const timer = parseInt(parts[3], 10);
@@ -551,6 +629,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
   // ── Ball tanlash va savolni push qilish ──
   // gr:pts:<roomCode>:<points>
   if (data.startsWith("gr:pts:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const parts = data.split(":");
     const roomCode = parts[2];
     const pointValue = parseInt(parts[3], 10);
@@ -563,7 +642,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
     await ctx.answerCallbackQuery("⏳ Savol yuborilmoqda...");
     await ctx.editMessageText("⏳ Savol push qilinmoqda...");
     try {
-      const question = await deps.apiPost(
+      const question = await deps.apiPostOnBehalf(
         `/api/gamerooms/admin/rooms/${roomCode}/questions`,
         {
           questionType: st.qType,
@@ -575,21 +654,22 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
           pointValue,
           isBonus: false,
           isQuick: st.timer <= 30,
-        }
+        },
+        uid
       );
       const summaryLines = [
         `✅ *Savol push qilindi!*`,
         ``,
-        `📝 ${question.body?.slice(0, 80) ?? st.qBody.slice(0, 80)}`,
+        `📝 ${md(question.body?.slice(0, 80) ?? st.qBody.slice(0, 80))}`,
         `⏱ Vaqt: ${formatSeconds(question.timeLimitSeconds)}`,
         `💰 Ball: ${question.pointValue}`,
-        question.correctAnswer ? `✓ To'g'ri javob: ${question.correctAnswer}` : `⚠️ To'g'ri javob kiritilmagan — keyin o'rnating`,
+        question.correctAnswer ? `✓ To'g'ri javob: ${md(question.correctAnswer)}` : `⚠️ To'g'ri javob kiritilmagan — keyin o'rnating`,
         ``,
         `👥 Ishtirokchilarga xabar yuborilmoqda...`,
       ];
       await ctx.editMessageText(summaryLines.join("\n"), { parse_mode: "Markdown" });
       // Barcha ishtirokchilarga broadcast
-      await broadcastQuestion(deps.bot, roomCode, question);
+      await broadcastQuestion(deps.bot, deps, roomCode, question);
       // Admin uchun boshqaruv klaviatura
       await deps.bot.api.sendMessage(
         uid,
@@ -606,19 +686,21 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
   // ── O'yinni boshlash ──
   // gr:start:<roomCode>
   if (data.startsWith("gr:start:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(9);
     await ctx.answerCallbackQuery("▶️ Boshlanmoqda...");
     try {
-      const state = await deps.apiPost(
+      const state = await deps.apiPostOnBehalf(
         `/api/gamerooms/admin/rooms/${roomCode}/start`,
-        {}
+        {},
+        uid
       );
       const count = state.participantCount ?? 0;
       await ctx.editMessageText(
         `▶️ *O'yin boshlandi!* Xona: \`${roomCode}\`\n\n👥 Ishtirokchilar: ${count} ta\n\nSavol yuborish uchun tugmani bosing:`,
         { parse_mode: "Markdown", reply_markup: grAdminRoomKb(roomCode) }
       );
-      await broadcastMessage(deps.bot, roomCode, `🎮 *O'yin boshlandi!* Xona: \`${roomCode}\`\n\nAdmin birinchi savolni yuboradi. Tayyor bo'ling!`);
+      await broadcastMessage(deps.bot, deps, roomCode, `🎮 *O'yin boshlandi!* Xona: \`${roomCode}\`\n\nAdmin birinchi savolni yuboradi. Tayyor bo'ling!`);
     } catch (e: any) {
       await ctx.answerCallbackQuery(`❌ ${e?.message}`, { show_alert: true });
     }
@@ -627,6 +709,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
 
   // ── Savol push qilish (admin panel tugmasidan) ──
   if (data.startsWith("gr:pushq:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(9);
     await ctx.answerCallbackQuery();
     await handleGrPushQuestion(ctx, deps, roomCode);
@@ -635,25 +718,27 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
 
   // ── Aktiv savolni yopish ──
   if (data.startsWith("gr:closeq:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(10);
     await ctx.answerCallbackQuery("⏳ Yopilmoqda...");
     try {
       // Joriy aktiv savolni topish
-      const state = await deps.apiGet(`/api/gamerooms/rooms/${roomCode}/state?adminView=1`);
+      const state = await deps.apiGetOnBehalf(`/api/gamerooms/rooms/${roomCode}/state?adminView=1`, uid);
       const cq = state.currentQuestion;
       if (!cq) {
         await ctx.answerCallbackQuery("❌ Hozir aktiv savol yo'q", { show_alert: true });
         return true;
       }
-      await deps.apiPost(
+      await deps.apiPostOnBehalf(
         `/api/gamerooms/admin/rooms/${roomCode}/questions/${cq.id}/close`,
-        {}
+        {},
+        uid
       );
       await ctx.editMessageText(
         `✅ Savol yopildi.\n\n📋 Endi javoblarni ko'rish yoki baholashingiz mumkin:`,
         { reply_markup: grAdminRoomKb(roomCode) }
       );
-      await broadcastMessage(deps.bot, roomCode, `⏰ *Savol yopildi!*\n\nJavoblar qabul qilinmaydi. Admin natijalarni ko'rib chiqmoqda...`);
+      await broadcastMessage(deps.bot, deps, roomCode, `⏰ *Savol yopildi!*\n\nJavoblar qabul qilinmaydi. Admin natijalarni ko'rib chiqmoqda...`);
     } catch (e: any) {
       await ctx.answerCallbackQuery(`❌ ${e?.message}`, { show_alert: true });
     }
@@ -662,6 +747,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
 
   // ── Javoblarni ko'rish ──
   if (data.startsWith("gr:subs:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(8);
     await ctx.answerCallbackQuery("⏳ Yuklanmoqda...");
     await showSubmissions(ctx, deps, uid, roomCode);
@@ -671,14 +757,16 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
   // ── Auto-grade ──
   // gr:autograde:<roomCode>:<questionId>
   if (data.startsWith("gr:autograde:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const parts = data.split(":");
     const roomCode = parts[2];
     const questionId = parseInt(parts[3], 10);
     await ctx.answerCallbackQuery("🤖 Baholanmoqda...");
     try {
-      const result = await deps.apiPost(
+      const result = await deps.apiPostOnBehalf(
         `/api/gamerooms/admin/rooms/${roomCode}/questions/${questionId}/auto-grade`,
-        {}
+        {},
+        uid
       );
       await ctx.editMessageText(
         `🤖 *Avto-baholash tugadi!*\n\n` +
@@ -706,15 +794,17 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
   // ── Manual grade ──
   // gr:grade:<roomCode>:<submissionId>:<1|0>
   if (data.startsWith("gr:grade:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const parts = data.split(":");
     const roomCode = parts[2];
     const submissionId = parseInt(parts[3], 10);
     const isCorrect = parts[4] === "1";
     await ctx.answerCallbackQuery(isCorrect ? "✅ To'g'ri" : "❌ Noto'g'ri");
     try {
-      await deps.apiPatch(
+      await deps.apiPatchOnBehalf(
         `/api/gamerooms/admin/rooms/${roomCode}/submissions/${submissionId}/grade`,
-        { isCorrect }
+        { isCorrect },
+        uid
       );
       // Xabarni yangilab keyingi submission'ga o'tamiz
       await ctx.editMessageText(
@@ -729,22 +819,25 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
 
   // ── Statistika ──
   if (data.startsWith("gr:stats:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(9);
     await ctx.answerCallbackQuery("📊 Yuklanmoqda...");
-    await showRoomStats(ctx, deps, roomCode);
+    await showRoomStats(ctx, deps, uid, roomCode);
     return true;
   }
 
   // ── Leaderboard ──
   if (data.startsWith("gr:lb:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(6);
     await ctx.answerCallbackQuery("🏆 Yuklanmoqda...");
-    await showLeaderboard(ctx, deps, roomCode);
+    await showLeaderboard(ctx, deps, uid, roomCode);
     return true;
   }
 
   // ── Natijalar eksport ──
   if (data.startsWith("gr:results:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(11);
     await ctx.answerCallbackQuery("📥 Tayyorlanmoqda...");
     await exportResults(ctx, deps, uid, roomCode);
@@ -753,17 +846,19 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
 
   // ── O'yinni yakunlash ──
   if (data.startsWith("gr:finish:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(10);
     await ctx.answerCallbackQuery("🏁 Yakunlanmoqda...");
     try {
-      const state = await deps.apiPost(
+      const state = await deps.apiPostOnBehalf(
         `/api/gamerooms/admin/rooms/${roomCode}/finish`,
-        {}
+        {},
+        uid
       );
       const lb = state.leaderboard ?? [];
       const top = lb.slice(0, 3);
       const podiumLines = top.map((p: any, i: number) =>
-        `${MEDALS[i] ?? `${i + 1}.`} *${p.displayName}* — ${p.totalPoints} ball`
+        `${MEDALS[i] ?? `${i + 1}.`} *${md(p.displayName)}* — ${p.totalPoints} ball`
       ).join("\n");
 
       await ctx.editMessageText(
@@ -772,7 +867,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
       );
       // Ishtirokchilarga xabar
       await broadcastMessage(
-        deps.bot, roomCode,
+        deps.bot, deps, roomCode,
         `🏁 *O'yin tugadi!*\n\n🏆 *Yakuniy reyting:*\n\n${podiumLines || "_Ishtirokchilar yo'q_"}\n\n🎉 O'ynaganliklari uchun rahmat!`
       );
       await deps.bot.api.sendMessage(uid, "Admin panel:", { reply_markup: deps.ADMIN_KB });
@@ -784,6 +879,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
 
   // ── Admin: panel tugmasi (submissions ko'rish sahifasidan qaytish) ──
   if (data.startsWith("gr:panel:")) {
+    if (!requireBotAdmin(ctx, deps)) return true;
     const roomCode = data.slice(9);
     await ctx.answerCallbackQuery();
     await ctx.reply(
@@ -810,7 +906,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
     const roomCode = data.slice(11);
     await ctx.answerCallbackQuery("⏳ Tekshirilmoqda...");
     try {
-      const state = await deps.apiGet(`/api/gamerooms/rooms/${roomCode}/state?adminView=1`);
+      const state = await deps.apiGetOnBehalf(`/api/gamerooms/rooms/${roomCode}/state?adminView=1`, uid);
       const cq = state.currentQuestion;
       if (!cq) {
         await ctx.answerCallbackQuery("❌ Hozir aktiv savol yo'q", { show_alert: true });
@@ -819,7 +915,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
       deps.setState(uid, { t: "gr_cancel_q_confirm", roomCode, questionId: cq.id } as GrState);
       await ctx.reply(
         `⚠️ *Savol bekor qilinsinmi?*\n\n` +
-        `❓ #${cq.orderIndex}: ${(cq.body ?? "").slice(0, 80)}\n\n` +
+        `❓ #${cq.orderIndex}: ${md((cq.body ?? "").slice(0, 80))}\n\n` +
         `Bekor qilinsa, ushbu savol o'chiriladi va barcha yuborilgan javoblar hamda ball qaytariladi.`,
         {
           parse_mode: "Markdown",
@@ -842,9 +938,10 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
     const questionId = parseInt(parts[3], 10);
     await ctx.answerCallbackQuery("🚫 Bekor qilinmoqda...");
     try {
-      const result = await deps.apiPost(
+      const result = await deps.apiPostOnBehalf(
         `/api/gamerooms/admin/rooms/${roomCode}/questions/${questionId}/cancel`,
-        {}
+        {},
+        uid
       );
       deps.clearState(uid);
       const deleted = result.deletedSubmissionsCount ?? 0;
@@ -871,9 +968,10 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
     const roomCode = data.slice(12);
     await ctx.answerCallbackQuery("💾 Saqlanmoqda...");
     try {
-      const result = await deps.apiPost(
+      const result = await deps.apiPostOnBehalf(
         `/api/gamerooms/admin/rooms/${roomCode}/save-to-bank`,
-        {}
+        {},
+        uid
       );
       const saved = result.savedCount ?? 0;
       const skipped = result.skippedCount ?? 0;
@@ -898,7 +996,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
   if (data === "gr:myrooms") {
     if (!deps.isAdmin(uid)) { await ctx.answerCallbackQuery(); return true; }
     await ctx.answerCallbackQuery("📋 Yuklanmoqda...");
-    await showAdminRooms(ctx, deps);
+    await showAdminRooms(ctx, deps, uid);
     return true;
   }
 
@@ -908,7 +1006,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
     if (!deps.isAdmin(uid)) { await ctx.answerCallbackQuery(); return true; }
     const roomCode = data.slice(12);
     await ctx.answerCallbackQuery("📋 Yuklanmoqda...");
-    await openAdminRoom(ctx, deps, roomCode);
+    await openAdminRoom(ctx, deps, uid, roomCode);
     return true;
   }
 
@@ -943,7 +1041,7 @@ export async function handleDeepLinkJoin(ctx: any, deps: GrBotDeps, code: string
   const uid: number = ctx.from!.id;
   // Avval xona mavjudligini tekshirish (state endpoint'i)
   try {
-    const state = await deps.apiGet(`/api/gamerooms/rooms/${code}/state`);
+    const state = await deps.apiGetOnBehalf(`/api/gamerooms/rooms/${code}/state`, uid);
     if (state.status === "finished") {
       await ctx.reply(`❌ *${code}* xonasi tugagan — kirib bo'lmaydi.`, { parse_mode: "Markdown" });
       return;
@@ -975,7 +1073,7 @@ async function handleJoinCodeEntered(ctx: any, deps: GrBotDeps, uid: number, cod
     return;
   }
   try {
-    const state = await deps.apiGet(`/api/gamerooms/rooms/${code}/state`);
+    const state = await deps.apiGetOnBehalf(`/api/gamerooms/rooms/${code}/state`, uid);
     if (state.status === "finished") {
       deps.clearState(uid);
       await ctx.reply(`❌ *${code}* xonasi tugagan — kirib bo'lmaydi.`, { parse_mode: "Markdown" });
@@ -1109,7 +1207,7 @@ async function doSubmitAnswer(
 async function showSubmissions(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
   try {
     // Joriy aktiv/yopiq savolni topish
-    const state = await deps.apiGet(`/api/gamerooms/rooms/${roomCode}/state?adminView=1`);
+    const state = await deps.apiGetOnBehalf(`/api/gamerooms/rooms/${roomCode}/state?adminView=1`, uid);
     const cq = state.currentQuestion;
     if (!cq) {
       await ctx.reply(
@@ -1118,8 +1216,9 @@ async function showSubmissions(ctx: any, deps: GrBotDeps, uid: number, roomCode:
       );
       return;
     }
-    const subs = await deps.apiGet(
-      `/api/gamerooms/admin/rooms/${roomCode}/questions/${cq.id}/submissions`
+    const subs = await deps.apiGetOnBehalf(
+      `/api/gamerooms/admin/rooms/${roomCode}/questions/${cq.id}/submissions`,
+      uid
     );
     const submissions: any[] = subs.submissions ?? [];
     if (!submissions.length) {
@@ -1135,7 +1234,7 @@ async function showSubmissions(ctx: any, deps: GrBotDeps, uid: number, roomCode:
         s.isCorrect === true ? "✅" :
         s.isCorrect === false ? "❌" :
         "⏳";
-      return `${i + 1}. ${status} *${s.participantName}*: _${s.answerText?.slice(0, 60)}_`;
+      return `${i + 1}. ${status} *${md(s.participantName)}*: _${md(s.answerText?.slice(0, 60))}_`;
     }).join("\n");
 
     const ungraded = submissions.filter((s: any) => s.isCorrect === null);
@@ -1155,8 +1254,8 @@ async function showSubmissions(ctx: any, deps: GrBotDeps, uid: number, roomCode:
 
     await ctx.reply(
       `📋 *Savol #${cq.orderIndex}* — ${cq.status === "active" ? "🔴 Aktiv" : "⚫ Yopiq"}\n\n` +
-      `❓ ${cq.body?.slice(0, 80)}\n` +
-      (subs.correctAnswer ? `✓ To'g'ri: _${subs.correctAnswer}_\n` : "") +
+      `❓ ${md(cq.body?.slice(0, 80))}\n` +
+      (subs.correctAnswer ? `✓ To'g'ri: _${md(subs.correctAnswer)}_\n` : "") +
       `\n👥 Javoblar (${submissions.length} ta):\n\n${lines}`,
       { parse_mode: "Markdown", reply_markup: gradingKb }
     );
@@ -1167,22 +1266,22 @@ async function showSubmissions(ctx: any, deps: GrBotDeps, uid: number, roomCode:
 
 // ─── Admin: statistika ───────────────────────────────────────────────────────
 
-async function showRoomStats(ctx: any, deps: GrBotDeps, roomCode: string) {
+async function showRoomStats(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
   try {
-    const stats = await deps.apiGet(`/api/gamerooms/admin/rooms/${roomCode}/stats`);
+    const stats = await deps.apiGetOnBehalf(`/api/gamerooms/admin/rooms/${roomCode}/stats`, uid);
     const qCount = stats.questionCount ?? 0;
     const pCount = stats.participantCount ?? 0;
     const qLines = (stats.questionStats ?? []).slice(0, 8).map((q: any) =>
-      `  #${q.orderIndex}. ${q.body?.slice(0, 40)} — ✅${q.correctCount}/${q.totalSubmissions} (${q.correctRate}%)`
+      `  #${q.orderIndex}. ${md(q.body?.slice(0, 40))} — ✅${q.correctCount}/${q.totalSubmissions} (${q.correctRate}%)`
     ).join("\n");
 
     const hardest = stats.hardestQuestion;
     const hardLine = hardest
-      ? `\n\n🔴 *Eng qiyin:* #${hardest.orderIndex}. ${hardest.body?.slice(0, 40)} (${hardest.correctRate}%)`
+      ? `\n\n🔴 *Eng qiyin:* #${hardest.orderIndex}. ${md(hardest.body?.slice(0, 40))} (${hardest.correctRate}%)`
       : "";
 
     await ctx.reply(
-      `📊 *${stats.roomName}* statistikasi\n\n` +
+      `📊 *${md(stats.roomName)}* statistikasi\n\n` +
       `👥 Ishtirokchilar: ${pCount}\n` +
       `❓ Savollar: ${qCount}\n\n` +
       `📋 *Savollar bo'yicha:*\n${qLines || "_Savollar yo'q_"}` +
@@ -1196,18 +1295,18 @@ async function showRoomStats(ctx: any, deps: GrBotDeps, roomCode: string) {
 
 // ─── Admin: leaderboard ──────────────────────────────────────────────────────
 
-async function showLeaderboard(ctx: any, deps: GrBotDeps, roomCode: string) {
+async function showLeaderboard(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
   try {
-    const data = await deps.apiGet(`/api/gamerooms/rooms/${roomCode}/leaderboard`);
+    const data = await deps.apiGetOnBehalf(`/api/gamerooms/rooms/${roomCode}/leaderboard`, uid);
     const lb: any[] = data.leaderboard ?? [];
     const winners: any[] = data.winners ?? [];
 
     const podiumText = winners.length
-      ? `🏆 *G'oliblar:*\n${winners.map((p: any, i: number) => `${MEDALS[i]} *${p.displayName}* — ${p.totalPoints} ball`).join("\n")}\n\n`
+      ? `🏆 *G'oliblar:*\n${winners.map((p: any, i: number) => `${MEDALS[i]} *${md(p.displayName)}* — ${p.totalPoints} ball`).join("\n")}\n\n`
       : "";
 
     await ctx.reply(
-      `🏆 *${data.roomName}* reytingi\n\n` +
+      `🏆 *${md(data.roomName)}* reytingi\n\n` +
       podiumText +
       `👥 *Barcha ishtirokchilar:*\n${formatLeaderboard(lb)}`,
       { parse_mode: "Markdown", reply_markup: grAdminRoomKb(roomCode) }
@@ -1221,7 +1320,7 @@ async function showLeaderboard(ctx: any, deps: GrBotDeps, roomCode: string) {
 
 async function showParticipantLeaderboard(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
   try {
-    const data = await deps.apiGet(`/api/gamerooms/rooms/${roomCode}/leaderboard`);
+    const data = await deps.apiGetOnBehalf(`/api/gamerooms/rooms/${roomCode}/leaderboard`, uid);
     const lb: any[] = data.leaderboard ?? [];
     const myEntry = lb.find((p: any) => p.telegramId === uid);
     const myRank = myEntry ? lb.indexOf(myEntry) + 1 : null;
@@ -1231,7 +1330,7 @@ async function showParticipantLeaderboard(ctx: any, deps: GrBotDeps, uid: number
       : "";
 
     await ctx.reply(
-      `🏆 *${data.roomName}* reytingi\n\n${formatLeaderboard(lb)}${myLine}`,
+      `🏆 *${md(data.roomName)}* reytingi\n\n${formatLeaderboard(lb)}${myLine}`,
       { parse_mode: "Markdown" }
     );
   } catch (e: any) {
@@ -1243,7 +1342,7 @@ async function showParticipantLeaderboard(ctx: any, deps: GrBotDeps, uid: number
 
 async function exportResults(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
   try {
-    const data = await deps.apiGet(`/api/gamerooms/admin/rooms/${roomCode}/results`);
+    const data = await deps.apiGetOnBehalf(`/api/gamerooms/admin/rooms/${roomCode}/results`, uid);
     const questions: any[] = data.questions ?? [];
     const participants: any[] = data.participants ?? [];
 
@@ -1270,7 +1369,7 @@ async function exportResults(ctx: any, deps: GrBotDeps, uid: number, roomCode: s
       new InputFile(buf, `zakovat_room_${roomCode}_${date}.csv`),
       {
         caption:
-          `📥 *${data.roomName}* natijalar\n` +
+          `📥 *${md(data.roomName)}* natijalar\n` +
           `👥 Ishtirokchilar: ${participants.length}\n` +
           `❓ Savollar: ${questions.length}\n` +
           `📅 ${date}`,
@@ -1286,7 +1385,7 @@ async function exportResults(ctx: any, deps: GrBotDeps, uid: number, roomCode: s
 
 async function exportResultsXlsx(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
   try {
-    const buf = await apiBinaryGet(deps, `/api/gamerooms/admin/rooms/${roomCode}/results.xlsx`);
+    const buf = await apiBinaryGet(deps, `/api/gamerooms/admin/rooms/${roomCode}/results.xlsx`, uid);
     const date = new Date().toISOString().slice(0, 10);
     await ctx.replyWithDocument(
       new InputFile(buf, `zakovat_room_${roomCode}_${date}.xlsx`),
@@ -1310,9 +1409,9 @@ function statusLabel(status: string): string {
   return status;
 }
 
-async function showAdminRooms(ctx: any, deps: GrBotDeps) {
+async function showAdminRooms(ctx: any, deps: GrBotDeps, uid: number) {
   try {
-    const rooms: any[] = await deps.apiGet("/api/gamerooms/admin/rooms");
+    const rooms: any[] = await deps.apiGetOnBehalf("/api/gamerooms/admin/rooms", uid);
     if (!rooms.length) {
       await ctx.reply(
         "📋 *Oldingi o'yinlar*\n\n_Hozircha xonalar yo'q._",
@@ -1324,7 +1423,7 @@ async function showAdminRooms(ctx: any, deps: GrBotDeps) {
     const lines = rooms.slice(0, 10).map((r: any, i: number) => {
       const date = r.createdAt ? new Date(r.createdAt).toLocaleDateString("uz-UZ") : "—";
       return (
-        `${i + 1}. *${r.name}* [\`${r.code}\`]\n` +
+        `${i + 1}. *${md(r.name)}* [\`${r.code}\`]\n` +
         `   ${statusLabel(r.status)} | 👥 ${r.participantCount ?? 0} | ❓ ${r.questionCount ?? 0} | 📅 ${date}`
       );
     }).join("\n\n");
@@ -1346,10 +1445,10 @@ async function showAdminRooms(ctx: any, deps: GrBotDeps) {
   }
 }
 
-async function openAdminRoom(ctx: any, deps: GrBotDeps, roomCode: string) {
+async function openAdminRoom(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
   try {
     // Xona holatini olish
-    const state = await deps.apiGet(`/api/gamerooms/rooms/${roomCode}/state`);
+    const state = await deps.apiGetOnBehalf(`/api/gamerooms/rooms/${roomCode}/state`, uid);
     const status: string = state.status ?? "waiting";
 
     if (status === "finished") {
@@ -1363,7 +1462,7 @@ async function openAdminRoom(ctx: any, deps: GrBotDeps, roomCode: string) {
         : "—";
 
       await ctx.reply(
-        `🏁 *${state.name ?? roomCode}* — Tugagan\n\n` +
+        `🏁 *${md(state.name ?? roomCode)}* — Tugagan\n\n` +
         `🔑 Kod: \`${roomCode}\`\n` +
         `👥 Ishtirokchilar: ${state.participantCount ?? 0}\n` +
         `📅 Tugagan: ${date}\n\n` +
@@ -1374,7 +1473,7 @@ async function openAdminRoom(ctx: any, deps: GrBotDeps, roomCode: string) {
       // Aktiv yoki kutilayotgan xona — admin panelini ko'rsatish
       const count = state.participantCount ?? 0;
       await ctx.reply(
-        `${status === "active" ? "🟢" : "⏳"} *${state.name ?? roomCode}* — ${statusLabel(status)}\n\n` +
+        `${status === "active" ? "🟢" : "⏳"} *${md(state.name ?? roomCode)}* — ${statusLabel(status)}\n\n` +
         `🔑 Kod: \`${roomCode}\`\n` +
         `👥 Ishtirokchilar: ${count}\n\n` +
         `Boshqarish uchun tugmalardan foydalaning:`,
@@ -1397,18 +1496,18 @@ async function doCreateRoom(
 ) {
   deps.clearState(uid);
   try {
-    const result = await deps.apiPost("/api/gamerooms/admin/rooms", {
+    const result = await deps.apiPostOnBehalf("/api/gamerooms/admin/rooms", {
       name,
       joinPassword: password || "",
-    });
+    }, uid);
     const code: string = result.code;
     const deepLink = `https://t.me/${deps.BOT_USERNAME}?start=room_${code}`;
 
     const msg =
       `🏟 *Xona yaratildi!*\n\n` +
-      `📛 Nomi: *${name}*\n` +
+      `📛 Nomi: *${md(name)}*\n` +
       `🔑 Kod: \`${code}\`\n` +
-      (password ? `🔒 Parol: \`${password}\`\n` : `🔓 Parolsiz\n`) +
+      (password ? `🔒 Parol: \`${md(password)}\`\n` : `🔓 Parolsiz\n`) +
       `\n🔗 *Deep-link:*\n${deepLink}\n\n` +
       `_Bu havolani ulashib, ishtirokchilar to'g'ridan-to'g'ri qo'shilishi mumkin._`;
 

@@ -8,6 +8,7 @@ import urllib.request
 
 from django.conf import settings
 
+from apps.users.models import User
 from .models import RequiredChannel
 
 logger = logging.getLogger(__name__)
@@ -132,13 +133,13 @@ def _check_one_channel(telegram_user_id: int, channel_id: str) -> bool:
     admin bo'lishi kerak (public kanallarda bot a'zo bo'lmasa ham ishlaydi
     lekin ba'zi hollarda xato berishi mumkin).
 
-    Agar bot token yo'q yoki xato bo'lsa — True qaytaradi (bloklashdan
-    ko'ra o'tkazib yuboramiz, xavfsiz fail).
+    Agar bot token yo'q yoki xato bo'lsa — False qaytaradi. Majburiy kanal
+    access gate bo'lgani uchun tekshiruv xatosida fail-closed ishlatamiz.
     """
     bot_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
     if not bot_token:
         logger.warning("check_channel: TELEGRAM_BOT_TOKEN yo'q, tekshirilmadi")
-        return True
+        return False
 
     url = "https://api.telegram.org/bot{}/getChatMember".format(bot_token)
     params = urllib.parse.urlencode({
@@ -157,12 +158,14 @@ def _check_one_channel(telegram_user_id: int, channel_id: str) -> bool:
         return status in ("member", "administrator", "creator")
     except Exception as exc:  # noqa: BLE001
         logger.warning("getChatMember xato: %s | channel=%s", exc, channel_id)
-        # Xato holatlarda o'tkazib yuboramiz — foydalanuvchini noto'g'ri bloklamaslik uchun
-        return True
+        return False
 
 
 def check_user_subscriptions(telegram_user_id: int) -> dict:
     """Foydalanuvchining barcha aktiv kanallarga obuna holatini tekshirish.
+
+    Agar hammasi obuna bo'lgan bo'lsa — har kanal uchun passed_users ga
+    foydalanuvchini qo'shadi (M2M, takrorlanmaydi).
 
     Returns::
 
@@ -198,5 +201,16 @@ def check_user_subscriptions(telegram_user_id: int) -> dict:
             "channelUrl": ch.channel_url,
             "subscribed": subscribed,
         })
+
+    if all_ok:
+        try:
+            user = User.objects.get(telegram_id=telegram_user_id)
+            for ch in channels:
+                ch.passed_users.add(user)
+        except User.DoesNotExist:
+            logger.warning(
+                "check_subscriptions: user not found | telegram_id=%s",
+                telegram_user_id,
+            )
 
     return {"allSubscribed": all_ok, "channels": results}

@@ -18,6 +18,7 @@ import secrets
 import time
 from typing import Any
 
+from django.contrib.auth.hashers import check_password, identify_hasher, make_password
 from django.db import IntegrityError, transaction
 from django.db.models import F as models_F
 from django.utils import timezone
@@ -58,6 +59,35 @@ def _generate_code() -> str:
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
 
 
+def _hash_room_password(raw: str) -> str:
+    raw = (raw or "").strip()
+    return make_password(raw) if raw else ""
+
+
+def _is_hashed_password(value: str) -> bool:
+    if not value:
+        return False
+    try:
+        identify_hasher(value)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _room_password_matches(room: GameRoom, candidate: str) -> bool:
+    stored = room.join_password or ""
+    candidate = (candidate or "").strip()
+    if not stored:
+        return True
+    if _is_hashed_password(stored):
+        return check_password(candidate, stored)
+    if candidate == stored:
+        room.join_password = _hash_room_password(candidate)
+        room.save(update_fields=["join_password"])
+        return True
+    return False
+
+
 # ─── Xona boshqaruvi ─────────────────────────────────────────────────────────
 
 def create_room(
@@ -89,7 +119,7 @@ def create_room(
         code=code,
         name=name,
         admin_telegram_id=admin_telegram_id,
-        join_password=(join_password or "").strip(),
+        join_password=_hash_room_password(join_password),
         extra_admin_ids=extra_admin_ids or [],
         status="waiting",
     )
@@ -148,7 +178,7 @@ def join_room(
 
         # Parol tekshirish
         if room.join_password:
-            if (join_password or "").strip() != room.join_password:
+            if not _room_password_matches(room, join_password):
                 raise AppError(403, "Noto'g'ri parol")
 
         existing = Participant.objects.filter(
@@ -1423,5 +1453,4 @@ def cancel_question(
         "deletedSubmissionsCount": deleted_subs_count,
         "pointsReversedFor": len([s for s in graded_subs if (s.points_awarded or 0) > 0]),
     }
-
 

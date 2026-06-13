@@ -39,6 +39,15 @@ class RequiredChannel(models.Model):
         help_text="Kanal havolasi (t.me/username yoki invite link)",
     )
 
+    # Kanaldan muvaffaqiyatli o'tgan (obuna bo'lgan) foydalanuvchilar.
+    # M2M — bir foydalanuvchi bir kanal uchun bir marta hisoblanadi.
+    passed_users = models.ManyToManyField(
+        "users.User",
+        blank=True,
+        related_name="passed_channels",
+        help_text="Kanalga obunadan o'tgan foydalanuvchilar",
+    )
+
     # Soft delete — o'chirilganda tarix yo'qolmaydi
     is_active = models.BooleanField(
         default=True,
@@ -83,4 +92,5 @@ class RequiredChannel(models.Model):
             "addedByTelegramId": self.added_by_telegram_id,
             "addedByName": self.added_by_name,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "passedCount": self.passed_users.count(),
         }

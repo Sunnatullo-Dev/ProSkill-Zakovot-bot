@@ -66,7 +66,7 @@ class GameRoom(models.Model):
     # Qo'shimcha admin'lar — [{telegram_id: int, name: str}, ...]
     extra_admin_ids = models.JSONField(default=list, blank=True)
     # Ixtiyoriy parol — bo'sh bo'lsa erkin kirish
-    join_password = models.CharField(max_length=50, blank=True, default="")
+    join_password = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(
         max_length=10, choices=ROOM_STATUS_CHOICES, default="waiting", db_index=True
     )
