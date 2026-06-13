@@ -1,6 +1,16 @@
 import "dotenv/config";
 import { Bot, GrammyError, HttpError, InlineKeyboard, InputFile, Keyboard } from "grammy";
 import { createRequire } from "module";
+import {
+  type GrState,
+  type GrBotDeps,
+  handleGrText,
+  handleGrMedia,
+  handleGrCallback,
+  handleGrSkip,
+  handleGrRoomCreate,
+  handleDeepLinkJoin,
+} from "./gameroom.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -107,7 +117,8 @@ type State =
   | { t: "broadcast_confirm"; text: string; total: number }
   | { t: "add_admin_id" }
   | { t: "add_admin_note"; telegramId: number }
-  | { t: "ch_add_username" };
+  | { t: "ch_add_username" }
+  | GrState;
 
 const states = new Map<number, State>();
 const getState = (id: number): State => states.get(id) ?? { t: "idle" };
@@ -150,6 +161,32 @@ async function apiDelete(path: string): Promise<any> {
   } catch {
     return { ok: true };
   }
+}
+
+// Bot username — onStart'da to'ldiriladi (deep-link uchun)
+let BOT_USERNAME = "";
+
+/** Bot ishtirokchi nomidan chaqiruv: X-On-Behalf-Of header orqali */
+async function apiPostOnBehalf(path: string, body: object, telegramId: number): Promise<any> {
+  const headers = {
+    Authorization: `bot ${ADMIN_API_KEY}`,
+    "Content-Type": "application/json",
+    "X-On-Behalf-Of": String(telegramId),
+  };
+  const r = await fetch(`${BACKEND_URL}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!r.ok) { const t = await r.text(); throw new Error(`POST ${path} → ${r.status}: ${t.slice(0, 200)}`); }
+  return r.json();
+}
+
+/** apiGet on behalf of a participant (for state polling) */
+async function apiGetOnBehalf(path: string, telegramId: number): Promise<any> {
+  const headers = {
+    Authorization: `bot ${ADMIN_API_KEY}`,
+    "X-On-Behalf-Of": String(telegramId),
+  };
+  const r = await fetch(`${BACKEND_URL}${path}`, { headers });
+  if (!r.ok) { const t = await r.text(); throw new Error(`GET ${path} → ${r.status}: ${t.slice(0, 200)}`); }
+  return r.json();
 }
 
 // ─── PDF Parser ───────────────────────────────────────────────────────────────
@@ -200,6 +237,7 @@ const ADMIN_KB = new Keyboard()
   .text("📄 PDF yuklash").text("📊 Statistika").row()
   .text("👥 Foydalanuvchilar").text("📢 Reklama").row()
   .text("👨‍💼 Adminlar").text("📢 Majburiy kanallar").row()
+  .text("🎮 O'yin xonasi").row()
   .text("🏠 Asosiy menyu")
   .resized().persistent();
 
@@ -292,6 +330,24 @@ async function doBroadcast(
 // ─── Bot ──────────────────────────────────────────────────────────────────────
 const bot = new Bot(token);
 
+// Gameroom modul uchun dependency bag — barcha shared funksiyalar
+const grDeps: GrBotDeps = {
+  get bot() { return bot; },
+  get BACKEND_URL() { return BACKEND_URL; },
+  get ADMIN_API_KEY() { return ADMIN_API_KEY; },
+  get BOT_USERNAME() { return BOT_USERNAME; },
+  apiGet,
+  apiPost,
+  apiPatch,
+  apiDelete,
+  apiPostOnBehalf,
+  isAdmin,
+  getState: (id: number) => getState(id) as any,
+  setState: (id: number, s: any) => setState(id, s as State),
+  clearState,
+  get ADMIN_KB() { return ADMIN_KB; },
+};
+
 // ─── Subscription check ───────────────────────────────────────────────────────
 
 /** Foydalanuvchi barcha majburiy kanallarga obuna ekanligini backend orqali tekshiradi.
@@ -357,6 +413,8 @@ async function sendWelcome(ctx: any): Promise<void> {
   } else {
     inlineKb.row().text("⚠️ O'yin hozircha mavjud emas", "noop");
   }
+  // Online o'yin xonasiga kirish (kod bilan)
+  inlineKb.row().text("🎮 Xonaga kirish (kod bilan)", "gr:join_manual");
 
   await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: inlineKb });
 
@@ -369,6 +427,24 @@ async function sendWelcome(ctx: any): Promise<void> {
 bot.command("start", async ctx => {
   const uid = ctx.from!.id;
   clearState(uid);
+
+  // Deep-link: /start room_<CODE> — xonaga qo'shilish
+  const param = ctx.match?.trim() ?? "";
+  if (param.startsWith("room_")) {
+    const code = param.slice(5).toUpperCase();
+    // Kanal obunasini tekshirish — admin bo'lsa tekshirmaymiz
+    if (!isAdmin(uid)) {
+      const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);
+      if (!allSubscribed) {
+        // Obuna bo'lmagan — avval obuna qilishni so'raymiz
+        // Keyin /start room_<code> bilan qaytib keladi
+        await sendSubscribePrompt(ctx, unsubscribed);
+        return;
+      }
+    }
+    await handleDeepLinkJoin(ctx, grDeps, code);
+    return;
+  }
 
   // Kanal obunasini tekshirish — admin bo'lsa tekshirmaymiz
   if (!isAdmin(uid)) {
@@ -424,6 +500,21 @@ bot.hears("🏠 Asosiy menyu", async ctx => {
   if (MINI_APP_URL) kb.webApp("🧠 Zakovat o'yinini ochish", MINI_APP_URL).row();
   if (isAdmin(uid)) kb.text("🔧 Admin panel").row();
   await ctx.reply("Asosiy menyu:", { reply_markup: kb.resized().persistent() });
+});
+
+// 🎮 O'yin xonasi
+bot.hears("🎮 O'yin xonasi", async ctx => {
+  const uid = ctx.from!.id;
+  if (!isAdmin(uid)) return;
+  clearState(uid);
+  const kb = new InlineKeyboard()
+    .text("🏟 Yangi xona yaratish", "gr:create_room").row()
+    .text("🚪 Kod bilan kirish", "gr:join_manual");
+  await ctx.reply(
+    "🎮 *Online O'yin Xonasi*\n\n" +
+    "Admin sifatida yangi xona yarating yoki mavjud xonaga kiring:",
+    { parse_mode: "Markdown", reply_markup: kb }
+  );
 });
 
 // 📊 Statistika
@@ -695,6 +786,20 @@ bot.on("message:document", async ctx => {
   }
 });
 
+// ─── Audio / Voice handler (gameroom audio savol uchun) ───────────────────────
+bot.on(["message:audio", "message:voice"], async ctx => {
+  const uid = ctx.from!.id;
+  if (!isAdmin(uid)) return;
+  await handleGrMedia(ctx, grDeps, "audio");
+});
+
+// ─── Photo handler (gameroom rasmli savol uchun) ──────────────────────────────
+bot.on("message:photo", async ctx => {
+  const uid = ctx.from!.id;
+  if (!isAdmin(uid)) return;
+  await handleGrMedia(ctx, grDeps, "photo");
+});
+
 // ─── Text message handler (state machine) ─────────────────────────────────────
 bot.on("message:text", async ctx => {
   const uid = ctx.from!.id;
@@ -702,6 +807,11 @@ bot.on("message:text", async ctx => {
   const st = getState(uid);
 
   if (text === "/cancel") return;
+
+  // Gameroom state machine — ishtirokchilar (non-admin) ham ishlatadi
+  const grHandled = await handleGrText(ctx, grDeps);
+  if (grHandled) return;
+
   if (!isAdmin(uid)) return;
 
   // ── Add question ──
@@ -847,6 +957,10 @@ bot.on("message:text", async ctx => {
 async function handleSkip(ctx: any) {
   const uid = ctx.from!.id;
   const st = getState(uid);
+
+  // Gameroom skip holatlarini tekshirish
+  const grHandled = await handleGrSkip(ctx, grDeps);
+  if (grHandled) return;
   if (st.t === "add_category") {
     setState(uid, { t: "add_difficulty", text: st.text, answer: st.answer, category: null });
     await ctx.reply("🎯 Qiyinlikni tanlang:", { reply_markup: diffKb("add") });
@@ -910,6 +1024,19 @@ bot.on("callback_query:data", async ctx => {
       } catch { /* xabarni o'zgartirish imkoni bo'lmasa — jim o'tamiz */ }
     }
     return;
+  }
+
+  // Gameroom callbacklari — ishtirokchilar ham bosa oladi (isAdmin tekshiruvi ichida)
+  // gr:create_room faqat admin uchun — handleGrCallback ichida ADMIN_KB qaytaradi
+  if (data === "gr:create_room") {
+    if (!isAdmin(uid)) { await ctx.answerCallbackQuery(); return; }
+    await ctx.answerCallbackQuery();
+    await handleGrRoomCreate(ctx, grDeps);
+    return;
+  }
+  if (data.startsWith("gr:")) {
+    const handled = await handleGrCallback(ctx, grDeps);
+    if (handled) return;
   }
 
   // Qolgan barcha callbacklar faqat adminlar uchun
@@ -1245,6 +1372,7 @@ async function startBot(attemptsLeft = 5): Promise<void> {
   try {
     await bot.start({
       onStart: async info => {
+        BOT_USERNAME = info.username;
         console.log(`Zakovat bot ishga tushdi: @${info.username}`);
         console.log(`[bot] MINI_APP_URL: ${MINI_APP_URL || "(belgilanmagan)"}`);
         if (!BACKEND_URL) console.warn("⚠️  BACKEND_URL ko'rsatilmagan");

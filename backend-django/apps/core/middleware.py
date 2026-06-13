@@ -51,6 +51,19 @@ class TelegramAuthMiddleware:
                 return None
 
             if hmac.compare_digest(provided_key, internal_key):
+                # Bot ishtirokchi nomidan harakat qilsa: X-On-Behalf-Of: <telegram_id>
+                # Bu faqat tasdiqlangan bot kaliti bilan ishlaydi — oddiy foydalanuvchi
+                # o'z telegram_id'sini soxtalashtirolmaydi.
+                on_behalf = request.headers.get("X-On-Behalf-Of") or request.headers.get("x-on-behalf-of")
+                if on_behalf and on_behalf.lstrip("-").isdigit():
+                    proxy_tid = int(on_behalf)
+                    if proxy_tid > 0:
+                        return TelegramUser(
+                            telegram_id=proxy_tid,
+                            first_name="BotProxy",
+                            last_name=None,
+                            username=None,
+                        )
                 return _bot_admin_user()
 
             return None
