@@ -41,5 +41,6 @@ urlpatterns = [
     path("api/svoyak/", include("apps.svoyak.urls")),
     path("api/daily/", include("apps.daily.urls")),
     path("api/channels/", include("apps.channels.urls")),
+    path("api/gamerooms/", include("apps.gamerooms.urls")),
     re_path(r"^(?!api/|admin/|health$|static/).*$", spa_fallback),
 ]

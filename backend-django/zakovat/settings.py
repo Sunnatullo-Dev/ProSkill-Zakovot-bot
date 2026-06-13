@@ -172,6 +172,7 @@ INSTALLED_APPS = [
     "apps.svoyak",
     "apps.daily",
     "apps.channels",
+    "apps.gamerooms",
 ]
 
 MIDDLEWARE = [
