@@ -13,6 +13,7 @@ type HomeScreenProps = {
   dailyInfo?: DailyInfo | null;
   onStart: (filter: RoundFilter) => void;
   onDailyOpen?: () => void;
+  onGameRoomOpen?: () => void;
 };
 
 const cardStyle = {
@@ -82,7 +83,8 @@ export default function HomeScreen({
   score,
   dailyInfo,
   onStart,
-  onDailyOpen
+  onDailyOpen,
+  onGameRoomOpen,
 }: HomeScreenProps) {
   const t = useT();
   const appSettings = useAppSettings();
@@ -221,6 +223,38 @@ export default function HomeScreen({
                   : dailyInfo.bonusPreview > 0
                   ? `+${dailyInfo.bonusPreview} bonus ball imkoniyati`
                   : "5 ta savol, har kuni yangi"}
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "18px", color: "var(--muted)" }}>›</span>
+        </button>
+      ) : null}
+
+      {onGameRoomOpen ? (
+        <button
+          type="button"
+          onClick={onGameRoomOpen}
+          style={{
+            width: "100%",
+            background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(77,166,255,0.18))",
+            border: "1px solid rgba(124,58,237,0.35)",
+            borderRadius: "16px",
+            padding: "14px 16px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            textAlign: "left"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "22px" }}>🎮</span>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+                Online O'yin Xonasi
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                Kod bilan real-vaqt o'yiniga kiring
               </div>
             </div>
           </div>

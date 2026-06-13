@@ -167,9 +167,95 @@ export type Screen =
   | "leaderboard"
   | "battle"
   | "svoyak"
-  | "daily";
+  | "daily"
+  | "gameroom";
 
 export type NavTab = "home" | "leaderboard" | "svoyak" | "team" | "profile" | "admin";
+
+// ─── Online O'yin Xonasi (GameRoom) ──────────────────────────────────────────
+
+export type GameRoomStatus = "waiting" | "active" | "finished";
+
+export type GameQuestionType = "text" | "audio" | "image";
+
+/** Backend `_serialize_question_for_participant` ga mos. */
+export type GameRoomQuestion = {
+  id: number;
+  questionType: GameQuestionType;
+  body: string;
+  /** Telegram file_id yoki URL. null = mavjud emas. */
+  mediaRef: string | null;
+  caption: string | null;
+  timeLimitSeconds: number;
+  pointValue: number;
+  orderIndex: number;
+  isBonus: boolean;
+  isQuick: boolean;
+  status: "active" | "closed";
+  activatedAt: string | null;
+  closedAt: string | null;
+  timeRemainingMs: number;
+  isExpired: boolean;
+  /** Faqat savol yopilgandan keyin yoki admin ko'rganda. */
+  correctAnswer: string | null;
+  mySubmission: GameRoomSubmission | null;
+};
+
+export type GameRoomSubmission = {
+  submissionId: number;
+  answerText: string;
+  submittedAt: string;
+  updatedAt: string;
+  /** null = hali baholanmagan yoki savol hali ochiq. */
+  isCorrect: boolean | null;
+  pointsAwarded: number | null;
+};
+
+export type GameRoomParticipant = {
+  rank: number;
+  telegramId: number;
+  displayName: string;
+  totalPoints: number;
+  joinedAt: string;
+};
+
+/** Backend `get_room_state` javobi. */
+export type GameRoomState = {
+  code: string;
+  name: string;
+  status: GameRoomStatus;
+  adminTelegramId: number;
+  hasPassword: boolean;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  participantCount: number;
+  leaderboard: GameRoomParticipant[];
+  currentQuestion: GameRoomQuestion | null;
+  viewerTelegramId: number;
+  viewerIsAdmin: boolean;
+};
+
+/** Backend `get_leaderboard` javobi. */
+export type GameRoomLeaderboard = {
+  roomCode: string;
+  roomName: string;
+  status: GameRoomStatus;
+  leaderboard: GameRoomParticipant[];
+  /** Faqat `finished` bo'lsa to'ldiriladi. */
+  winners: GameRoomParticipant[];
+  viewerTelegramId: number;
+};
+
+/** Backend `submit_answer` javobi. */
+export type GameRoomSubmitResult = {
+  submissionId: number;
+  questionId: number;
+  answerText: string;
+  submittedAt: string;
+  updatedAt: string;
+  graded: boolean;
+};
 
 export type LeaderboardUser = AppUser;
 

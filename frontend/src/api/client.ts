@@ -5,6 +5,9 @@ import type {
   AppUser,
   AuthResponse,
   BattleState,
+  GameRoomLeaderboard,
+  GameRoomState,
+  GameRoomSubmitResult,
   GameStats,
   LeaderboardData,
   LeaderboardUser,
@@ -698,6 +701,77 @@ export async function submitBattleAnswer(
     body: { roundId, answer }
   });
 }
+
+// ─── Online O'yin Xonasi (GameRoom) ──────────────────────────────────────────
+
+/**
+ * Xonaga qo'shilish yoki qaytib ulanish.
+ * POST /api/gamerooms/rooms/<code>/join
+ */
+export async function joinGameRoom(
+  code: string,
+  displayName: string,
+  joinPassword?: string,
+): Promise<ApiResult<GameRoomState>> {
+  return requestResult<GameRoomState>(`/gamerooms/rooms/${code.toUpperCase()}/join`, {
+    method: "POST",
+    body: { displayName, ...(joinPassword ? { joinPassword } : {}) },
+  });
+}
+
+/**
+ * Xona holatini polling orqali olish.
+ * GET /api/gamerooms/rooms/<code>/state
+ */
+export async function getGameRoomState(code: string): Promise<GameRoomState | null> {
+  try {
+    const res = await request<GameRoomState>(
+      `/gamerooms/rooms/${code.toUpperCase()}/state`,
+    );
+    return res ?? null;
+  } catch (error) {
+    console.error("getGameRoomState failed", error);
+    return null;
+  }
+}
+
+/**
+ * Savol uchun javob yuborish yoki tahrirlash (upsert, deadline'gacha).
+ * POST /api/gamerooms/rooms/<code>/answer
+ */
+export async function submitGameRoomAnswer(
+  code: string,
+  questionId: number,
+  answer: string,
+): Promise<ApiResult<GameRoomSubmitResult>> {
+  return requestResult<GameRoomSubmitResult>(
+    `/gamerooms/rooms/${code.toUpperCase()}/answer`,
+    {
+      method: "POST",
+      body: { questionId, answer },
+    },
+  );
+}
+
+/**
+ * Joriy reyting.
+ * GET /api/gamerooms/rooms/<code>/leaderboard
+ */
+export async function getGameRoomLeaderboard(
+  code: string,
+): Promise<GameRoomLeaderboard | null> {
+  try {
+    const res = await request<GameRoomLeaderboard>(
+      `/gamerooms/rooms/${code.toUpperCase()}/leaderboard`,
+    );
+    return res ?? null;
+  } catch (error) {
+    console.error("getGameRoomLeaderboard failed", error);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Backend xato xabarini UI ga uzatish uchun result-tipidagi yordamchi.
 async function requestResult<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {

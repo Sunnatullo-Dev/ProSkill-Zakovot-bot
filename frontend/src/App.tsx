@@ -30,6 +30,7 @@ import OnboardingScreen from "./components/OnboardingScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import SvoyakRouter from "./svoyak/SvoyakRouter";
 import SvoyakDemoScreen from "./svoyak/SvoyakDemoScreen";
+import GameRoomRouter from "./gameroom/GameRoomRouter";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
 import { useLanguage } from "./i18n/LanguageContext";
@@ -166,6 +167,8 @@ export default function App() {
   const [autoJoinCode, setAutoJoinCode] = useState("");
   // Svoyak deep link: ?startapp=svoyak_ABC123 orqali kelganda kod
   const [svoyakJoinCode, setSvoyakJoinCode] = useState<string | undefined>(undefined);
+  // GameRoom deep link: ?startapp=room_ABC123 orqali kelganda kod
+  const [gameRoomJoinCode, setGameRoomJoinCode] = useState<string | undefined>(undefined);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -411,7 +414,12 @@ export default function App() {
         if (svoyakMatch) {
           setSvoyakJoinCode(svoyakMatch[1].toUpperCase());
         }
-        const referrerId = !joinCode && !svoyakMatch && /^\d+$/.test(startParam) ? Number(startParam) : undefined;
+        // room_CODE — Online O'yin Xonasiga taklif havolasi
+        const roomMatch = /^room_([A-Z0-9]{4,8})$/i.exec(startParam);
+        if (roomMatch) {
+          setGameRoomJoinCode(roomMatch[1].toUpperCase());
+        }
+        const referrerId = !joinCode && !svoyakMatch && !roomMatch && /^\d+$/.test(startParam) ? Number(startParam) : undefined;
 
         // Login natijasini to'liq kutamiz — sekin tarmoqda foydalanuvchi
         // "mehmon" sifatida tezda kirib qolib, keyin haqiqiy javob keldikida
@@ -535,6 +543,10 @@ export default function App() {
           // to'g'ridan-to'g'ri o'tish. Ism so'rovini ham keyinroq lobby
           // ichida ko'rsatamiz, lekin oqimni uzmaymiz.
           setScreen(needsName ? "name" : "svoyak");
+        } else if (roomMatch) {
+          // Deep link: t.me/bot?startapp=room_ABCDEF — Online O'yin Xonasiga
+          // to'g'ridan-to'g'ri o'tish.
+          setScreen(needsName ? "name" : "gameroom");
         } else {
           setScreen(needsName ? "name" : "home");
         }
@@ -567,7 +579,7 @@ export default function App() {
     const backButton = window.Telegram?.WebApp?.BackButton;
     if (!backButton) return;
 
-    const showOn: Screen[] = ["team", "profile", "admin", "finish", "leaderboard"];
+    const showOn: Screen[] = ["team", "profile", "admin", "finish", "leaderboard", "gameroom"];
     if (showOn.includes(screen)) {
       backButton.onClick(handleBack);
       backButton.show();
@@ -967,6 +979,7 @@ export default function App() {
             dailyInfo={dailyInfo}
             onStart={startGame}
             onDailyOpen={() => setScreen("daily")}
+            onGameRoomOpen={() => setScreen("gameroom")}
           />
         ) : null}
 
@@ -1028,6 +1041,17 @@ export default function App() {
             initialJoinCode={svoyakJoinCode}
             onExitSvoyak={() => {
               setSvoyakJoinCode(undefined);
+              setScreen("home");
+            }}
+          />
+        ) : null}
+
+        {screen === "gameroom" ? (
+          <GameRoomRouter
+            playerName={playerName}
+            initialCode={gameRoomJoinCode}
+            onExit={() => {
+              setGameRoomJoinCode(undefined);
               setScreen("home");
             }}
           />
