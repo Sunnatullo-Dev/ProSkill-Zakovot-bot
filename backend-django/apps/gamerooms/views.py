@@ -11,6 +11,8 @@ Barcha javob shakllari kamelCase formatida (frontend bilan moslashish uchun).
 """
 from __future__ import annotations
 
+from django.http import HttpResponse, HttpResponseRedirect
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -22,18 +24,33 @@ from . import repositories
 
 # ─── Admin endpoint'lari ──────────────────────────────────────────────────────
 
-@api_view(["POST"])
-@require_admin
-def admin_create_room(request):
-    """Yangi o'yin xonasi yaratish.
+@api_view(["GET", "POST"])
+@require_auth
+def admin_rooms(request):
+    """Xonalar ro'yxati (GET) yoki yangi xona yaratish (POST).
+
+    GET  /api/gamerooms/admin/rooms
+         Auth: require_auth — faqat o'z xonalari qaytariladi
+         Response: [ { code, name, status, isOwner, participantCount, ... } ]
 
     POST /api/gamerooms/admin/rooms
-    Body: { name, joinPassword?, extraAdminIds? }
-    Response: { code, name, status, adminTelegramId, ... }
+         Auth: require_admin (global admin bo'lishi shart)
+         Body: { name, joinPassword?, extraAdminIds? }
+         Response: { code, name, status, adminTelegramId, ... }
     """
-    user = request.current_user
-    body = request.data if isinstance(request.data, dict) else {}
+    from apps.core.telegram_auth import is_admin as _is_admin
 
+    user = request.current_user
+
+    if request.method == "GET":
+        result = repositories.list_admin_rooms(admin_telegram_id=user.telegram_id)
+        return Response(result)
+
+    # POST — yangi xona yaratish (global admin kerak)
+    if not _is_admin(user.telegram_id):
+        raise AppError(403, "Admin huquqi kerak")
+
+    body = request.data if isinstance(request.data, dict) else {}
     name = (body.get("name") or "").strip()
     join_password = (body.get("joinPassword") or "").strip()
 
@@ -56,6 +73,10 @@ def admin_create_room(request):
         extra_admin_ids=extra_admins,
     )
     return Response(result, status=201)
+
+
+# Keep the old name as an alias so any direct references still work.
+admin_create_room = admin_rooms
 
 
 @api_view(["POST"])
@@ -343,4 +364,105 @@ def get_leaderboard(request, code: str):
     """
     user = request.current_user
     result = repositories.get_leaderboard(code, viewer_telegram_id=user.telegram_id)
+    return Response(result)
+
+
+# ─── 1. Excel eksport ────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@require_auth
+def admin_get_results_xlsx(request, code: str):
+    """Xona natijalarini .xlsx formatida eksport qilish.
+
+    GET /api/gamerooms/admin/rooms/<code>/results.xlsx
+    Auth: xona admini
+    Response: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    """
+    user = request.current_user
+    buf, filename = repositories.export_room_results_xlsx(
+        code=code,
+        admin_telegram_id=user.telegram_id,
+    )
+    response = HttpResponse(
+        buf.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+# ─── 3. Media proxy ──────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@require_auth
+def proxy_question_media(request, code: str, question_id: int):
+    """Savol media faylini Telegram orqali proxylash.
+
+    GET /api/gamerooms/rooms/<code>/questions/<id>/media
+    Auth: require_auth (faqat xona a'zolari yoki admini)
+    Response: fayl bytes + to'g'ri Content-Type
+    """
+    user = request.current_user
+    try:
+        content, content_type = repositories.resolve_question_media(
+            code=code,
+            question_id=question_id,
+            viewer_telegram_id=user.telegram_id,
+        )
+    except AppError as e:
+        # 302 — allaqachon http URL, redirect qilamiz
+        if e.status_code == 302:
+            return HttpResponseRedirect(e.message)
+        raise
+    response = HttpResponse(content, content_type=content_type)
+    response["Cache-Control"] = "private, max-age=3600"
+    return response
+
+
+# ─── 4. Savollarni savol bankiga saqlash ────────────────────────────────────
+
+@api_view(["POST"])
+@require_auth
+def admin_save_to_bank(request, code: str):
+    """Xonaning matn savollarini umumiy savol bankiga saqlash.
+
+    POST /api/gamerooms/admin/rooms/<code>/save-to-bank
+    Body (ixtiyoriy): { category?: str, difficulty?: "easy"|"medium"|"hard" }
+    Auth: xona admini
+    Response: { savedCount, skippedCount, alreadySavedCount, totalTextQuestions }
+    """
+    user = request.current_user
+    body = request.data if isinstance(request.data, dict) else {}
+
+    category = (body.get("category") or "").strip() or None
+    difficulty = (body.get("difficulty") or "").strip() or None
+    if difficulty and difficulty not in ("easy", "medium", "hard"):
+        raise AppError(400, "difficulty 'easy', 'medium' yoki 'hard' bo'lishi kerak")
+
+    result = repositories.save_questions_to_bank(
+        code=code,
+        admin_telegram_id=user.telegram_id,
+        category=category,
+        difficulty=difficulty,
+    )
+    return Response(result)
+
+
+# ─── 5. Savolni bekor qilish ─────────────────────────────────────────────────
+
+@api_view(["POST"])
+@require_auth
+def admin_cancel_question(request, code: str, question_id: int):
+    """Savolni bekor qilish — submissionlar va ball ta'siri o'chiriladi.
+
+    POST /api/gamerooms/admin/rooms/<code>/questions/<id>/cancel
+    Auth: xona admini
+    Response: { cancelledQuestionId, deletedSubmissionsCount, pointsReversedFor }
+    """
+    user = request.current_user
+    result = repositories.cancel_question(
+        code=code,
+        admin_telegram_id=user.telegram_id,
+        question_id=question_id,
+    )
     return Response(result)

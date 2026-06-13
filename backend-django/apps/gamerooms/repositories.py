@@ -929,6 +929,7 @@ def _serialize_question_for_participant(
     Leak himoyasi:
     - `correctAnswer` faqat status='closed' bo'lsa yoki admin ko'rsa ochiladi.
     - Boshqa ishtirokchilarning `answerText` faqat savol yopilgandan keyin ko'rinadi.
+    - `mediaUrl` — media_ref Telegram file_id bo'lsa proxy URL, http(s) bo'lsa to'g'ridan-to'g'ri.
     """
     if q is None:
         return None
@@ -963,11 +964,24 @@ def _serialize_question_for_participant(
     # To'g'ri javob: faqat admin yoki savol yopilganda
     reveal_correct = not is_open or is_admin_view
 
+    # Media URL — Telegram file_id bo'lsa proxy, http(s) bo'lsa to'g'ridan
+    media_url: str | None = None
+    if q.media_ref:
+        ref = q.media_ref.strip()
+        if ref.startswith("http://") or ref.startswith("https://"):
+            media_url = ref
+        else:
+            # Telegram file_id — backend proxy orqali
+            room_code = q.room.code if hasattr(q, "room") and q.room else None
+            if room_code:
+                media_url = f"/api/gamerooms/rooms/{room_code}/questions/{q.id}/media"
+
     return {
         "id": q.id,
         "questionType": q.question_type,
         "body": q.body,
         "mediaRef": q.media_ref if q.media_ref else None,
+        "mediaUrl": media_url,
         "caption": q.caption if q.caption else None,
         "timeLimitSeconds": q.time_limit_seconds,
         "pointValue": q.point_value,
@@ -997,6 +1011,417 @@ def _serialize_submission_for_admin(s: Submission) -> dict[str, Any]:
         "gradingNote": s.grading_note,
         "submittedAt": s.submitted_at.isoformat(),
         "updatedAt": s.updated_at.isoformat(),
+    }
+
+
+# ─── 1. Excel eksport ─────────────────────────────────────────────────────────
+
+def export_room_results_xlsx(code: str, *, admin_telegram_id: int):
+    """Xona natijalarini haqiqiy .xlsx fayl sifatida qaytaradi.
+
+    `openpyxl` ishlatiladi. Ikkita varaq:
+      - Leaderboard: reyting, ism, ball, to'g'ri count, aniqlik %
+      - Savollar: tartib, matn, tur, to'g'ri javob, statistika
+    """
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+    except ImportError:
+        raise AppError(500, "openpyxl kutubxonasi o'rnatilmagan — server admini bilan bog'laning")
+
+    normalized = code.strip().upper()
+    room = get_room(normalized)
+    _require_room_admin(room, admin_telegram_id)
+
+    questions = list(room.questions.prefetch_related("submissions__participant").all())
+    participants = list(
+        room.participants.all().order_by("-total_points", "speed_score_ms", "joined_at")
+    )
+
+    wb = openpyxl.Workbook()
+
+    # ── Varaq 1: Leaderboard ──────────────────────────────────────────────────
+    ws_lb = wb.active
+    ws_lb.title = "Leaderboard"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    center = Alignment(horizontal="center")
+
+    lb_headers = ["#", "Ism", "Ball", "To'g'ri javoblar", "Aniqlik (%)"]
+    for col, h in enumerate(lb_headers, 1):
+        cell = ws_lb.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+
+    ws_lb.column_dimensions["A"].width = 6
+    ws_lb.column_dimensions["B"].width = 28
+    ws_lb.column_dimensions["C"].width = 10
+    ws_lb.column_dimensions["D"].width = 18
+    ws_lb.column_dimensions["E"].width = 16
+
+    for rank, p in enumerate(participants, 1):
+        p_subs = list(p.submissions.all())
+        correct_count = sum(1 for s in p_subs if s.is_correct is True)
+        total_subs = len(p_subs)
+        accuracy = round(correct_count / total_subs * 100, 1) if total_subs else 0.0
+        ws_lb.append([rank, p.display_name, p.total_points, correct_count, accuracy])
+
+    # ── Varaq 2: Savollar statistikasi ────────────────────────────────────────
+    ws_q = wb.create_sheet("Savollar")
+
+    q_headers = [
+        "#", "Savol matni", "Tur", "To'g'ri javob",
+        "Jami javob", "To'g'ri", "Noto'g'ri", "Baholanmagan", "To'g'ri %",
+    ]
+    for col, h in enumerate(q_headers, 1):
+        cell = ws_q.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+
+    ws_q.column_dimensions["A"].width = 6
+    ws_q.column_dimensions["B"].width = 50
+    ws_q.column_dimensions["C"].width = 10
+    ws_q.column_dimensions["D"].width = 30
+    ws_q.column_dimensions["E"].width = 12
+    ws_q.column_dimensions["F"].width = 12
+    ws_q.column_dimensions["G"].width = 14
+    ws_q.column_dimensions["H"].width = 16
+    ws_q.column_dimensions["I"].width = 12
+
+    for q in questions:
+        subs = list(q.submissions.all())
+        total = len(subs)
+        correct = sum(1 for s in subs if s.is_correct is True)
+        incorrect = sum(1 for s in subs if s.is_correct is False)
+        pending = sum(1 for s in subs if s.is_correct is None)
+        rate = round(correct / total * 100, 1) if total else 0.0
+        ws_q.append([
+            q.order_index,
+            q.body,
+            q.question_type,
+            q.correct_answer or "",
+            total,
+            correct,
+            incorrect,
+            pending,
+            rate,
+        ])
+
+    # Wrap text uchun savollar varaqda
+    for row in ws_q.iter_rows(min_row=2, min_col=2, max_col=2):
+        for cell in row:
+            cell.alignment = Alignment(wrap_text=True)
+
+    import io
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf, f"gameroom_{normalized}_results.xlsx"
+
+
+# ─── 2. Admin xonalari ro'yxati ──────────────────────────────────────────────
+
+def list_admin_rooms(*, admin_telegram_id: int) -> list[dict[str, Any]]:
+    """Admin o'zi yaratgan yoki co-admin bo'lgan barcha xonalarni qaytaradi.
+
+    Filtrlash DB darajasida amalga oshirilmaydi (extra_admin_ids JSON maydon),
+    shuning uchun owner bo'lgan xonalar DB'da filter qilinadi, co-admin bo'lganlar
+    Python darajasida tekshiriladi.
+    Ish hajmi amalda kichik (bir admin yuzlab xona yaratmaydi).
+    """
+    # Owner bo'lgan xonalar — DB filter
+    owned = list(
+        GameRoom.objects.filter(admin_telegram_id=admin_telegram_id)
+        .order_by("-created_at")
+    )
+
+    # Co-admin bo'lgan xonalar — barcha non-owned xonalarni tekshirib chiqish
+    # muammo ko'rsatishi mumkin, lekin amalda xonalar soni cheklangan.
+    # Optimizatsiya kerak bo'lsa keyinchalik DB indexi qo'shish mumkin.
+    co_admin_rooms = list(
+        GameRoom.objects.exclude(admin_telegram_id=admin_telegram_id)
+        .order_by("-created_at")
+    )
+    co_admin_filtered = [
+        r for r in co_admin_rooms
+        if r.is_room_admin(admin_telegram_id)
+    ]
+
+    # Barcha xonalar — owned birinchi, co-admin ikkinchi, created_at bo'yicha
+    all_rooms = owned + co_admin_filtered
+    all_rooms.sort(key=lambda r: r.created_at, reverse=True)
+
+    result = []
+    for r in all_rooms:
+        participant_count = r.participants.count()
+        question_count = r.questions.count()
+        result.append({
+            "code": r.code,
+            "name": r.name,
+            "status": r.status,
+            "isOwner": r.admin_telegram_id == admin_telegram_id,
+            "hasPassword": bool(r.join_password),
+            "participantCount": participant_count,
+            "questionCount": question_count,
+            "createdAt": r.created_at.isoformat(),
+            "startedAt": r.started_at.isoformat() if r.started_at else None,
+            "finishedAt": r.finished_at.isoformat() if r.finished_at else None,
+        })
+    return result
+
+
+# ─── 3. Media proxy ──────────────────────────────────────────────────────────
+
+def resolve_question_media(
+    *,
+    code: str,
+    question_id: int,
+    viewer_telegram_id: int,
+) -> tuple[bytes, str]:
+    """Savol media faylini Telegram'dan stream qilib qaytaradi.
+
+    XAVFSIZLIK:
+    - Faqat ushbu xonaga tegishli savol media_ref'i proxylash mumkin
+      (ixtiyoriy file_id qabul qilinmaydi — ochiq proxy yo'q).
+    - Foydalanuvchi xonada ro'yxatdan o'tgan bo'lishi shart.
+
+    Returns: (bytes_content, content_type)
+    """
+    import urllib.request
+    from django.conf import settings
+
+    normalized = code.strip().upper()
+
+    # Savol topilishi shart
+    room = get_room(normalized)
+    question = GameQuestion.objects.filter(id=question_id, room=room).first()
+    if not question:
+        raise AppError(404, "Savol topilmadi")
+
+    media_ref = (question.media_ref or "").strip()
+    if not media_ref:
+        raise AppError(404, "Bu savolda media yo'q")
+
+    # Agar allaqachon http URL bo'lsa — to'g'ridan redirect
+    if media_ref.startswith("http://") or media_ref.startswith("https://"):
+        raise AppError(302, media_ref)  # view tomonida redirect qilinadi
+
+    # Foydalanuvchi xonada ro'yxatdan o'tganligini tekshirish
+    # (admin ham ishtirokchi sifatida kirgan bo'lishi shart emas — admin view uchun ruxsat)
+    viewer_is_admin = room.is_room_admin(viewer_telegram_id)
+    if not viewer_is_admin:
+        participant = Participant.objects.filter(
+            room=room, telegram_id=viewer_telegram_id
+        ).first()
+        if not participant:
+            raise AppError(403, "Siz bu xonada ro'yxatdan o'tmagansiz")
+
+    # Bot token tekshirish
+    bot_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        raise AppError(502, "Bot token sozlanmagan — server admini bilan bog'laning")
+
+    # Telegram getFile API — file_path olish
+    get_file_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={media_ref}"
+    try:
+        with urllib.request.urlopen(get_file_url, timeout=10) as resp:  # noqa: S310
+            import json as _json
+            data = _json.loads(resp.read().decode())
+    except Exception as e:
+        logger.warning("Telegram getFile xatosi: %s", e)
+        raise AppError(502, "Telegram media manzilini olishda xato")
+
+    if not data.get("ok"):
+        raise AppError(404, "Telegram file topilmadi (file_id eskirgan yoki noto'g'ri)")
+
+    file_path = data.get("result", {}).get("file_path", "")
+    if not file_path:
+        raise AppError(502, "Telegram file_path bo'sh qaytdi")
+
+    # Fayl yuklab olish
+    download_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
+    try:
+        with urllib.request.urlopen(download_url, timeout=30) as resp:  # noqa: S310
+            content = resp.read()
+            content_type = resp.headers.get("Content-Type", "application/octet-stream")
+    except Exception as e:
+        logger.warning("Telegram fayl yuklab olishda xato: %s", e)
+        raise AppError(502, "Telegram faylni yuklab olishda xato")
+
+    return content, content_type
+
+
+# ─── 4. Savollarni savol bankiga saqlash ────────────────────────────────────
+
+def save_questions_to_bank(
+    *,
+    code: str,
+    admin_telegram_id: int,
+    category: str | None = None,
+    difficulty: str | None = None,
+) -> dict[str, Any]:
+    """Xonaning matn savollarini apps.questions bankiga saqlaydi.
+
+    Qoidalar:
+    - Faqat question_type='text' savollar saqlanadi.
+    - correct_answer bo'sh bo'lgan savollar o'tkaziladi.
+    - Allaqachon bank_question_id to'ldirilgan savollar o'tkaziladi (idempotent).
+    - Aniq dublikat oldini olish: bir xil (text, correct_answer) kombinatsiyasi
+      bankda mavjud bo'lsa, GameQuestion.bank_question_id yangilanadi, lekin
+      yangi yozuv yaratilmaydi.
+
+    Returns: { savedCount, skippedCount, alreadySavedCount }
+    """
+    from apps.questions.models import Question
+
+    normalized = code.strip().upper()
+    room = get_room(normalized)
+    _require_room_admin(room, admin_telegram_id)
+
+    questions = list(
+        GameQuestion.objects.filter(
+            room=room,
+            question_type="text",
+        ).exclude(correct_answer="")
+    )
+
+    saved_count = 0
+    skipped_count = 0
+    already_saved_count = 0
+
+    for gq in questions:
+        # Allaqachon saqlangan
+        if gq.bank_question_id is not None:
+            already_saved_count += 1
+            continue
+
+        body_stripped = gq.body.strip()
+        answer_stripped = gq.correct_answer.strip()
+
+        # Aniq dublikat tekshirish — text + correct_answer bo'yicha
+        existing_bank_q = Question.objects.filter(
+            text=body_stripped,
+            correct_answer=answer_stripped,
+        ).first()
+
+        with transaction.atomic():
+            if existing_bank_q:
+                # Bankda mavjud — faqat FK belgilaymiz
+                GameQuestion.objects.filter(id=gq.id).update(
+                    bank_question_id=existing_bank_q.id
+                )
+                skipped_count += 1
+            else:
+                # Yangi yozuv yaratish
+                new_q = Question.objects.create(
+                    text=body_stripped,
+                    correct_answer=answer_stripped,
+                    category=category,
+                    difficulty=difficulty,
+                    wrong_answers=[],
+                    time_limit_seconds=None,
+                )
+                GameQuestion.objects.filter(id=gq.id).update(
+                    bank_question_id=new_q.id
+                )
+                saved_count += 1
+
+    return {
+        "savedCount": saved_count,
+        "skippedCount": skipped_count,
+        "alreadySavedCount": already_saved_count,
+        "totalTextQuestions": len(questions),
+    }
+
+
+# ─── 5. Savolni bekor qilish (cancel) ───────────────────────────────────────
+
+def cancel_question(
+    *,
+    code: str,
+    admin_telegram_id: int,
+    question_id: int,
+) -> dict[str, Any]:
+    """Savolni bekor qiladi — barcha submissionlar va ball ta'siri o'chiriladi.
+
+    Nima qiladi:
+    1. Savolni topadi (pending yoki active).
+    2. Agar allaqachon baholangan submissionlar bo'lsa — ular bergan ballni
+       ishtirokchi total_points'idan atomik ayiradi.
+    3. speed_score_ms ni ham to'g'ri javob submission'larning hissasini ayiradi.
+    4. Barcha submission'larni o'chiradi.
+    5. Savolning o'zini o'chiradi.
+    6. room.current_question shu savol bo'lsa — null qiladi.
+
+    Atomik: bitta transaction ichida.
+    Idempotent: savol topilmasa 404 qaytaradi.
+    """
+    normalized = code.strip().upper()
+
+    with transaction.atomic():
+        room = GameRoom.objects.select_for_update().filter(code=normalized).first()
+        if not room:
+            raise AppError(404, "Xona topilmadi")
+        _require_room_admin(room, admin_telegram_id)
+
+        question = GameQuestion.objects.select_for_update().filter(
+            id=question_id, room=room
+        ).first()
+        if not question:
+            raise AppError(404, "Savol topilmadi")
+        if question.status == "closed":
+            # Yopilgan savollarni ham bekor qilishga ruxsat beramiz (admin qaroriga)
+            pass  # allowed
+
+        # Baholangan submissionlarning ball ta'sirini teskari qaytarish
+        graded_subs = list(
+            Submission.objects.select_for_update()
+            .select_related("participant")
+            .filter(question=question, graded_by__in=["auto", "manual"])
+        )
+
+        for sub in graded_subs:
+            awarded = sub.points_awarded or 0
+            # Ball qaytarish
+            if awarded > 0:
+                Participant.objects.filter(id=sub.participant_id).update(
+                    total_points=models_F("total_points") - awarded,
+                )
+            # Speed score qaytarish — faqat to'g'ri javoblar uchun qo'shilgandi
+            if sub.is_correct and question.activated_at:
+                activated_ms = int(question.activated_at.timestamp() * 1000)
+                submitted_ms = int(sub.submitted_at.timestamp() * 1000)
+                response_ms = max(0, submitted_ms - activated_ms)
+                Participant.objects.filter(id=sub.participant_id).update(
+                    speed_score_ms=models_F("speed_score_ms") - response_ms,
+                )
+
+        # total_points manfiy bo'lib qolmasligini kafolatlash (edge case)
+        Participant.objects.filter(room=room, total_points__lt=0).update(total_points=0)
+        Participant.objects.filter(room=room, speed_score_ms__lt=0).update(speed_score_ms=0)
+
+        # Barcha submissionlarni o'chirish
+        deleted_subs_count = Submission.objects.filter(question=question).delete()[0]
+
+        # room.current_question ni tozalash
+        if room.current_question_id == question.id:
+            room.current_question = None
+            room.save(update_fields=["current_question"])
+
+        # Savolni o'chirish
+        q_order = question.order_index
+        q_body_preview = question.body[:60]
+        question.delete()
+
+    return {
+        "cancelledQuestionId": question_id,
+        "orderIndex": q_order,
+        "bodyPreview": q_body_preview,
+        "deletedSubmissionsCount": deleted_subs_count,
+        "pointsReversedFor": len([s for s in graded_subs if (s.points_awarded or 0) > 0]),
     }
 
 
