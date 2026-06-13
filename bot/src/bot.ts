@@ -509,6 +509,7 @@ bot.hears("🎮 O'yin xonasi", async ctx => {
   clearState(uid);
   const kb = new InlineKeyboard()
     .text("🏟 Yangi xona yaratish", "gr:create_room").row()
+    .text("📋 Oldingi o'yinlar", "gr:myrooms").row()
     .text("🚪 Kod bilan kirish", "gr:join_manual");
   await ctx.reply(
     "🎮 *Online O'yin Xonasi*\n\n" +

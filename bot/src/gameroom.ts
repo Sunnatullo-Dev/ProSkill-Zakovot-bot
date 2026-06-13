@@ -35,6 +35,22 @@ export interface GrBotDeps {
   ADMIN_KB: any; // Keyboard instance
 }
 
+// ─── Binary API yordamchi (xlsx uchun — JSON parse qilinmaydi) ──────────────
+
+async function apiBinaryGet(deps: GrBotDeps, path: string): Promise<Buffer> {
+  const r = await fetch(`${deps.BACKEND_URL}${path}`, {
+    headers: {
+      Authorization: `bot ${deps.ADMIN_API_KEY}`,
+    },
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`GET ${path} → ${r.status}: ${t.slice(0, 200)}`);
+  }
+  const ab = await r.arrayBuffer();
+  return Buffer.from(ab);
+}
+
 // ─── State turlari ───────────────────────────────────────────────────────────
 // Bot.ts dagi State union'ga qo'shiladigan yangi holatlar.
 // bot.ts da `type State = ExistingState | GrState` deb kengaytirish kerak.
@@ -59,7 +75,9 @@ export type GrState =
   | { t: "gr_join_name"; roomCode: string; roomName: string; hasPassword: boolean }
   | { t: "gr_join_password"; roomCode: string; roomName: string; displayName: string }
   // Ishtirokchi: aktiv o'yinda javob kutilmoqda
-  | { t: "gr_awaiting_answer"; roomCode: string; questionId: number; deadline: number };
+  | { t: "gr_awaiting_answer"; roomCode: string; questionId: number; deadline: number }
+  // Admin: savolni bekor qilishni tasdiqlash
+  | { t: "gr_cancel_q_confirm"; roomCode: string; questionId: number };
 
 // bot.ts dagi asosiy State union uchun type alias
 export type BotState = { t: string; [key: string]: any };
@@ -88,9 +106,10 @@ function grAdminRoomKb(code: string): InlineKeyboard {
     .text("▶️ O'yinni boshlash", `gr:start:${code}`).row()
     .text("❓ Savol yuborish", `gr:pushq:${code}`).row()
     .text("👀 Javoblarni ko'rish", `gr:subs:${code}`).row()
-    .text("✅ Savolni yopish", `gr:closeq:${code}`).row()
+    .text("✅ Savolni yopish", `gr:closeq:${code}`).text("🚫 Bekor qilish", `gr:cancelq:${code}`).row()
     .text("📊 Statistika", `gr:stats:${code}`).text("🏆 Reyting", `gr:lb:${code}`).row()
-    .text("📥 Natijalar", `gr:results:${code}`).text("🏁 Yakunlash", `gr:finish:${code}`);
+    .text("📥 Natijalar", `gr:results:${code}`).text("📊 Excel", `gr:xlsx:${code}`).row()
+    .text("💾 Bankka saqlash", `gr:savebank:${code}`).text("🏁 Yakunlash", `gr:finish:${code}`);
 }
 
 function grTimerKb(roomCode: string, qBody: string, mediaRef: string, caption: string, qType: string, correctAnswer: string): InlineKeyboard {
@@ -774,6 +793,125 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
     return true;
   }
 
+  // ── Excel yuklab olish ──
+  // gr:xlsx:<roomCode>
+  if (data.startsWith("gr:xlsx:")) {
+    if (!deps.isAdmin(uid)) { await ctx.answerCallbackQuery(); return true; }
+    const roomCode = data.slice(8);
+    await ctx.answerCallbackQuery("📊 Excel tayyorlanmoqda...");
+    await exportResultsXlsx(ctx, deps, uid, roomCode);
+    return true;
+  }
+
+  // ── Savolni bekor qilish (tasdiqlash) ──
+  // gr:cancelq:<roomCode>
+  if (data.startsWith("gr:cancelq:")) {
+    if (!deps.isAdmin(uid)) { await ctx.answerCallbackQuery(); return true; }
+    const roomCode = data.slice(11);
+    await ctx.answerCallbackQuery("⏳ Tekshirilmoqda...");
+    try {
+      const state = await deps.apiGet(`/api/gamerooms/rooms/${roomCode}/state?adminView=1`);
+      const cq = state.currentQuestion;
+      if (!cq) {
+        await ctx.answerCallbackQuery("❌ Hozir aktiv savol yo'q", { show_alert: true });
+        return true;
+      }
+      deps.setState(uid, { t: "gr_cancel_q_confirm", roomCode, questionId: cq.id } as GrState);
+      await ctx.reply(
+        `⚠️ *Savol bekor qilinsinmi?*\n\n` +
+        `❓ #${cq.orderIndex}: ${(cq.body ?? "").slice(0, 80)}\n\n` +
+        `Bekor qilinsa, ushbu savol o'chiriladi va barcha yuborilgan javoblar hamda ball qaytariladi.`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: new InlineKeyboard()
+            .text("🚫 Ha, bekor qilish", `gr:cancelq_do:${roomCode}:${cq.id}`)
+            .text("↩️ Yo'q", `gr:panel:${roomCode}`),
+        }
+      );
+    } catch (e: any) {
+      await ctx.answerCallbackQuery(`❌ ${e?.message}`, { show_alert: true });
+    }
+    return true;
+  }
+
+  // gr:cancelq_do:<roomCode>:<questionId>
+  if (data.startsWith("gr:cancelq_do:")) {
+    if (!deps.isAdmin(uid)) { await ctx.answerCallbackQuery(); return true; }
+    const parts = data.split(":");
+    const roomCode = parts[2];
+    const questionId = parseInt(parts[3], 10);
+    await ctx.answerCallbackQuery("🚫 Bekor qilinmoqda...");
+    try {
+      const result = await deps.apiPost(
+        `/api/gamerooms/admin/rooms/${roomCode}/questions/${questionId}/cancel`,
+        {}
+      );
+      deps.clearState(uid);
+      const deleted = result.deletedSubmissionsCount ?? 0;
+      const reversed = (result.pointsReversedFor ?? []).length;
+      await ctx.editMessageText(
+        `🚫 *Savol bekor qilindi!*\n\n` +
+        `🗑 O'chirilgan javoblar: ${deleted} ta\n` +
+        `↩️ Ball qaytarilgan ishtirokchilar: ${reversed} ta\n\n` +
+        `Keyingi savolni yuboring:`,
+        { parse_mode: "Markdown", reply_markup: grAdminRoomKb(roomCode) }
+      );
+    } catch (e: any) {
+      deps.clearState(uid);
+      await ctx.answerCallbackQuery(`❌ ${e?.message}`, { show_alert: true });
+      await deps.bot.api.sendMessage(uid, "Admin paneli:", { reply_markup: grAdminRoomKb(roomCode) });
+    }
+    return true;
+  }
+
+  // ── Bankka saqlash ──
+  // gr:savebank:<roomCode>
+  if (data.startsWith("gr:savebank:")) {
+    if (!deps.isAdmin(uid)) { await ctx.answerCallbackQuery(); return true; }
+    const roomCode = data.slice(12);
+    await ctx.answerCallbackQuery("💾 Saqlanmoqda...");
+    try {
+      const result = await deps.apiPost(
+        `/api/gamerooms/admin/rooms/${roomCode}/save-to-bank`,
+        {}
+      );
+      const saved = result.savedCount ?? 0;
+      const skipped = result.skippedCount ?? 0;
+      const already = result.alreadySavedCount ?? 0;
+      const total = result.totalTextQuestions ?? 0;
+      await ctx.reply(
+        `💾 *Savol bankka saqlash natijasi*\n\n` +
+        `✅ Saqlandi: ${saved} ta\n` +
+        `⏭ O'tkazib yuborildi: ${skipped} ta\n` +
+        (already > 0 ? `🔁 Avval saqlangan: ${already} ta\n` : "") +
+        `📝 Jami matnli savollar: ${total} ta`,
+        { parse_mode: "Markdown", reply_markup: grAdminRoomKb(roomCode) }
+      );
+    } catch (e: any) {
+      await ctx.reply(`❌ Saqlashda xatolik: ${e?.message}`, { reply_markup: grAdminRoomKb(roomCode) });
+    }
+    return true;
+  }
+
+  // ── Oldingi o'yinlar ro'yxati ──
+  // gr:myrooms
+  if (data === "gr:myrooms") {
+    if (!deps.isAdmin(uid)) { await ctx.answerCallbackQuery(); return true; }
+    await ctx.answerCallbackQuery("📋 Yuklanmoqda...");
+    await showAdminRooms(ctx, deps);
+    return true;
+  }
+
+  // ── Oldingi xona ochish ──
+  // gr:openroom:<roomCode>
+  if (data.startsWith("gr:openroom:")) {
+    if (!deps.isAdmin(uid)) { await ctx.answerCallbackQuery(); return true; }
+    const roomCode = data.slice(12);
+    await ctx.answerCallbackQuery("📋 Yuklanmoqda...");
+    await openAdminRoom(ctx, deps, roomCode);
+    return true;
+  }
+
   // ── Ishtirokchi: xona kodi qo'lda kiritish boshlash ──
   if (data === "gr:join_manual") {
     deps.setState(uid, { t: "gr_join_code" } as GrState);
@@ -1141,6 +1279,110 @@ async function exportResults(ctx: any, deps: GrBotDeps, uid: number, roomCode: s
     );
   } catch (e: any) {
     await ctx.reply(`❌ Eksport xatoligi: ${e?.message}`);
+  }
+}
+
+// ─── Admin: Excel eksport ────────────────────────────────────────────────────
+
+async function exportResultsXlsx(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
+  try {
+    const buf = await apiBinaryGet(deps, `/api/gamerooms/admin/rooms/${roomCode}/results.xlsx`);
+    const date = new Date().toISOString().slice(0, 10);
+    await ctx.replyWithDocument(
+      new InputFile(buf, `zakovat_room_${roomCode}_${date}.xlsx`),
+      {
+        caption:
+          `📊 *${roomCode}* — Excel natijalar\n📅 ${date}`,
+        parse_mode: "Markdown",
+      }
+    );
+  } catch (e: any) {
+    await ctx.reply(`❌ Excel yuklab bo'lmadi: ${e?.message}`);
+  }
+}
+
+// ─── Admin: o'z xonalari ro'yxati ───────────────────────────────────────────
+
+function statusLabel(status: string): string {
+  if (status === "waiting") return "⏳ Kutilmoqda";
+  if (status === "active") return "🟢 Aktiv";
+  if (status === "finished") return "🏁 Tugagan";
+  return status;
+}
+
+async function showAdminRooms(ctx: any, deps: GrBotDeps) {
+  try {
+    const rooms: any[] = await deps.apiGet("/api/gamerooms/admin/rooms");
+    if (!rooms.length) {
+      await ctx.reply(
+        "📋 *Oldingi o'yinlar*\n\n_Hozircha xonalar yo'q._",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const lines = rooms.slice(0, 10).map((r: any, i: number) => {
+      const date = r.createdAt ? new Date(r.createdAt).toLocaleDateString("uz-UZ") : "—";
+      return (
+        `${i + 1}. *${r.name}* [\`${r.code}\`]\n` +
+        `   ${statusLabel(r.status)} | 👥 ${r.participantCount ?? 0} | ❓ ${r.questionCount ?? 0} | 📅 ${date}`
+      );
+    }).join("\n\n");
+
+    const kb = new InlineKeyboard();
+    for (const r of rooms.slice(0, 10)) {
+      kb.row().text(
+        `${statusLabel(r.status)} ${r.name} [${r.code}]`,
+        `gr:openroom:${r.code}`
+      );
+    }
+
+    await ctx.reply(
+      `📋 *Oldingi o'yinlar* (${rooms.length} ta)\n\n${lines}`,
+      { parse_mode: "Markdown", reply_markup: kb }
+    );
+  } catch (e: any) {
+    await ctx.reply(`❌ O'yinlar ro'yxatini olib bo'lmadi: ${e?.message}`);
+  }
+}
+
+async function openAdminRoom(ctx: any, deps: GrBotDeps, roomCode: string) {
+  try {
+    // Xona holatini olish
+    const state = await deps.apiGet(`/api/gamerooms/rooms/${roomCode}/state`);
+    const status: string = state.status ?? "waiting";
+
+    if (status === "finished") {
+      // Tugagan xona — statistika/reyting/excel amallarni ko'rsatish
+      const kb = new InlineKeyboard()
+        .text("📊 Statistika", `gr:stats:${roomCode}`).text("🏆 Reyting", `gr:lb:${roomCode}`).row()
+        .text("📥 Natijalar (CSV)", `gr:results:${roomCode}`).text("📊 Excel", `gr:xlsx:${roomCode}`);
+
+      const date = state.finishedAt
+        ? new Date(state.finishedAt).toLocaleDateString("uz-UZ")
+        : "—";
+
+      await ctx.reply(
+        `🏁 *${state.name ?? roomCode}* — Tugagan\n\n` +
+        `🔑 Kod: \`${roomCode}\`\n` +
+        `👥 Ishtirokchilar: ${state.participantCount ?? 0}\n` +
+        `📅 Tugagan: ${date}\n\n` +
+        `Natijalarni ko'rish uchun tugmani bosing:`,
+        { parse_mode: "Markdown", reply_markup: kb }
+      );
+    } else {
+      // Aktiv yoki kutilayotgan xona — admin panelini ko'rsatish
+      const count = state.participantCount ?? 0;
+      await ctx.reply(
+        `${status === "active" ? "🟢" : "⏳"} *${state.name ?? roomCode}* — ${statusLabel(status)}\n\n` +
+        `🔑 Kod: \`${roomCode}\`\n` +
+        `👥 Ishtirokchilar: ${count}\n\n` +
+        `Boshqarish uchun tugmalardan foydalaning:`,
+        { parse_mode: "Markdown", reply_markup: grAdminRoomKb(roomCode) }
+      );
+    }
+  } catch (e: any) {
+    await ctx.reply(`❌ Xonani ochib bo'lmadi: ${e?.message}`);
   }
 }
 
