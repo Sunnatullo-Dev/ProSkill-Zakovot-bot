@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { submitGameRoomAnswer } from "../api/client";
 import { useTimer } from "../hooks/useTimer";
 import { useGameRoom } from "./useGameRoom";
+import { useAuthedMedia } from "./useAuthedMedia";
 import type { GameRoomParticipant, GameRoomQuestion, GameRoomState } from "../types";
 import { hapticTap } from "../utils/haptics";
 
@@ -691,18 +692,33 @@ function QuestionView({
 
 // ─── Media komponenti ─────────────────────────────────────────────────────────
 
+/**
+ * QuestionMedia — savol turига qarab rasm, audio yoki bo'sh qaytaradi.
+ *
+ * mediaUrl (backend proxy yoki mutlaq URL) mavjud bo'lsa ishlatiladi.
+ * Nisbiy URL (/api/...) bo'lsa useAuthedMedia orqali autentifikatsiyalangan
+ * blob sifatida yuklanadi. Mutlaq http(s) URL bo'lsa to'g'ridan-to'g'ri src'ga qo'yiladi.
+ */
 function QuestionMedia({ question }: { question: GameRoomQuestion }) {
-  if (question.questionType === "text" || !question.mediaRef) {
-    return null;
-  }
+  // mediaUrl mavjud bo'lsa uni, aks holda mediaRef (http URL bo'lsa) ishlatamiz.
+  const rawUrl: string | null | undefined =
+    question.mediaUrl != null
+      ? question.mediaUrl
+      : question.mediaRef?.startsWith("http")
+        ? question.mediaRef
+        : null;
 
-  const isUrl =
-    question.mediaRef.startsWith("http://") ||
-    question.mediaRef.startsWith("https://");
+  const media = useAuthedMedia(
+    question.questionType !== "text" ? rawUrl : null,
+  );
 
-  if (!isUrl) {
-    // Telegram file_id — mini-app bu'ni to'g'ridan-to'g'ri yuklay olmaydi.
-    // Caption mavjud bo'lsa ko'rsatamiz, aks holda "media mavjud emas" xabari.
+  if (question.questionType === "text") return null;
+
+  // Media URL yo'q (ne mediaUrl, ne ishlatilishi mumkin bo'lgan mediaRef)
+  if (!rawUrl) return null;
+
+  // Yuklanmoqda
+  if (media.status === "loading") {
     return (
       <div
         style={{
@@ -715,13 +731,32 @@ function QuestionMedia({ question }: { question: GameRoomQuestion }) {
           flexShrink: 0,
         }}
       >
-        <div style={{ fontSize: "24px", marginBottom: "6px" }}>
+        <div style={{ fontSize: "22px", marginBottom: "6px" }}>
           {question.questionType === "image" ? "🖼" : "🎵"}
         </div>
+        <div style={{ fontSize: "12px", color: "var(--muted)" }}>Yuklanmoqda...</div>
+      </div>
+    );
+  }
+
+  // Xato
+  if (media.status === "error") {
+    return (
+      <div
+        style={{
+          background: "rgba(239,68,68,0.06)",
+          border: "1px dashed rgba(239,68,68,0.25)",
+          borderRadius: "12px",
+          padding: "14px",
+          textAlign: "center",
+          marginBottom: "10px",
+          flexShrink: 0,
+        }}
+      >
         <div style={{ fontSize: "12px", color: "var(--muted)", marginBottom: question.caption ? "6px" : 0 }}>
           {question.questionType === "image"
-            ? "Rasm Telegram'da ko'rsatilgan"
-            : "Audio Telegram'da ko'rsatilgan"}
+            ? "Rasmni yuklab bo'lmadi"
+            : "Audioni yuklab bo'lmadi"}
         </div>
         {question.caption && (
           <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>
@@ -732,39 +767,42 @@ function QuestionMedia({ question }: { question: GameRoomQuestion }) {
     );
   }
 
-  if (question.questionType === "image") {
-    return (
-      <div style={{ marginBottom: "10px", flexShrink: 0, borderRadius: "12px", overflow: "hidden" }}>
-        <img
-          src={question.mediaRef}
-          alt={question.caption ?? "Savol rasmi"}
-          style={{ width: "100%", maxHeight: "200px", objectFit: "contain", background: "var(--bg)" }}
-        />
-        {question.caption && (
-          <div style={{ fontSize: "12px", color: "var(--muted)", textAlign: "center", padding: "6px" }}>
-            {question.caption}
-          </div>
-        )}
-      </div>
-    );
-  }
+  // Tayyor
+  if (media.status === "ready") {
+    if (question.questionType === "image") {
+      return (
+        <div style={{ marginBottom: "10px", flexShrink: 0, borderRadius: "12px", overflow: "hidden" }}>
+          <img
+            src={media.url}
+            alt={question.caption ?? "Savol rasmi"}
+            style={{ width: "100%", maxHeight: "220px", objectFit: "contain", background: "var(--bg)", display: "block" }}
+          />
+          {question.caption && (
+            <div style={{ fontSize: "12px", color: "var(--muted)", textAlign: "center", padding: "6px" }}>
+              {question.caption}
+            </div>
+          )}
+        </div>
+      );
+    }
 
-  if (question.questionType === "audio") {
-    return (
-      <div style={{ marginBottom: "10px", flexShrink: 0 }}>
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-        <audio
-          controls
-          src={question.mediaRef}
-          style={{ width: "100%", borderRadius: "10px" }}
-        />
-        {question.caption && (
-          <div style={{ fontSize: "12px", color: "var(--muted)", textAlign: "center", marginTop: "4px" }}>
-            {question.caption}
-          </div>
-        )}
-      </div>
-    );
+    if (question.questionType === "audio") {
+      return (
+        <div style={{ marginBottom: "10px", flexShrink: 0 }}>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <audio
+            controls
+            src={media.url}
+            style={{ width: "100%", borderRadius: "10px" }}
+          />
+          {question.caption && (
+            <div style={{ fontSize: "12px", color: "var(--muted)", textAlign: "center", marginTop: "4px" }}>
+              {question.caption}
+            </div>
+          )}
+        </div>
+      );
+    }
   }
 
   return null;

@@ -185,6 +185,13 @@ export type GameRoomQuestion = {
   body: string;
   /** Telegram file_id yoki URL. null = mavjud emas. */
   mediaRef: string | null;
+  /**
+   * Backend tomonidan tayyor media URL.
+   * - Mutlaq http(s) URL → to'g'ridan-to'g'ri ishlatiladi.
+   * - Nisbiy /api/... yo'l → autentifikatsiya bilan proxy orqali yuklanadi.
+   * - null/undefined → media yo'q.
+   */
+  mediaUrl?: string | null;
   caption: string | null;
   timeLimitSeconds: number;
   pointValue: number;

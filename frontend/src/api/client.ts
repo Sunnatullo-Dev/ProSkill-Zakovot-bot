@@ -702,6 +702,22 @@ export async function submitBattleAnswer(
   });
 }
 
+// ─── Media (autentifikatsiyalangan blob yuklab olish) ─────────────────────────
+
+/**
+ * Nisbiy API yo'li uchun autentifikatsiyalangan Blob qaytaradi.
+ * `/api/...` shaklida bo'lishi kerak (masalan, `/api/gamerooms/rooms/XYZ/questions/1/media`).
+ * Mutlaq URL uchun bu funksiyadan foydalanmang — to'g'ridan-to'g'ri `fetch` qiling.
+ */
+export async function fetchAuthedBlob(relativePath: string): Promise<Blob> {
+  const url = `${API_URL.replace(/\/$/, "")}${relativePath}`;
+  const response = await fetch(url, { headers: buildHeaders() });
+  if (!response.ok) {
+    throw new Error(`Media yuklab bo'lmadi: ${response.status}`);
+  }
+  return response.blob();
+}
+
 // ─── Online O'yin Xonasi (GameRoom) ──────────────────────────────────────────
 
 /**
