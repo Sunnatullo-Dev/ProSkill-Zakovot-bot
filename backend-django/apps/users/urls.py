@@ -10,4 +10,5 @@ urlpatterns = [
     path("me", views.update_me),
     path("me/language", views.update_language),
     path("me/check-achievements", views.check_achievements),
+    path("bot-start", views.bot_start),
 ]

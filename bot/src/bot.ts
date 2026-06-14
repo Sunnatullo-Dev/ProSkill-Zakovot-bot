@@ -447,6 +447,48 @@ async function sendWelcome(ctx: any): Promise<void> {
   }
 }
 
+/** Yangi foydalanuvchi bot-start endpointiga ro'yxatdan o'tkazadi.
+ *  Agar 100-chi (200-chi, 300-chi...) yangi foydalanuvchi bo'lsa — barcha adminlarga xabar yuboradi.
+ *  Xato bo'lsa jim o'tadi — asosiy /start oqimiga ta'sir qilmaydi. */
+async function notifyMilestoneIfNeeded(
+  telegramId: number,
+  firstName: string | undefined,
+  lastName: string | undefined,
+  username: string | undefined
+): Promise<void> {
+  try {
+    const result = await apiPost("/api/users/bot-start", {
+      telegramId,
+      firstName: firstName ?? "",
+      lastName: lastName ?? null,
+      username: username ?? null,
+    });
+
+    const isNew: boolean = result?.isNew === true;
+    const totalCount: number = typeof result?.totalCount === "number" ? result.totalCount : 0;
+
+    if (isNew && totalCount > 0 && totalCount % 100 === 0) {
+      const name = firstName || "Foydalanuvchi";
+      const userTag = username ? ` (@${username})` : "";
+      const milestoneText =
+        `🎉 *${totalCount}-chi foydalanuvchi!*\n\n` +
+        `Botimizga yangi foydalanuvchi qo'shildi va siz ${totalCount} ta foydalanuvchiga erishdingiz!\n\n` +
+        `👤 *Yangi foydalanuvchi:* ${name}${userTag}\n` +
+        `📊 *Jami:* ${totalCount} ta foydalanuvchi`;
+
+      for (const adminId of SUPER_ADMIN_IDS) {
+        try {
+          await bot.api.sendMessage(adminId, milestoneText, { parse_mode: "Markdown" });
+        } catch {
+          // Admin botni bloklagan bo'lishi mumkin — jim o'tamiz
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn("[bot] bot-start milestone xatosi:", e?.message);
+  }
+}
+
 // /start
 bot.command("start", async ctx => {
   const uid = ctx.from!.id;
@@ -467,6 +509,7 @@ bot.command("start", async ctx => {
       }
     }
     await handleDeepLinkJoin(ctx, grDeps, code);
+    void notifyMilestoneIfNeeded(uid, ctx.from?.first_name, ctx.from?.last_name, ctx.from?.username);
     return;
   }
 
@@ -480,6 +523,7 @@ bot.command("start", async ctx => {
   }
 
   await sendWelcome(ctx);
+  void notifyMilestoneIfNeeded(uid, ctx.from?.first_name, ctx.from?.last_name, ctx.from?.username);
 });
 
 // 🔧 Admin panel — /admin slash buyrug'i va "🔧 Admin panel" tugmasi orqali

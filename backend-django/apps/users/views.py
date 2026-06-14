@@ -166,6 +166,40 @@ def check_achievements(request):
     )
 
 
+@api_view(["POST"])
+@require_auth
+def bot_start(request):
+    """Bot /start komandasida chaqiriladi — foydalanuvchini yaratadi yoki topadi.
+
+    Body: { "telegramId": int, "firstName": str, "lastName": str?, "username": str? }
+    Response: { "isNew": bool, "totalCount": int }
+    """
+    body = request.data if isinstance(request.data, dict) else {}
+
+    telegram_id = body.get("telegramId")
+    if not isinstance(telegram_id, int) or telegram_id <= 0:
+        raise AppError(400, "telegramId kerak (musbat son)")
+
+    first_name = body.get("firstName") or None
+    last_name = body.get("lastName") or None
+    username = body.get("username") or None
+
+    from .models import User as UserModel
+
+    _, created = UserModel.objects.get_or_create(
+        telegram_id=telegram_id,
+        defaults={
+            "first_name": first_name,
+            "last_name": last_name,
+            "username": username,
+        },
+    )
+
+    total_count = UserModel.objects.count()
+
+    return Response({"isNew": created, "totalCount": total_count})
+
+
 def _parse_int(raw: str | None, *, default: int, lo: int, hi: int) -> int:
     if not raw:
         return default
