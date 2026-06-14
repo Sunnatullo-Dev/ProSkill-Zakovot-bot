@@ -1,6 +1,8 @@
 node_modules
 dist
 build
+frontend/dist/
+backend/
 .env
 .env.local
 .DS_Store

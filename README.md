@@ -1,156 +1,112 @@
 # Zakovat
 
-Zakovat - Telegram Mini App uchun bilim tekshirish MVP o'yini.
+Telegram Mini App ko'rinishidagi bilim o'yini platformasi. O'zbek tilidagi Zakovat teleo'yini uslubida qurilgan.
+
+## O'yin rejimlari
+
+- **Yakka o'yin** — savol-javob raundlari, taymer, ball va streak tizimi
+- **Kunlik chaqiriq** — har kun yangi savol to'plami
+- **Jamoa rejimi** — jamoa bo'lib o'ynash
+- **Duel/Bellashuv** — boshqa foydalanuvchi bilan 1v1
+- **Svoyak** — doska + kategoriya × ball + BUZZ tugmasi
+- **Online O'yin Xonasi** — admin xona ochadi, savollar push qiladi, real-time reyting
 
 ## Stack
 
-- Frontend: React, TypeScript, Vite, Tailwind CSS, `@twa-dev/sdk`
-- Backend: Node.js, Express, TypeScript
-- Database: PostgreSQL via Supabase
-- AI: Google Gemini API
+| Qatlam | Texnologiya |
+|---|---|
+| Frontend | React + TypeScript + Vite + Tailwind CSS + `@twa-dev/sdk` |
+| Backend | Django 5 + Django REST Framework |
+| Bot | grammY (TypeScript) |
+| AI | Google Gemini 2.5-flash (javob baholash, TTS) |
+| DB | SQLite (lokal) / PostgreSQL (prod, `DATABASE_URL`) |
+| Hosting | Render (gunicorn + WhiteNoise) |
+
+## Loyiha tuzilmasi
+
+```
+ZAKOVOT/
+├── frontend/          # React + TypeScript (Telegram Mini App)
+├── backend-django/    # Django 5 + DRF (asosiy backend)
+├── bot/               # grammY Telegram boti
+├── package.json       # monorepo workspaces
+└── DEPLOY.md          # serverga qo'yish ko'rsatmasi
+```
 
 ## Ishga tushirish
 
-1. `npm install`
-2. `frontend/.env` ichidagi `VITE_BOT_USERNAME` qiymatini bot username bilan almashtiring.
-3. `backend/.env` ichidagi Supabase, Telegram va Gemini secretlarini haqiqiy qiymatlar bilan almashtiring.
-4. Supabase SQL editor ichida quyidagi schema'ni bajaring.
-5. Namuna savollar uchun `backend/seed.sql` faylini Supabase SQL editorda bajaring (60 ta savol).
-6. `npm run dev`
-
-## Environment
-
-`backend/.env`
-
-```env
-PORT=3000
-NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your_supabase_service_role_key
-GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.0-flash
-ADMIN_TELEGRAM_IDS=123456789,987654321
-MINI_APP_URL=
+```bash
+npm install
+npm run dev   # frontend + backend-django + bot ni birga ko'taradi
 ```
 
-`MINI_APP_URL` (ixtiyoriy) - Mini App joylashtirilgan HTTPS manzili. Backend bot xabarlariga "Mini Appni ochish" tugmasini shu manzil orqali qo'shadi. Bo'sh bo'lsa, xabarlar tugmasiz yuboriladi.
+### Environment fayllar
 
-`ADMIN_TELEGRAM_IDS` - vergul bilan ajratilgan admin Telegram ID lari. Shu hisoblar ilovada "Admin" bo'limini ko'radi va yuborilgan savollarni tasdiqlaydi.
+**`backend-django/.env`**
 
-`frontend/.env`
+```env
+NODE_ENV=development
+DJANGO_SECRET_KEY=your-secret-key-here
+DJANGO_DEBUG=true
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
+ADMIN_TELEGRAM_IDS=123456789,987654321
+MINI_APP_URL=https://your-deployed-frontend-url
+BOT_INTERNAL_API_KEY=your-bot-internal-key
+FRONTEND_URL=http://localhost:5173
+```
+
+Django `SECRET_KEY` yaratish:
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(50))"
+```
+
+**`frontend/.env`**
 
 ```env
 VITE_API_URL=http://localhost:3000
 VITE_BOT_USERNAME=zakovot_robot
 ```
 
-`VITE_BOT_USERNAME` - Telegram bot username (@ belgisiz). Taklif va ulashish havolalari shu bot orqali ochiladi.
-
-`bot/.env`
+**`bot/.env`**
 
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-ADMIN_ID=123456789
+BACKEND_URL=http://localhost:3000
+BOT_INTERNAL_API_KEY=your-bot-internal-key
+ADMIN_TELEGRAM_IDS=123456789
 MINI_APP_URL=https://your-deployed-frontend-url
 ```
 
-## Bot
+## Database
 
-`bot/` papkasida Telegram boti joylashgan (grammy kutubxonasi). Bot `/start` buyrug'iga "Assalomu Aleykum, {ism}" deb javob beradi va Mini App'ni ochuvchi tugma ko'rsatadi.
+Lokal SQLite avtomatik yaratiladi (`backend-django/db.sqlite3`).
 
-- `bot/.env.example` ni nusxalab `bot/.env` qiling va qiymatlarni to'ldiring.
-- Ishga tushirish: `npm run bot` (yoki `npm run dev --workspace bot`).
-- `MINI_APP_URL` HTTPS bo'lishi shart — Telegram localhost'ni qabul qilmaydi, shuning uchun frontend deploy qilingach to'ldiriladi.
-
-## Database schema
-
-```sql
-create extension if not exists pgcrypto;
-
-create table users (
-  id uuid primary key default gen_random_uuid(),
-  telegram_id bigint not null unique,
-  first_name text,
-  last_name text,
-  username text,
-  score integer not null default 0,
-  referred_by bigint,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table questions (
-  id uuid primary key default gen_random_uuid(),
-  text text not null,
-  correct_answer text not null,
-  category text,
-  difficulty text,
-  created_at timestamptz not null default now()
-);
-
-create table question_submissions (
-  id uuid primary key default gen_random_uuid(),
-  text text not null,
-  correct_answer text not null,
-  category text,
-  difficulty text,
-  submitted_by bigint not null,
-  status text not null default 'pending',
-  created_at timestamptz not null default now(),
-  reviewed_at timestamptz
-);
-
-create table game_results (
-  id uuid primary key default gen_random_uuid(),
-  telegram_id bigint not null,
-  correct_count integer not null,
-  total_count integer not null,
-  round_score integer not null,
-  created_at timestamptz not null default now()
-);
-
-create table question_reports (
-  id uuid primary key default gen_random_uuid(),
-  question_id uuid not null,
-  reported_by bigint not null,
-  created_at timestamptz not null default now()
-);
-
-create index idx_users_telegram_id on users (telegram_id);
-create index idx_users_referred_by on users (referred_by);
-create index idx_questions_created_at on questions (created_at);
-create index idx_submissions_status on question_submissions (status);
-create index idx_game_results_telegram_id on game_results (telegram_id);
-create index idx_question_reports_question on question_reports (question_id);
+```bash
+cd backend-django
+python manage.py migrate
+python manage.py createsuperuser  # ixtiyoriy
 ```
 
-`question_reports` - foydalanuvchilar "savolda xato bor" deb belgilagan savollar. Admin panelida ko'rinadi, admin savolni o'chira oladi.
-
-`users.referred_by` - foydalanuvchini taklif qilgan odamning `telegram_id` si. Taklif havolasi orqali kelganda bir marta yoziladi. Takliflar reytingi shu ustun bo'yicha hisoblanadi.
-
-Mavjud bazaga ustun qo'shish uchun: `alter table users add column referred_by bigint;`
-
-`question_submissions` - foydalanuvchilar yuborgan savollar. `status` qiymatlari: `pending`, `approved`, `rejected`. Admin tasdiqlaganda savol `questions` jadvaliga ko'chiriladi va muallifga bonus ball qo'shiladi.
-
-`game_results` - har bir tugatilgan raund natijasi (to'g'ri javoblar soni, savollar soni, raund bali). Profil ekranidagi statistika shu jadval asosida hisoblanadi.
+Namuna savollar qo'shish:
+```bash
+cd backend-django
+python manage.py shell < seed.sql  # yoki to'g'ridan to'g'ri SQLite'ga import
+```
 
 ## Ball tizimi
 
-- Har to'g'ri javob: 1 ball.
-- 4 soniya yoki undan tez javob berilsa: 2 ball.
-- 3 va undan ortiq ketma-ket to'g'ri javobda: har savolga qo'shimcha +1 ball.
+- Har to'g'ri javob: **1 ball**
+- 4 soniya yoki tezroq javob: **2 ball**
+- 3+ ketma-ket to'g'ri javob (streak): har savolga **+1 ball**
 
-## Fayllar tavsifi
+## Muhim fayllar
 
-- `package.json` - monorepo workspaces va umumiy scriptlarni boshqaradi.
-- `frontend/src/App.tsx` - Telegram login, savol olish, javob yuborish, taymer va ball oqimini birlashtiradi.
-- `frontend/src/api/client.ts` - backend API bilan ishlash uchun yagona client.
-- `frontend/src/hooks/useTelegram.ts` - Telegram Web App SDK'dan `initData` va user ma'lumotlarini oladi.
-- `frontend/src/hooks/useTimer.ts` - 15 soniyalik raund taymerini yuritadi.
-- `backend/src/app.ts` - Express app, middleware va routelarni ulaydi.
-- `backend/src/services/telegram.service.ts` - Telegram `initData` imzosini tekshiradi.
-- `backend/src/services/gemini.service.ts` - Gemini orqali foydalanuvchi javobini baholaydi.
-- `backend/src/repositories/user.repository.ts` - `users` jadvali bilan ishlaydi.
-- `backend/src/repositories/question.repository.ts` - `questions` jadvali bilan ishlaydi.
+- `backend-django/zakovat/settings.py` — barcha sozlamalar
+- `backend-django/apps/answers/gemini.py` — Gemini baholash logikasi
+- `backend-django/apps/gamerooms/` — Online O'yin Xonasi (models, views, tests)
+- `frontend/src/App.tsx` — asosiy frontend oqimi
+- `bot/src/bot.ts` — asosiy bot
+- `bot/src/gameroom.ts` — O'yin Xonasi bot oqimi
+- `DEPLOY.md` — Render'ga qo'yish bo'yicha batafsil ko'rsatma

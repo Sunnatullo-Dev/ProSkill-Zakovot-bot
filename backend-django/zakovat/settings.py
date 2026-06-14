@@ -42,19 +42,12 @@ DEBUG = env_bool("DJANGO_DEBUG", default=False)
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
     if IS_PRODUCTION:
-        # Production'da SECRET_KEY yo'q bo'lsa — xavfsiz ishlay olmaymiz.
-        # Har restart'da kalit o'zgarsa barcha sessiyalar va CSRF tokenlar
-        # bekor bo'ladi. Aniq xato bilan to'xtatamiz.
-        print(
-            "[settings] CRITICAL: DJANGO_SECRET_KEY o'rnatilmagan! "
-            "Render env'ga aniq qiymat qo'ying: "
-            "python -c \"import secrets; print(secrets.token_urlsafe(50))\"",
-            file=sys.stderr,
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY o'rnatilmagan! "
+            "Render env'ga qo'ying: "
+            "python -c \"import secrets; print(secrets.token_urlsafe(50))\""
         )
-        SECRET_KEY = "auto-" + os.urandom(32).hex()
-        # Eslatma: ideally bu yerda sys.exit(1) yoki ImproperlyConfigured
-        # chaqirilishi kerak, lekin server qayta ko'tarilolmasligi muammosini
-        # oldini olish uchun hozircha warning bilan davom etamiz.
     else:
         SECRET_KEY = "dev-only-not-for-production-" + os.urandom(8).hex()
 
