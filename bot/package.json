@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/bot.ts",
-    "start": "tsx src/bot.ts"
+    "start": "tsx src/bot.ts",
+    "milestone": "node scripts/send-milestone.mjs"
   },
   "dependencies": {
     "@types/node": "latest",
