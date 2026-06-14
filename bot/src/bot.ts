@@ -468,13 +468,9 @@ async function notifyMilestoneIfNeeded(
     const totalCount: number = typeof result?.totalCount === "number" ? result.totalCount : 0;
 
     if (isNew && totalCount > 0 && totalCount % 100 === 0) {
-      const name = firstName || "Foydalanuvchi";
-      const userTag = username ? ` (@${username})` : "";
       const milestoneText =
-        `🎉 *${totalCount}-chi foydalanuvchi!*\n\n` +
-        `Botimizga yangi foydalanuvchi qo'shildi va siz ${totalCount} ta foydalanuvchiga erishdingiz!\n\n` +
-        `👤 *Yangi foydalanuvchi:* ${name}${userTag}\n` +
-        `📊 *Jami:* ${totalCount} ta foydalanuvchi`;
+        `🎉 Tabriklayman! Biz yana 100 taga ko'paydik!\n\n` +
+        `📊 Hozirgi ko'rsatkich: *${totalCount} ta* foydalanuvchi`;
 
       for (const adminId of SUPER_ADMIN_IDS) {
         try {
