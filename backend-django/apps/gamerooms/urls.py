@@ -20,6 +20,12 @@ urlpatterns = [
     path("admin/rooms/<str:code>/submissions/<int:submission_id>/grade", views.admin_manual_grade),
     # Javoblar ko'rish
     path("admin/rooms/<str:code>/questions/<int:question_id>/submissions", views.admin_get_submissions),
+    # [YANGI] Guruhlangan javoblar ko'rish
+    path("admin/rooms/<str:code>/questions/<int:question_id>/submissions/grouped", views.admin_get_grouped_submissions),
+    # [YANGI] Guruh bo'yicha ommaviy baholash
+    path("admin/rooms/<str:code>/questions/<int:question_id>/bulk-grade", views.admin_bulk_grade),
+    # [YANGI] Qolgan baholanmaganlarni noto'g'ri belgilash
+    path("admin/rooms/<str:code>/questions/<int:question_id>/grade-rest-wrong", views.admin_grade_rest_wrong),
     # Statistika va eksport
     path("admin/rooms/<str:code>/stats", views.admin_get_stats),
     path("admin/rooms/<str:code>/results", views.admin_get_results),

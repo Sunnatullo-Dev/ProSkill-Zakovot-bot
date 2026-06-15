@@ -696,6 +696,250 @@ def get_room_state(
     }
 
 
+# ─── Guruhlangan baholash (admin uchun) ──────────────────────────────────────
+
+def _normalize_answer(text: str) -> str:
+    """Javob matnini normalizatsiya qiladi (grading.py bilan muvofiq).
+
+    NFC + trim + ichki bo'shliqlarni yig'ish + casefold.
+    casefold() lower() ga qaraganda ko'proq Unicode holatlarni to'g'ri ishlaydi
+    (masalan, nemischa ß → ss), O'zbek/Kirilcha uchun ham xavfsiz.
+    """
+    import unicodedata
+    import re
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFC", text).strip().casefold()
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
+
+
+def get_grouped_submissions(
+    *,
+    code: str,
+    admin_telegram_id: int,
+    question_id: int,
+) -> dict[str, Any]:
+    """Admin uchun savolning javoblarini guruhlaydi.
+
+    Bir xil (normalized) javoblar bitta guruhga birlashtiriladi.
+    Guruhlar count bo'yicha kamayish tartibida qaytariladi.
+
+    Response shape:
+    {
+        questionId, questionBody, correctAnswer, questionStatus,
+        totalSubmissions, totalUngraded,
+        groups: [
+            {
+                normalizedKey: str,
+                displayAnswer: str,       # original cased bir namunaviy javob
+                count: int,
+                gradedCorrect: int,
+                gradedIncorrect: int,
+                pending: int,
+                submissionIds: list[int],
+            },
+            ...
+        ]
+    }
+    """
+    normalized_code = code.strip().upper()
+    room = get_room(normalized_code)
+    _require_room_admin(room, admin_telegram_id)
+
+    question = GameQuestion.objects.filter(id=question_id, room=room).first()
+    if not question:
+        raise AppError(404, "Savol topilmadi")
+
+    submissions = list(
+        Submission.objects.select_related("participant")
+        .filter(question=question)
+        .order_by("submitted_at")
+    )
+
+    # Javoblarni normalize qilib guruhlash
+    # groups_map: normalizedKey → {displayAnswer, submissionIds, counts}
+    groups_map: dict[str, dict[str, Any]] = {}
+    for sub in submissions:
+        key = _normalize_answer(sub.answer_text)
+        if key not in groups_map:
+            groups_map[key] = {
+                "normalizedKey": key,
+                "displayAnswer": sub.answer_text,  # birinchi ko'ringan asl javob
+                "submissionIds": [],
+                "gradedCorrect": 0,
+                "gradedIncorrect": 0,
+                "pending": 0,
+            }
+        g = groups_map[key]
+        g["submissionIds"].append(sub.id)
+        if sub.is_correct is True:
+            g["gradedCorrect"] += 1
+        elif sub.is_correct is False:
+            g["gradedIncorrect"] += 1
+        else:
+            g["pending"] += 1
+
+    # Count bo'yicha kamayish tartibida saralash
+    groups = sorted(groups_map.values(), key=lambda g: len(g["submissionIds"]), reverse=True)
+    for g in groups:
+        g["count"] = len(g["submissionIds"])
+
+    total = len(submissions)
+    total_ungraded = sum(1 for s in submissions if not s.graded_by)
+
+    return {
+        "questionId": question_id,
+        "questionBody": question.body,
+        "correctAnswer": question.correct_answer,
+        "questionStatus": question.status,
+        "totalSubmissions": total,
+        "totalUngraded": total_ungraded,
+        "groups": groups,
+    }
+
+
+def bulk_grade_group(
+    *,
+    code: str,
+    admin_telegram_id: int,
+    question_id: int,
+    normalized_key: str,
+    is_correct: bool,
+) -> dict[str, Any]:
+    """Bir normalized javob guruhining barcha submissionlarini baholaydi.
+
+    Atomik va race-safe. Re-grading to'g'ri delta bilan ishlaydi:
+    - Allaqachon to'g'ri deb belgilangan + yana to'g'ri → delta 0 (points o'zgarmaydi)
+    - Allaqachon noto'g'ri + endi to'g'ri → delta = +point_value
+    - Allaqachon to'g'ri + endi noto'g'ri → delta = -point_value, speed_score ham ayiriladi
+    - Hali baholanmagan → oddiy grade
+
+    Returns: { gradedCount, questionId, isCorrect }
+    """
+    normalized_code = code.strip().upper()
+    room = get_room(normalized_code)
+    _require_room_admin(room, admin_telegram_id)
+
+    question = GameQuestion.objects.filter(id=question_id, room=room).first()
+    if not question:
+        raise AppError(404, "Savol topilmadi")
+
+    # Ushbu question uchun normalized key mos keladigan barcha submissionlar
+    # Normalizatsiyani Python tomonida bajaramiz (DB'da casefold/NFC yo'q)
+    all_subs = list(
+        Submission.objects.select_related("participant")
+        .filter(question=question)
+    )
+
+    target_ids = [
+        sub.id for sub in all_subs
+        if _normalize_answer(sub.answer_text) == normalized_key
+    ]
+
+    if not target_ids:
+        return {"gradedCount": 0, "questionId": question_id, "isCorrect": is_correct}
+
+    new_points = question.point_value if is_correct else 0
+    graded_count = 0
+
+    with transaction.atomic():
+        subs_to_grade = list(
+            Submission.objects.select_for_update()
+            .select_related("participant")
+            .filter(id__in=target_ids)
+        )
+
+        for sub in subs_to_grade:
+            old_points = sub.points_awarded or 0
+            old_is_correct = sub.is_correct  # None | True | False
+
+            # Delta hisoblash
+            delta = new_points - old_points
+
+            # Submission yangilash
+            sub.is_correct = is_correct
+            sub.points_awarded = new_points
+            sub.graded_by = "manual"
+            sub.grading_note = ""
+            sub.save(update_fields=[
+                "is_correct", "points_awarded", "graded_by",
+                "grading_note", "updated_at",
+            ])
+            graded_count += 1
+
+            if delta != 0:
+                Participant.objects.filter(id=sub.participant_id).update(
+                    total_points=models_F("total_points") + delta
+                )
+
+            # Speed score: faqat yangi to'g'ri javob uchun qo'shiladi
+            # (oldin noto'g'ri/baholanmagan edi, endi to'g'ri bo'ldi)
+            if is_correct and old_is_correct is not True and question.activated_at:
+                activated_ms = int(question.activated_at.timestamp() * 1000)
+                submitted_ms = int(sub.submitted_at.timestamp() * 1000)
+                response_ms = max(0, submitted_ms - activated_ms)
+                Participant.objects.filter(id=sub.participant_id).update(
+                    speed_score_ms=models_F("speed_score_ms") + response_ms
+                )
+
+            # Speed score: to'g'ri edi, endi noto'g'ri → teskari qaytarish
+            if not is_correct and old_is_correct is True and question.activated_at:
+                activated_ms = int(question.activated_at.timestamp() * 1000)
+                submitted_ms = int(sub.submitted_at.timestamp() * 1000)
+                response_ms = max(0, submitted_ms - activated_ms)
+                Participant.objects.filter(id=sub.participant_id).update(
+                    speed_score_ms=models_F("speed_score_ms") - response_ms
+                )
+
+        # Manfiy bo'lib qolmasligini kafolatlash
+        Participant.objects.filter(
+            id__in=[s.participant_id for s in subs_to_grade],
+            total_points__lt=0
+        ).update(total_points=0)
+        Participant.objects.filter(
+            id__in=[s.participant_id for s in subs_to_grade],
+            speed_score_ms__lt=0
+        ).update(speed_score_ms=0)
+
+    return {"gradedCount": graded_count, "questionId": question_id, "isCorrect": is_correct}
+
+
+def grade_rest_wrong(
+    *,
+    code: str,
+    admin_telegram_id: int,
+    question_id: int,
+) -> dict[str, Any]:
+    """Hali baholanmagan (graded_by='') barcha submissionlarni noto'g'ri deb belgilaydi.
+
+    0 ball beriladi, speed_score o'zgarmaydi (noto'g'ri javob uchun speed qo'shilmagan).
+    Atomik.
+
+    Returns: { gradedCount, questionId }
+    """
+    normalized_code = code.strip().upper()
+    room = get_room(normalized_code)
+    _require_room_admin(room, admin_telegram_id)
+
+    question = GameQuestion.objects.filter(id=question_id, room=room).first()
+    if not question:
+        raise AppError(404, "Savol topilmadi")
+
+    with transaction.atomic():
+        updated_count = Submission.objects.filter(
+            question=question,
+            graded_by="",
+        ).update(
+            is_correct=False,
+            points_awarded=0,
+            graded_by="manual",
+            grading_note="grade_rest_wrong",
+        )
+
+    return {"gradedCount": updated_count, "questionId": question_id}
+
+
 # ─── Javoblar oqimi (admin uchun) ─────────────────────────────────────────────
 
 def get_question_submissions(

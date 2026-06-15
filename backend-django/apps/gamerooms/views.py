@@ -254,6 +254,74 @@ def admin_get_submissions(request, code: str, question_id: int):
 
 @api_view(["GET"])
 @require_auth
+def admin_get_grouped_submissions(request, code: str, question_id: int):
+    """Savolning javoblarini guruhlangan holda ko'rish.
+
+    GET /api/gamerooms/admin/rooms/<code>/questions/<id>/submissions/grouped
+    Auth: xona admini
+    Response: { questionId, totalSubmissions, totalUngraded, groups: [...] }
+    """
+    user = request.current_user
+    result = repositories.get_grouped_submissions(
+        code=code,
+        admin_telegram_id=user.telegram_id,
+        question_id=question_id,
+    )
+    return Response(result)
+
+
+@api_view(["POST"])
+@require_auth
+def admin_bulk_grade(request, code: str, question_id: int):
+    """Bir normalized javob guruhini ommaviy baholash.
+
+    POST /api/gamerooms/admin/rooms/<code>/questions/<id>/bulk-grade
+    Body: { normalizedKey: str, isCorrect: bool }
+    Auth: xona admini
+    Response: { gradedCount, questionId, isCorrect }
+    """
+    user = request.current_user
+    body = request.data if isinstance(request.data, dict) else {}
+
+    normalized_key = body.get("normalizedKey")
+    if normalized_key is None:
+        raise AppError(400, "normalizedKey yuborilishi kerak")
+
+    is_correct_raw = body.get("isCorrect")
+    if is_correct_raw is None:
+        raise AppError(400, "isCorrect (true/false) yuborilishi kerak")
+    is_correct = bool(is_correct_raw)
+
+    result = repositories.bulk_grade_group(
+        code=code,
+        admin_telegram_id=user.telegram_id,
+        question_id=question_id,
+        normalized_key=str(normalized_key),
+        is_correct=is_correct,
+    )
+    return Response(result)
+
+
+@api_view(["POST"])
+@require_auth
+def admin_grade_rest_wrong(request, code: str, question_id: int):
+    """Hali baholanmagan barcha javoblarni noto'g'ri deb belgilash.
+
+    POST /api/gamerooms/admin/rooms/<code>/questions/<id>/grade-rest-wrong
+    Auth: xona admini
+    Response: { gradedCount, questionId }
+    """
+    user = request.current_user
+    result = repositories.grade_rest_wrong(
+        code=code,
+        admin_telegram_id=user.telegram_id,
+        question_id=question_id,
+    )
+    return Response(result)
+
+
+@api_view(["GET"])
+@require_auth
 def admin_get_stats(request, code: str):
     """Xona statistikasi.
 
