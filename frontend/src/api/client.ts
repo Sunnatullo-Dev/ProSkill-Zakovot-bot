@@ -880,6 +880,50 @@ export async function adminActivateChannel(id: number): Promise<ApiResult<{ ok: 
   return requestResult<{ ok: boolean }>(`/admin/channels/${id}`, { method: "POST" });
 }
 
+// ─── Admin Users ──────────────────────────────────────────────────────────────
+
+export type AdminUserListItem = {
+  id: string;
+  telegramId: number;
+  firstName: string | null;
+  lastName: string | null;
+  username: string | null;
+  displayName: string | null;
+  score: number;
+};
+
+export type AdminUsersResponse = {
+  items: AdminUserListItem[];
+  total: number;
+};
+
+export type AdminUserProfile = {
+  user: AdminUserListItem;
+  stats: import("../types").GameStats;
+  referralCount: number;
+  recentGames: import("../types").GameHistoryItem[];
+};
+
+/** Admin: foydalanuvchilar ro'yxati (qidirish + pagination). */
+export async function getAdminUsers(
+  params: { page?: number; limit?: number; search?: string } = {}
+): Promise<AdminUsersResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.search) q.set("search", params.search);
+  const path = q.toString() ? `/admin/users?${q}` : "/admin/users";
+  const res = await request<AdminUsersResponse>(path);
+  return res ?? { items: [], total: 0 };
+}
+
+/** Admin: bitta foydalanuvchining to'liq profili (stats + tarixi). */
+export async function getAdminUserProfile(
+  telegramId: number
+): Promise<AdminUserProfile | null> {
+  return request<AdminUserProfile>(`/admin/users/${telegramId}/profile`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T | null> {

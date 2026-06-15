@@ -7,6 +7,8 @@ import {
   getAdminCategories,
   getAdminQuestions,
   getAdminStats,
+  getAdminUserProfile,
+  getAdminUsers,
   getReportedQuestions,
   renameAdminCategory,
   updateAdminQuestion
@@ -17,7 +19,9 @@ import type {
   AdminCategoryStat,
   AdminQuestion,
   AdminQuestionsResponse,
-  AdminStats
+  AdminStats,
+  AdminUserListItem,
+  AdminUserProfile
 } from "../api/client";
 import type { Difficulty, ReportedQuestion } from "../types";
 import ConfirmDialog from "./ConfirmDialog";
@@ -51,7 +55,7 @@ type AdminPanelProps = {
   onExitToUser: () => void;
 };
 
-type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels";
+type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels" | "users";
 
 type SectionMeta = {
   id: Section;
@@ -103,6 +107,13 @@ const SECTIONS: SectionMeta[] = [
     Icon: AlertIcon,
     accent: "#F59E0B",
     subtitle: "Majburiy kanallar — qo'shish, o'chirish, tarix"
+  },
+  {
+    id: "users",
+    label: "Foydalanuvchilar",
+    Icon: UserIcon,
+    accent: "#06B6D4",
+    subtitle: "Foydalanuvchilar ro'yxati va individual profillar"
   },
   {
     id: "settings",
@@ -396,6 +407,7 @@ export default function AdminPanel({ onExitToUser }: AdminPanelProps) {
           {section === "categories" ? <CategoriesSection /> : null}
           {section === "svoyak" ? <SvoyakAdminSection /> : null}
           {section === "channels" ? <ChannelsSection /> : null}
+          {section === "users" ? <UsersSection /> : null}
           {section === "settings" ? <SettingsSection /> : null}
         </div>
       </div>
@@ -2543,6 +2555,500 @@ function CategoriesSection() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ----- Users -----
+
+const USER_PAGE_LIMIT = 20;
+
+function userDisplayName(u: AdminUserListItem): string {
+  return u.displayName ?? u.firstName ?? u.username ?? `#${u.telegramId}`;
+}
+
+function UsersSection() {
+  const [items, setItems] = useState<AdminUserListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<AdminUserListItem | null>(null);
+
+  const load = useCallback(async (p: number, q: string) => {
+    setLoading(true);
+    const res = await getAdminUsers({ page: p, limit: USER_PAGE_LIMIT, search: q.trim() || undefined });
+    setItems(res.items);
+    setTotal(res.total);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load(page, search);
+  }, [load, page, search]);
+
+  const totalPages = Math.max(1, Math.ceil(total / USER_PAGE_LIMIT));
+
+  if (selectedUser) {
+    return (
+      <UserProfileDetail
+        user={selectedUser}
+        onBack={() => setSelectedUser(null)}
+      />
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Search */}
+      <Card padding="12px">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            background: "var(--surface)",
+            border: "1.5px solid var(--border)",
+            borderRadius: "12px",
+            padding: "0 12px"
+          }}
+        >
+          <span style={{ color: "var(--muted)" }}>
+            <SearchIcon size={16} />
+          </span>
+          <input
+            placeholder="Ism, username yoki Telegram ID..."
+            style={{
+              ...inputStyle,
+              background: "transparent",
+              border: "none",
+              padding: "12px 10px"
+            }}
+            type="text"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+      </Card>
+
+      {/* Count + refresh row */}
+      <div
+        style={{
+          fontSize: "12px",
+          color: "var(--muted)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}
+      >
+        <span>{loading ? "Yuklanmoqda..." : `Jami: ${total} ta foydalanuvchi`}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {totalPages > 1 ? (
+            <span style={{ fontWeight: 700 }}>
+              {page} / {totalPages}
+            </span>
+          ) : null}
+          <RefreshButton onClick={() => void load(page, search)} />
+        </div>
+      </div>
+
+      {/* List */}
+      {!loading && items.length === 0 ? (
+        <EmptyState icon={<UserIcon size={36} />} text="Foydalanuvchi topilmadi" />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {items.map((u) => {
+            const initial = (userDisplayName(u)[0] ?? "?").toUpperCase();
+            return (
+              <button
+                key={u.telegramId}
+                style={{
+                  width: "100%",
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  textAlign: "left",
+                  transition: "border-color 0.15s"
+                }}
+                type="button"
+                onClick={() => setSelectedUser(u)}
+              >
+                {/* Avatar */}
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "12px",
+                    background: "linear-gradient(135deg, #06B6D4, #4DA6FF)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "16px",
+                    fontWeight: 800,
+                    color: "white",
+                    flex: "0 0 auto"
+                  }}
+                >
+                  {initial}
+                </div>
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 800,
+                      color: "var(--text)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap"
+                    }}
+                  >
+                    {userDisplayName(u)}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                    {u.username ? `@${u.username} · ` : ""}ID: {u.telegramId}
+                  </div>
+                </div>
+                {/* Score */}
+                <div style={{ textAlign: "right", flex: "0 0 auto" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 900, color: "var(--gold)" }}>
+                    {u.score}
+                  </div>
+                  <div style={{ fontSize: "9px", color: "var(--muted)", letterSpacing: "1px", textTransform: "uppercase" }}>
+                    ball
+                  </div>
+                </div>
+                <ChevronRightIcon size={16} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: "4px"
+          }}
+        >
+          <button
+            disabled={page <= 1}
+            style={{ ...ghostButton, opacity: page <= 1 ? 0.4 : 1 }}
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeftIcon size={14} /> Oldingi
+          </button>
+          <span style={{ fontSize: "12px", color: "var(--muted)", fontWeight: 700 }}>
+            {page} / {totalPages}
+          </span>
+          <button
+            disabled={page >= totalPages}
+            style={{ ...ghostButton, opacity: page >= totalPages ? 0.4 : 1 }}
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Keyingi <ChevronRightIcon size={14} />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ----- User profile detail (admin view) -----
+
+function UserProfileDetail({
+  user,
+  onBack
+}: {
+  user: AdminUserListItem;
+  onBack: () => void;
+}) {
+  const [profile, setProfile] = useState<AdminUserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void getAdminUserProfile(user.telegramId).then((res) => {
+      if (active) {
+        setProfile(res);
+        setLoading(false);
+      }
+    });
+    return () => { active = false; };
+  }, [user.telegramId]);
+
+  const displayName = userDisplayName(user);
+  const initial = (displayName[0] ?? "?").toUpperCase();
+
+  const STAT_ACCENT = "#06B6D4";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Back button */}
+      <button
+        style={{
+          ...ghostButton,
+          alignSelf: "flex-start"
+        }}
+        type="button"
+        onClick={onBack}
+      >
+        <ChevronLeftIcon size={14} /> Ro'yxatga qaytish
+      </button>
+
+      {/* Identity hero card — ProfileScreen style */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, rgba(6,182,212,0.18), rgba(77,166,255,0.16))",
+          border: "1px solid rgba(6,182,212,0.4)",
+          borderRadius: "20px",
+          padding: "18px",
+          boxShadow: "0 8px 24px rgba(6,182,212,0.14)"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          {/* Avatar */}
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "18px",
+              background: "linear-gradient(135deg, #06B6D4, #4DA6FF)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "24px",
+              fontWeight: 800,
+              color: "white",
+              flex: "0 0 auto",
+              boxShadow: "0 6px 16px rgba(6,182,212,0.4)"
+            }}
+          >
+            {initial}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                fontSize: "18px",
+                fontWeight: 900,
+                color: "var(--text)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap"
+              }}
+            >
+              {displayName}
+            </div>
+            {user.username ? (
+              <div style={{ fontSize: "12px", color: STAT_ACCENT, fontWeight: 700, marginTop: "3px" }}>
+                @{user.username}
+              </div>
+            ) : null}
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+              Telegram ID: {user.telegramId}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {[1, 2, 3].map((id) => (
+            <div
+              key={id}
+              style={{
+                height: "88px",
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: "14px",
+                opacity: 0.5
+              }}
+            />
+          ))}
+        </div>
+      ) : profile ? (
+        <>
+          {/* Score row — big tiles matching ProfileScreen */}
+          <div style={{ display: "flex", gap: "10px" }}>
+            <UserStatTile label="Joriy ball" value={profile.user.score} color="var(--gold)" large />
+            <UserStatTile label="To'g'ri javoblar" value={profile.stats.totalCorrect} color={STAT_ACCENT} large />
+          </div>
+
+          {/* Stats grid */}
+          <div style={{ display: "flex", gap: "10px" }}>
+            <UserStatTile label="O'yinlar" value={profile.stats.gamesPlayed} color="var(--accent)" />
+            <UserStatTile label="Aniqlik" value={`${profile.stats.accuracy}%`} color="var(--success)" />
+            <UserStatTile label="Eng yaxshi" value={profile.stats.bestRoundScore} color="var(--gold)" />
+          </div>
+
+          {/* Referrals */}
+          <div
+            style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "14px",
+              padding: "12px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px"
+            }}
+          >
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: "rgba(6,182,212,0.16)",
+                color: STAT_ACCENT,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flex: "0 0 auto"
+              }}
+            >
+              <TeamIcon size={18} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)" }}>
+                Taklif qilinganlar
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                {profile.referralCount} ta do'st taklif qilgan
+              </div>
+            </div>
+            <div style={{ fontSize: "22px", fontWeight: 900, color: STAT_ACCENT }}>
+              {profile.referralCount}
+            </div>
+          </div>
+
+          {/* Recent games — ProfileScreen style */}
+          {profile.recentGames.length > 0 ? (
+            <div
+              style={{
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: "18px",
+                padding: "14px"
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  color: "var(--muted)",
+                  letterSpacing: "1.2px",
+                  textTransform: "uppercase",
+                  marginBottom: "12px"
+                }}
+              >
+                So'nggi o'yinlar
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {profile.recentGames.map((item) => {
+                  const d = new Date(item.createdAt);
+                  const label = d.toLocaleDateString("uz-UZ", { day: "numeric", month: "short" });
+                  const time = d.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
+                  return (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 12px",
+                        background: "var(--bg)",
+                        borderRadius: "12px",
+                        border: "1px solid var(--border)"
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "11px", color: "var(--muted)" }}>
+                          {label} · {time}
+                        </div>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)", marginTop: "2px" }}>
+                          {item.correctCount}/{item.totalCount} to'g'ri · {item.accuracy}%
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: "17px", fontWeight: 900, color: "var(--gold)" }}>
+                          +{item.roundScore}
+                        </div>
+                        <div style={{ fontSize: "9px", color: "var(--muted)", letterSpacing: "1px", textTransform: "uppercase" }}>
+                          ball
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <EmptyState icon={<ControllerIcon size={30} />} text="Hali o'yin o'ynamagan" />
+          )}
+        </>
+      ) : (
+        <EmptyState icon={<UserIcon size={36} />} text="Profil ma'lumotlarini olib bo'lmadi" />
+      )}
+    </div>
+  );
+}
+
+function UserStatTile({
+  label,
+  value,
+  color,
+  large
+}: {
+  label: string;
+  value: string | number;
+  color: string;
+  large?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+        borderRadius: large ? "16px" : "14px",
+        padding: large ? "16px 10px" : "12px 10px",
+        textAlign: "center"
+      }}
+    >
+      <div
+        style={{
+          fontSize: large ? "28px" : "20px",
+          fontWeight: 900,
+          color,
+          lineHeight: 1
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          fontSize: large ? "10px" : "9.5px",
+          color: "var(--muted)",
+          letterSpacing: "1.3px",
+          textTransform: "uppercase",
+          marginTop: "5px"
+        }}
+      >
+        {label}
+      </div>
     </div>
   );
 }

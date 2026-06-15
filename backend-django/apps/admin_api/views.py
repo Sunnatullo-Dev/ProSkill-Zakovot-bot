@@ -13,6 +13,7 @@ from apps.channels import repositories as channel_repo
 from apps.core.decorators import require_admin
 from apps.core.exceptions import AppError
 from apps.core.models import AppSettings
+from apps.game_results import repositories as game_result_repo
 from apps.game_results.repositories import count_all as count_game_results
 from apps.questions import repositories as question_repo
 from apps.teams.models import Team
@@ -403,6 +404,29 @@ def list_users(request):
         raise AppError(400, "limit noto'g'ri")
     result = user_repo.list_users(page=page, limit=limit, search=search)
     return Response(result)
+
+
+@api_view(["GET"])
+@require_admin
+def user_profile(request, telegram_id: int):
+    """Bitta foydalanuvchining to'liq profili — faqat admin uchun.
+
+    GET /api/admin/users/<telegram_id>/profile
+    """
+    user = user_repo.find_by_telegram_id(telegram_id)
+    if not user:
+        raise AppError(404, "Foydalanuvchi topilmadi")
+
+    stats = game_result_repo.get_stats(telegram_id)
+    history = game_result_repo.get_history(telegram_id, limit=10)
+    referral_count = user_repo.get_referral_count(telegram_id)
+
+    return Response({
+        "user": user,
+        "stats": stats,
+        "referralCount": referral_count,
+        "recentGames": history,
+    })
 
 
 @api_view(["GET"])
