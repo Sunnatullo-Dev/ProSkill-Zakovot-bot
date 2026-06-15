@@ -1235,11 +1235,7 @@ def resolve_question_media(
     if not media_ref:
         raise AppError(404, "Bu savolda media yo'q")
 
-    # Agar allaqachon http URL bo'lsa — to'g'ridan redirect
-    if media_ref.startswith("http://") or media_ref.startswith("https://"):
-        raise AppError(302, media_ref)  # view tomonida redirect qilinadi
-
-    # Foydalanuvchi xonada ro'yxatdan o'tganligini tekshirish
+    # Foydalanuvchi xonada ro'yxatdan o'tganligini tekshirish — AVVAL auth, keyin media
     # (admin ham ishtirokchi sifatida kirgan bo'lishi shart emas — admin view uchun ruxsat)
     viewer_is_admin = room.is_room_admin(viewer_telegram_id)
     if not viewer_is_admin:
@@ -1248,6 +1244,10 @@ def resolve_question_media(
         ).first()
         if not participant:
             raise AppError(403, "Siz bu xonada ro'yxatdan o'tmagansiz")
+
+    # Agar allaqachon http URL bo'lsa — tekshiruvdan O'TGANDAN SO'NG redirect
+    if media_ref.startswith("http://") or media_ref.startswith("https://"):
+        raise AppError(302, media_ref)  # view tomonida redirect qilinadi
 
     # Bot token tekshirish
     bot_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
@@ -1271,12 +1271,21 @@ def resolve_question_media(
     if not file_path:
         raise AppError(502, "Telegram file_path bo'sh qaytdi")
 
-    # Fayl yuklab olish
+    # Fayl yuklab olish — hajm va timeout cheklovi bilan
+    _MAX_MEDIA_BYTES = 20 * 1024 * 1024  # 20 MB (Telegram bot limit)
     download_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
     try:
-        with urllib.request.urlopen(download_url, timeout=30) as resp:  # noqa: S310
-            content = resp.read()
+        with urllib.request.urlopen(download_url, timeout=10) as resp:  # noqa: S310
+            content_length = resp.headers.get("Content-Length")
+            if content_length is not None and int(content_length) > _MAX_MEDIA_BYTES:
+                raise AppError(413, "Media fayli juda katta (20 MB dan oshmasligi kerak)")
+            # Content-Length yo'q yoki ishonchsiz bo'lsa ham cap bilan o'qiymiz
+            content = resp.read(_MAX_MEDIA_BYTES + 1)
+            if len(content) > _MAX_MEDIA_BYTES:
+                raise AppError(413, "Media fayli juda katta (20 MB dan oshmasligi kerak)")
             content_type = resp.headers.get("Content-Type", "application/octet-stream")
+    except AppError:
+        raise
     except Exception as e:
         logger.warning("Telegram fayl yuklab olishda xato: %s", e)
         raise AppError(502, "Telegram faylni yuklab olishda xato")
@@ -1331,10 +1340,10 @@ def save_questions_to_bank(
         body_stripped = gq.body.strip()
         answer_stripped = gq.correct_answer.strip()
 
-        # Aniq dublikat tekshirish — text + correct_answer bo'yicha
+        # Dublikat tekshirish — bo'shliq va katta-kichik harf farqini e'tiborga olmasdan
         existing_bank_q = Question.objects.filter(
-            text=body_stripped,
-            correct_answer=answer_stripped,
+            text__iexact=body_stripped,
+            correct_answer__iexact=answer_stripped,
         ).first()
 
         with transaction.atomic():
