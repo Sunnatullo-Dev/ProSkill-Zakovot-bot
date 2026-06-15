@@ -965,8 +965,8 @@ export default function App() {
             >
               <span
                 style={{
-                  fontSize: "11px",
-                  letterSpacing: "0.04em",
+                  fontSize: "12px",
+                  letterSpacing: "0.05em",
                   color: "var(--muted)",
                   opacity: 0.7,
                   textTransform: "lowercase",
@@ -974,23 +974,23 @@ export default function App() {
               >
                 from
               </span>
-              <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <img
                   src="/uchqun.png"
                   alt=""
-                  width={24}
-                  height={24}
-                  style={{ borderRadius: "6px", objectFit: "cover", display: "block" }}
+                  width={44}
+                  height={44}
+                  style={{ borderRadius: "11px", objectFit: "cover", display: "block" }}
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                   }}
                 />
                 <span
                   style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: "var(--muted)",
-                    opacity: 0.75,
+                    fontSize: "17px",
+                    fontWeight: 800,
+                    color: "var(--text)",
+                    opacity: 0.9,
                     letterSpacing: "0.01em",
                   }}
                 >
