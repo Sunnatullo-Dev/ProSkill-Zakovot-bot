@@ -59,17 +59,6 @@ async function apiBinaryGet(deps: GrBotDeps, path: string, telegramId: number): 
 // Bot.ts dagi State union'ga qo'shiladigan yangi holatlar.
 // bot.ts da `type State = ExistingState | GrState` deb kengaytirish kerak.
 
-// Guruhlangan baholash uchun bitta guruh ma'lumoti
-export interface GrSubmissionGroup {
-  normalizedKey: string;
-  displayAnswer: string;
-  count: number;
-  gradedCorrect: number;
-  gradedIncorrect: number;
-  pending: number;
-  submissionIds: number[];
-}
-
 export type GrState =
   // Admin: xona yaratish oqimi
   | { t: "gr_room_name" }
@@ -85,8 +74,8 @@ export type GrState =
   | { t: "gr_q_points"; roomCode: string; qBody: string; mediaRef: string; caption: string; qType: "text" | "audio" | "image"; correctAnswer: string; timer: number }
   // Admin: to'g'ri javob kiritish (auto-grade uchun)
   | { t: "gr_correct_answer"; roomCode: string; questionId: number }
-  // Admin: guruhlangan baholash — guruhlar state'da saqlanadi
-  | { t: "gr_grading"; roomCode: string; questionId: number; groups: GrSubmissionGroup[] }
+  // Admin: shaxsiy baholash — joriy sahifa state'da saqlanadi
+  | { t: "gr_grading_v2"; roomCode: string; questionId: number; page: number }
   // Ishtirokchi: xonaga kirish oqimi
   | { t: "gr_join_code" }
   | { t: "gr_join_name"; roomCode: string; roomName: string; hasPassword: boolean }
@@ -177,70 +166,85 @@ function grPointsKb(roomCode: string): InlineKeyboard {
     .text("1 ball", `${base}:1`).text("2 ball", `${base}:2`).text("3 ball", `${base}:3`);
 }
 
-function grGradeKb(roomCode: string, submissionId: number): InlineKeyboard {
-  return new InlineKeyboard()
-    .text("✅ To'g'ri", `gr:grade:${roomCode}:${submissionId}:1`)
-    .text("❌ Noto'g'ri", `gr:grade:${roomCode}:${submissionId}:0`);
-}
+/** Sahifa o'lchami — Telegram inline keyboard chekloviga xavfsiz sig'adi */
+const GRADING_PAGE_SIZE = 10;
 
 /**
- * Guruhlangan baholash klaviaturasi va xabar matni.
+ * Shaxsiy baholash klaviaturasi va xabar matni.
  *
- * Callback: gr:bg:<roomCode>:<questionId>:<groupIdx>:<1|0>
- * groupIdx — state'dagi groups massivining indeksi.
- * Telegram callback_data cheklov: 64 bayt. Biz bu yerda faqat qisqa raqamlar
- * ishlatamiz, javob matnini callback'ga qo'shmaymiz.
+ * Har bir ishtirokchi uchun bir qator:
+ *   [ Ali — panda ]  [ ✅ ]  [ ❌ ]
+ *
+ * Callback formatlar:
+ *   gr:grade:<code>:<subId>:1     — to'g'ri
+ *   gr:grade:<code>:<subId>:0     — noto'g'ri
+ *   gr:subs_page:<code>:<qId>:<p> — sahifa almashtirish
+ *
+ * 64-bayt cheklov: gr:grade:XXXXXX:99999:1 = 23 bayt, xavfsiz.
  */
-function buildGroupedGradingMessage(
+function buildPerPersonGradingMessage(
   roomCode: string,
   questionId: number,
   questionBody: string,
   questionStatus: string,
   correctAnswer: string | null,
-  groups: GrSubmissionGroup[],
-  totalSubmissions: number,
-  totalUngraded: number,
+  submissions: any[],
+  page: number,
 ): { text: string; kb: InlineKeyboard } {
+  const total = submissions.length;
+  const totalPages = Math.max(1, Math.ceil(total / GRADING_PAGE_SIZE));
+  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const pageItems = submissions.slice(safePage * GRADING_PAGE_SIZE, (safePage + 1) * GRADING_PAGE_SIZE);
+
+  const totalUngraded = submissions.filter((s: any) => !s.gradedBy).length;
   const statusLabel = questionStatus === "active" ? "🔴 Aktiv" : "⚫ Yopiq";
 
-  const groupLines = groups.map((g, i) => {
-    const graded = g.gradedCorrect + g.gradedIncorrect;
-    let statusIcon = "";
-    if (g.pending === 0 && graded > 0) {
-      statusIcon = g.gradedCorrect === g.count ? " ✅" : " ❌";
-    } else if (graded > 0) {
-      statusIcon = ` (${graded}/${g.count} baholangan)`;
-    }
-    return `${i + 1}. _${md(g.displayAnswer.slice(0, 50))}_ — ${g.count} ta${statusIcon}`;
-  }).join("\n");
-
   const text =
-    `📋 *Savol* — ${statusLabel}\n\n` +
+    `📋 *Javoblar* — ${statusLabel}\n\n` +
     `❓ ${md(questionBody.slice(0, 80))}\n` +
     (correctAnswer ? `✓ To'g'ri: _${md(correctAnswer)}_\n` : "") +
-    `\n👥 Jami: ${totalSubmissions} ta | Baholanmagan: ${totalUngraded} ta\n\n` +
-    `*Guruhlar (bir xil javoblar):*\n\n${groupLines || "_Javoblar yo'q_"}`;
+    `\n👥 Jami: ${total} ta | Baholanmagan: ${totalUngraded} ta` +
+    (totalPages > 1 ? ` | Sahifa ${safePage + 1}/${totalPages}` : "");
 
   const kb = new InlineKeyboard();
 
-  // Har bir guruh uchun ✅/❌ tugmalar (max 10 guruh ko'rsatamiz)
-  const visibleGroups = groups.slice(0, 10);
-  for (let i = 0; i < visibleGroups.length; i++) {
-    const g = visibleGroups[i];
-    const label = g.displayAnswer.slice(0, 16);
-    // callback_data: "gr:bg:<code>:<qid>:<idx>:<1|0>"
-    // Eng uzun holat: gr:bg:XXXXXX:99999:9:1 = 28 bayt — xavfsiz
+  for (const sub of pageItems) {
+    // Ism: max 12 belgi, javob: max 18 belgi — jami ~32, Telegram button uchun qulay
+    const nameRaw: string = (sub.participantName ?? "Noma'lum").slice(0, 12);
+    const answerRaw: string = (sub.answerText ?? "—").slice(0, 18);
+    const label = `${nameRaw} — ${answerRaw}`;
+
+    // Baholangan bo'lsa — qaysi holat ekanini belgida ko'rsatamiz
+    let correctBtn = "✅";
+    let wrongBtn = "❌";
+    if (sub.isCorrect === true) correctBtn = "✅✓";
+    if (sub.isCorrect === false) wrongBtn = "❌✓";
+
     kb.row()
-      .text(`✅ ${label}`, `gr:bg:${roomCode}:${questionId}:${i}:1`)
-      .text(`❌ ${label}`, `gr:bg:${roomCode}:${questionId}:${i}:0`);
+      .text(label, `noop`)
+      .text(correctBtn, `gr:grade:${roomCode}:${sub.submissionId}:1`)
+      .text(wrongBtn, `gr:grade:${roomCode}:${sub.submissionId}:0`);
   }
 
+  // Pagination qatori
+  if (totalPages > 1) {
+    kb.row();
+    if (safePage > 0) {
+      kb.text("◀️", `gr:subs_page:${roomCode}:${questionId}:${safePage - 1}`);
+    }
+    kb.text(`${safePage + 1}/${totalPages}`, "noop");
+    if (safePage < totalPages - 1) {
+      kb.text("▶️", `gr:subs_page:${roomCode}:${questionId}:${safePage + 1}`);
+    }
+  }
+
+  // Footer: baholash amallari
   kb.row()
-    .text("🔴 Qolganini xato", `gr:grw:${roomCode}:${questionId}`);
+    .text("🔴 Qolganini xato deb belgilash", `gr:grw:${roomCode}:${questionId}`);
   kb.row()
-    .text("🤖 Avto-baholash", `gr:autograde:${roomCode}:${questionId}`);
+    .text("🤖 Avto-baholash", `gr:autograde:${roomCode}:${questionId}`)
+    .text("🔄 Yangilash", `gr:subs:${roomCode}`);
   kb.row()
-    .text("🔄 Yangilash", `gr:subs:${roomCode}`)
     .text("⬅️ Panel", `gr:panel:${roomCode}`);
 
   return { text, kb };
@@ -867,7 +871,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
     return true;
   }
 
-  // ── Manual grade ──
+  // ── Manual grade — shaxsiy baholash ──
   // gr:grade:<roomCode>:<submissionId>:<1|0>
   if (data.startsWith("gr:grade:")) {
     if (!requireBotAdmin(ctx, deps)) return true;
@@ -882,11 +886,13 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
         { isCorrect },
         uid
       );
-      // Xabarni yangilab keyingi submission'ga o'tamiz
-      await ctx.editMessageText(
-        `${isCorrect ? "✅ To'g'ri" : "❌ Noto'g'ri"} deb belgilandi.`,
-        { reply_markup: grAdminRoomKb(roomCode) }
-      );
+      // Joriy state'dan questionId va page ni olish
+      const st = deps.getState(uid) as GrState;
+      if (st.t === "gr_grading_v2" && st.roomCode === roomCode) {
+        // Ko'rinishni yangilaymiz — submissionlarni qaytadan olamiz
+        await refreshGradingView(ctx, deps, uid, roomCode, st.questionId, st.page);
+      }
+      // Aks holda (state yo'q bo'lsa) — shunchaki callback javobini bermiz (yuqorida berildi)
     } catch (e: any) {
       await ctx.answerCallbackQuery(`❌ ${e?.message}`, { show_alert: true });
     }
@@ -1106,88 +1112,16 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
     return true;
   }
 
-  // ── Guruh bo'yicha ommaviy baholash ──
-  // gr:bg:<roomCode>:<questionId>:<groupIdx>:<1|0>
-  if (data.startsWith("gr:bg:")) {
+  // ── Baholash sahifasi almashtirish ──
+  // gr:subs_page:<roomCode>:<questionId>:<page>
+  if (data.startsWith("gr:subs_page:")) {
     if (!requireBotAdmin(ctx, deps)) return true;
     const parts = data.split(":");
-    // parts: ["gr", "bg", roomCode, questionId, groupIdx, isCorrect]
     const roomCode = parts[2];
     const questionId = parseInt(parts[3], 10);
-    const groupIdx = parseInt(parts[4], 10);
-    const isCorrect = parts[5] === "1";
-
-    // State'dan normalizedKey ni topamiz
-    const st = deps.getState(uid) as GrState;
-    let normalizedKey: string | null = null;
-    if (st.t === "gr_grading" && st.roomCode === roomCode && st.questionId === questionId) {
-      const group = st.groups[groupIdx];
-      if (group) normalizedKey = group.normalizedKey;
-    }
-
-    if (!normalizedKey) {
-      // State yo'q yoki eskirgan — yangilashni so'raymiz
-      await ctx.answerCallbackQuery(
-        "Ma'lumot eskirgan. Iltimos, 🔄 Yangilash tugmasini bosing.",
-        { show_alert: true }
-      );
-      return true;
-    }
-
-    await ctx.answerCallbackQuery(isCorrect ? "✅ Baholanmoqda..." : "❌ Baholanmoqda...");
-    try {
-      const result = await deps.apiPostOnBehalf(
-        `/api/gamerooms/admin/rooms/${roomCode}/questions/${questionId}/bulk-grade`,
-        { normalizedKey, isCorrect },
-        uid
-      );
-      const count = result.gradedCount ?? 0;
-      // State'ni yangilaymiz — baholangan guruhning pending sonini 0 ga tushiramiz
-      if (st.t === "gr_grading") {
-        const updatedGroups = st.groups.map((g, i) => {
-          if (i !== groupIdx) return g;
-          return {
-            ...g,
-            gradedCorrect: isCorrect ? g.count : 0,
-            gradedIncorrect: isCorrect ? 0 : g.count,
-            pending: 0,
-          };
-        });
-        const newUngraded = updatedGroups.reduce((acc, g) => acc + g.pending, 0);
-        deps.setState(uid, { ...st, groups: updatedGroups } as GrState);
-
-        // Guruhlar ro'yxatini yangilab ko'rsatamiz
-        const { text, kb } = buildGroupedGradingMessage(
-          roomCode,
-          questionId,
-          "",  // body endi state'da yo'q — qisqa holat xabari
-          "closed",
-          null,
-          updatedGroups,
-          updatedGroups.reduce((acc, g) => acc + g.count, 0),
-          newUngraded,
-        );
-        // Yangi xabar yuborish (editMessageText qilmaymiz — qayta baholash uchun qulay)
-        await deps.bot.api.sendMessage(
-          uid,
-          `${isCorrect ? "✅" : "❌"} *${count} ta javob baholandi.*\n\n` + text,
-          { parse_mode: "Markdown", reply_markup: kb }
-        );
-      } else {
-        await deps.bot.api.sendMessage(
-          uid,
-          `${isCorrect ? "✅" : "❌"} *${count} ta javob baholandi.*\n\nYangilash uchun tugmani bosing:`,
-          {
-            parse_mode: "Markdown",
-            reply_markup: new InlineKeyboard()
-              .text("🔄 Yangilash", `gr:subs:${roomCode}`)
-              .text("⬅️ Panel", `gr:panel:${roomCode}`),
-          }
-        );
-      }
-    } catch (e: any) {
-      await ctx.answerCallbackQuery(`❌ ${e?.message}`, { show_alert: true });
-    }
+    const page = parseInt(parts[4], 10);
+    await ctx.answerCallbackQuery();
+    await refreshGradingView(ctx, deps, uid, roomCode, questionId, page);
     return true;
   }
 
@@ -1213,7 +1147,7 @@ export async function handleGrCallback(ctx: any, deps: GrBotDeps): Promise<boole
       );
       // State ni tozalaymiz — baholash tugadi
       const st = deps.getState(uid) as GrState;
-      if (st.t === "gr_grading") {
+      if (st.t === "gr_grading_v2") {
         deps.clearState(uid);
       }
     } catch (e: any) {
@@ -1394,8 +1328,12 @@ async function doSubmitAnswer(
   }
 }
 
-// ─── Admin: guruhlangan submissions ko'rish ──────────────────────────────────
+// ─── Admin: shaxsiy baholash ko'rinishi ──────────────────────────────────────
 
+/**
+ * showSubmissions — "👀 Javoblarni ko'rish" tugmasidan chaqiriladi.
+ * Joriy savolni topib, birinchi sahifani ko'rsatadi.
+ */
 async function showSubmissions(ctx: any, deps: GrBotDeps, uid: number, roomCode: string) {
   try {
     // Joriy aktiv/yopiq savolni topish
@@ -1409,45 +1347,91 @@ async function showSubmissions(ctx: any, deps: GrBotDeps, uid: number, roomCode:
       return;
     }
 
+    // State'ga questionId va birinchi sahifani saqlaymiz — gr:grade callback'i refresh uchun ishlatadi
+    deps.setState(uid, {
+      t: "gr_grading_v2",
+      roomCode,
+      questionId: cq.id,
+      page: 0,
+    } as GrState);
+
+    await renderGradingPage(ctx, deps, uid, roomCode, cq.id, 0, /* sendNew */ true);
+  } catch (e: any) {
+    await ctx.reply(`❌ Javoblarni olib bo'lmadi: ${e?.message}`, { reply_markup: grAdminRoomKb(roomCode) });
+  }
+}
+
+/**
+ * Baholash ko'rinishini qaytadan chizadi (gr:grade yoki gr:subs_page dan keyin).
+ * editMessageText orqali mavjud xabarni yangilaydi.
+ */
+async function refreshGradingView(
+  ctx: any,
+  deps: GrBotDeps,
+  uid: number,
+  roomCode: string,
+  questionId: number,
+  page: number,
+) {
+  // State'ni yangilaymiz
+  deps.setState(uid, { t: "gr_grading_v2", roomCode, questionId, page } as GrState);
+  await renderGradingPage(ctx, deps, uid, roomCode, questionId, page, /* sendNew */ false);
+}
+
+/**
+ * Javoblar sahifasini render qiladi.
+ * sendNew=true → yangi xabar yuboradi (showSubmissions'dan chaqirilganda)
+ * sendNew=false → mavjud xabarni editMessageText bilan yangilaydi
+ */
+async function renderGradingPage(
+  ctx: any,
+  deps: GrBotDeps,
+  uid: number,
+  roomCode: string,
+  questionId: number,
+  page: number,
+  sendNew: boolean,
+) {
+  try {
     const data = await deps.apiGetOnBehalf(
-      `/api/gamerooms/admin/rooms/${roomCode}/questions/${cq.id}/submissions/grouped`,
+      `/api/gamerooms/admin/rooms/${roomCode}/questions/${questionId}/submissions`,
       uid
     );
 
-    const groups: GrSubmissionGroup[] = data.groups ?? [];
-    const totalSubmissions: number = data.totalSubmissions ?? 0;
-    const totalUngraded: number = data.totalUngraded ?? 0;
+    const submissions: any[] = data.submissions ?? [];
 
-    if (totalSubmissions === 0) {
-      await ctx.reply(
-        `📋 *Savol #${cq.orderIndex}:* ${md(cq.body?.slice(0, 60))}\n\nHozircha javoblar yo'q.`,
-        { parse_mode: "Markdown", reply_markup: grAdminRoomKb(roomCode) }
-      );
+    if (submissions.length === 0) {
+      const emptyMsg =
+        `📋 *Savol:* ${md((data.questionBody ?? "").slice(0, 60))}\n\nHozircha javoblar yo'q.`;
+      if (sendNew) {
+        await ctx.reply(emptyMsg, { parse_mode: "Markdown", reply_markup: grAdminRoomKb(roomCode) });
+      } else {
+        await ctx.editMessageText(emptyMsg, { parse_mode: "Markdown", reply_markup: grAdminRoomKb(roomCode) });
+      }
       return;
     }
 
-    // Guruhlarni admin state'ga saqlaymiz — callback'da normalizedKey lookup uchun
-    deps.setState(uid, {
-      t: "gr_grading",
+    const { text, kb } = buildPerPersonGradingMessage(
       roomCode,
-      questionId: cq.id,
-      groups,
-    } as GrState);
-
-    const { text, kb } = buildGroupedGradingMessage(
-      roomCode,
-      cq.id,
-      cq.body ?? "",
-      cq.status ?? "closed",
+      questionId,
+      data.questionBody ?? "",
+      data.status ?? "closed",
       data.correctAnswer ?? null,
-      groups,
-      totalSubmissions,
-      totalUngraded,
+      submissions,
+      page,
     );
 
-    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
+    if (sendNew) {
+      await ctx.reply(text, { parse_mode: "Markdown", reply_markup: kb });
+    } else {
+      await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: kb });
+    }
   } catch (e: any) {
-    await ctx.reply(`❌ Javoblarni olib bo'lmadi: ${e?.message}`, { reply_markup: grAdminRoomKb(roomCode) });
+    if (sendNew) {
+      await ctx.reply(`❌ Javoblarni olib bo'lmadi: ${e?.message}`, { reply_markup: grAdminRoomKb(roomCode) });
+    } else {
+      await ctx.answerCallbackQuery(`❌ ${e?.message}`, { show_alert: true });
+    }
   }
 }
 
