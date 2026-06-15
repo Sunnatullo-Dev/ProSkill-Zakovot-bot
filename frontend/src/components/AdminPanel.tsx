@@ -2778,6 +2778,7 @@ function UserProfileDetail({
 }) {
   const [profile, setProfile] = useState<AdminUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -2795,6 +2796,51 @@ function UserProfileDetail({
 
   const STAT_ACCENT = "#06B6D4";
 
+  // Telegram profilini ochish yoki ID nusxalash
+  function openTelegramProfile() {
+    const tg = window.Telegram?.WebApp;
+
+    if (user.username) {
+      const url = `https://t.me/${user.username}`;
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(url);
+      } else if (tg?.openLink) {
+        tg.openLink(url);
+      } else {
+        window.open(url, "_blank", "noopener");
+      }
+    } else {
+      // Username yo'q — tg://user?id=... urinib ko'ramiz (hamma qurilmada ishlamaydi)
+      const deepLink = `tg://user?id=${user.telegramId}`;
+      if (tg?.openTelegramLink) {
+        try {
+          tg.openTelegramLink(deepLink);
+          return;
+        } catch {
+          // muvaffaqiyatsiz bo'lsa clipboard ga nusxa olamiz
+        }
+      }
+      // Fallback: ID ni clipboard ga nusxalash
+      const idStr = String(user.telegramId);
+      void navigator.clipboard.writeText(idStr).catch(() => {
+        // navigator.clipboard yo'q bo'lsa legacyCopy
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = idStr;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        } catch { /* e'tiborsiz */ }
+      }).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
       {/* Back button */}
@@ -2809,15 +2855,27 @@ function UserProfileDetail({
         <ChevronLeftIcon size={14} /> Ro'yxatga qaytish
       </button>
 
-      {/* Identity hero card — ProfileScreen style */}
-      <div
+      {/* Identity hero card — tappable */}
+      <button
+        type="button"
         style={{
           background: "linear-gradient(135deg, rgba(6,182,212,0.18), rgba(77,166,255,0.16))",
           border: "1px solid rgba(6,182,212,0.4)",
           borderRadius: "20px",
           padding: "18px",
-          boxShadow: "0 8px 24px rgba(6,182,212,0.14)"
+          boxShadow: "0 8px 24px rgba(6,182,212,0.14)",
+          cursor: "pointer",
+          textAlign: "left",
+          width: "100%",
+          transition: "opacity 0.15s, transform 0.1s",
+          fontFamily: "inherit"
         }}
+        onClick={openTelegramProfile}
+        onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.8"; (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.99)"; }}
+        onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+        onTouchStart={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.8"; (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.99)"; }}
+        onTouchEnd={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           {/* Avatar */}
@@ -2861,8 +2919,65 @@ function UserProfileDetail({
               Telegram ID: {user.telegramId}
             </div>
           </div>
+          {/* Tap hint icon */}
+          <div style={{ color: STAT_ACCENT, opacity: 0.7, flex: "0 0 auto", fontSize: "16px" }}>
+            ➤
+          </div>
         </div>
-      </div>
+      </button>
+
+      {/* Telegram profil tugmasi */}
+      {user.username ? (
+        <button
+          type="button"
+          style={{
+            width: "100%",
+            padding: "13px 16px",
+            background: "linear-gradient(135deg, rgba(6,182,212,0.18), rgba(77,166,255,0.14))",
+            border: "1px solid rgba(6,182,212,0.45)",
+            borderRadius: "14px",
+            fontSize: "14px",
+            fontWeight: 800,
+            color: STAT_ACCENT,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            transition: "opacity 0.15s",
+            fontFamily: "inherit"
+          }}
+          onClick={openTelegramProfile}
+        >
+          <span style={{ fontSize: "17px" }}>💬</span>
+          Telegram profilga o'tish
+        </button>
+      ) : (
+        <button
+          type="button"
+          style={{
+            width: "100%",
+            padding: "13px 16px",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "14px",
+            fontSize: "13px",
+            fontWeight: 700,
+            color: copied ? "#22C55E" : "var(--muted)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            transition: "color 0.2s",
+            fontFamily: "inherit"
+          }}
+          onClick={openTelegramProfile}
+        >
+          <span style={{ fontSize: "15px" }}>{copied ? "✅" : "📋"}</span>
+          {copied ? "Nusxalandi!" : `Username yo'q — ID: ${user.telegramId} (nusxalash)`}
+        </button>
+      )}
 
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
