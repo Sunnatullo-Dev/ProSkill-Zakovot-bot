@@ -28,8 +28,10 @@ import ConfirmDialog from "./ConfirmDialog";
 import SvoyakAdminSection from "./admin/SvoyakAdminSection";
 import SettingsSection from "./admin/SettingsSection";
 import ChannelsSection from "./admin/ChannelsSection";
+import BoardSection from "./admin/BoardSection";
 import {
   AlertIcon,
+  BroadcastIcon,
   CheckCircleIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -55,7 +57,7 @@ type AdminPanelProps = {
   onExitToUser: () => void;
 };
 
-type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels" | "users";
+type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels" | "users" | "board";
 
 type SectionMeta = {
   id: Section;
@@ -121,6 +123,13 @@ const SECTIONS: SectionMeta[] = [
     Icon: ShieldIcon,
     accent: "#22C55E",
     subtitle: "Xususiyatlarni yoqish va o'chirish, sozlamalar"
+  },
+  {
+    id: "board",
+    label: "Murojaat",
+    Icon: BroadcastIcon,
+    accent: "#F59E0B",
+    subtitle: "Adminlarga murojaat — e'lonlar va xabarlar"
   }
 ];
 
@@ -409,6 +418,7 @@ export default function AdminPanel({ onExitToUser }: AdminPanelProps) {
           {section === "channels" ? <ChannelsSection /> : null}
           {section === "users" ? <UsersSection /> : null}
           {section === "settings" ? <SettingsSection /> : null}
+          {section === "board" ? <BoardSection /> : null}
         </div>
       </div>
     </div>

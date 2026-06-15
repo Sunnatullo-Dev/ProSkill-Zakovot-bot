@@ -370,3 +370,24 @@ export type PendingChallenge = {
   iAmOpponent: boolean;
   createdAt: string;
 };
+
+// ─── Admin Board (Adminlarga murojaat) ───────────────────────────────────────
+
+export type AdminBoardPost = {
+  id: number;
+  authorTelegramId: number;
+  authorName: string;
+  text: string;
+  mediaType: "image" | "video" | null;
+  /** Nisbiy /api/admin/board/<id>/media yo'li yoki null */
+  mediaUrl: string | null;
+  createdAt: string;
+  canDelete: boolean;
+};
+
+export type AdminBoardListResponse = {
+  items: AdminBoardPost[];
+  total: number;
+  page: number;
+  limit: number;
+};

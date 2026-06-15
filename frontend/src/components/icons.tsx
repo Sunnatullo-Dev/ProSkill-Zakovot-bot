@@ -278,3 +278,13 @@ export function SpeakerIcon({ size = 18 }: IconProps) {
     </svg>
   );
 }
+
+export function BroadcastIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <path d="M18 20V10" />
+      <path d="M12 20V4" />
+      <path d="M6 20v-6" />
+    </svg>
+  );
+}

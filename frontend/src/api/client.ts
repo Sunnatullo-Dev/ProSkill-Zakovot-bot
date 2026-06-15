@@ -1,4 +1,6 @@
 import type {
+  AdminBoardListResponse,
+  AdminBoardPost,
   AnswerResult,
   AnswerStatus,
   ApiResult,
@@ -785,6 +787,61 @@ export async function getGameRoomLeaderboard(
     console.error("getGameRoomLeaderboard failed", error);
     return null;
   }
+}
+
+// ─── Admin Board (Adminlarga murojaat) ───────────────────────────────────────
+
+/** Admin Board xabarlari ro'yxati (pagination). */
+export async function getAdminBoardPosts(
+  params: { page?: number; limit?: number } = {}
+): Promise<AdminBoardListResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  const path = q.toString() ? `/admin/board/?${q}` : "/admin/board/";
+  const res = await request<AdminBoardListResponse>(path);
+  return res ?? { items: [], total: 0, page: params.page ?? 1, limit: params.limit ?? 20 };
+}
+
+/** Yangi xabar yuborish — matn + ixtiyoriy media (multipart/form-data). */
+export async function createAdminBoardPost(
+  text: string,
+  mediaFile?: File | null
+): Promise<ApiResult<AdminBoardPost>> {
+  const url = `${API_BASE_URL}/admin/board/`;
+  const initData = getTelegramInitData();
+
+  const form = new FormData();
+  if (text.trim()) form.append("text", text.trim());
+  if (mediaFile) form.append("media", mediaFile);
+
+  const headers = new Headers();
+  if (initData) {
+    headers.set("Authorization", `tma ${initData}`);
+  }
+  // Dev-only X-Dev-Tid
+  try {
+    const devTid = typeof window !== "undefined" ? window.localStorage.getItem("svoyak:devTid") : null;
+    if (devTid && /^\d+$/.test(devTid)) headers.set("X-Dev-Tid", devTid);
+  } catch { /* ignore */ }
+
+  try {
+    const response = await fetch(url, { method: "POST", headers, body: form });
+    const body = await parseResponse(response);
+    if (!response.ok) {
+      const message = (body as { message?: string } | null)?.message ?? `Xato (${response.status})`;
+      return { ok: false, error: message };
+    }
+    return { ok: true, data: body as AdminBoardPost };
+  } catch (error) {
+    console.error("createAdminBoardPost failed", error);
+    return { ok: false, error: "Internet aloqasi bilan muammo" };
+  }
+}
+
+/** Xabarni o'chirish. */
+export async function deleteAdminBoardPost(id: number): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>(`/admin/board/${id}`, { method: "DELETE" });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

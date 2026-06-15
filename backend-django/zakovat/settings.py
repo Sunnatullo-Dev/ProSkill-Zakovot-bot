@@ -166,7 +166,12 @@ INSTALLED_APPS = [
     "apps.daily",
     "apps.channels",
     "apps.gamerooms",
+    "apps.admin_board",
 ]
+
+# Media saqlash uchun Telegram chat ID (xabar taxtasi uchun).
+# Bo'sh bo'lsa — posting adminnning o'z telegram_id'siga yuboriladi.
+ADMIN_MEDIA_CHAT_ID = os.environ.get("ADMIN_MEDIA_CHAT_ID", "")
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
