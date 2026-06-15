@@ -932,13 +932,71 @@ export default function App() {
     <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
       <section className="mx-auto min-h-screen w-full max-w-[430px]">
         {screen === "loading" ? (
-          <div className="grid min-h-screen place-items-center text-center">
-            <div>
-              <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[var(--card)] text-3xl">
-                {"\u{1F9E0}"}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              minHeight: "100dvh",
+              textAlign: "center",
+            }}
+          >
+            {/* Centred hero — grows to fill space above footer */}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div>
+                <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[var(--card)] text-3xl">
+                  {"\u{1F9E0}"}
+                </span>
+                <p className="mt-4 text-lg font-black text-[var(--text)]">{t("app_name")}</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--muted)]">{t("loading_dots")}</p>
+              </div>
+            </div>
+
+            {/* Instagram-style "from Uchqun" footer lockup */}
+            <div
+              style={{
+                paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
+                paddingTop: "12px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "11px",
+                  letterSpacing: "0.04em",
+                  color: "var(--muted)",
+                  opacity: 0.7,
+                  textTransform: "lowercase",
+                }}
+              >
+                from
               </span>
-              <p className="mt-4 text-lg font-black text-[var(--text)]">{t("app_name")}</p>
-              <p className="mt-2 text-sm font-semibold text-[var(--muted)]">{t("loading_dots")}</p>
+              <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                <img
+                  src="/uchqun.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  style={{ borderRadius: "6px", objectFit: "cover", display: "block" }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "var(--muted)",
+                    opacity: 0.75,
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  Uchqun
+                </span>
+              </div>
             </div>
           </div>
         ) : null}
