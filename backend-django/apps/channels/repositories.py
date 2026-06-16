@@ -154,8 +154,15 @@ def _check_one_channel(telegram_user_id: int, channel_id: str) -> bool:
             err = data.get("description", "")
             logger.warning("getChatMember not ok: %s | channel=%s", err, channel_id)
             return False
-        status = data["result"].get("status", "left")
-        return status in ("member", "administrator", "creator")
+        result = data["result"]
+        status = result.get("status", "left")
+        # "restricted" foydalanuvchi kanalda hali bor (is_member=True).
+        # "left" va "kicked" — kanalda yo'q.
+        if status in ("member", "administrator", "creator"):
+            return True
+        if status == "restricted":
+            return bool(result.get("is_member", False))
+        return False
     except Exception as exc:  # noqa: BLE001
         logger.warning("getChatMember xato: %s | channel=%s", exc, channel_id)
         return False
