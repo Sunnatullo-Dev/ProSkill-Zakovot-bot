@@ -116,6 +116,9 @@ const TIMER_SECONDS = 90;
 const ANSWER_TIMEOUT_MS = 90000;
 const RESULT_AUTO_DELAY_MS = 3000;
 const PARTIAL_RESULT_AUTO_DELAY_MS = 3500;
+// Kirish (splash) ekrani kamida shuncha ko'rinadi — brending (from Uchqun)
+// ko'rinib ulgursin. Bootstrap tezroq tugasa, qolgan vaqt kutiladi.
+const SPLASH_MIN_MS = 3000;
 const DEFAULT_FILTER: RoundFilter = { category: null, difficulty: null };
 // Auth ishlamay qolganda zaxira foydalanuvchi — ism bo'sh, frontend Telegram'dan
 // keladigan ismni ishlatadi (yoki "Foydalanuvchi" placeholder ko'rsatadi).
@@ -402,6 +405,8 @@ export default function App() {
     bootstrapDoneRef.current = true;
 
     async function bootstrap() {
+      // try'dan tashqarida — catch blokida ham kerak (scope).
+      const splashStartedAt = Date.now();
       try {
         setScreen("loading");
         setErrorMessage("");
@@ -495,6 +500,13 @@ export default function App() {
           setSubCheckChannels([]);
         }
 
+        // Splash kamida SPLASH_MIN_MS ko'rinsin — ekran o'tishidan oldin
+        // qolgan vaqtni kutamiz (bootstrap tez tugagan bo'lsa).
+        const splashRemaining = SPLASH_MIN_MS - (Date.now() - splashStartedAt);
+        if (splashRemaining > 0) {
+          await new Promise((resolve) => setTimeout(resolve, splashRemaining));
+        }
+
         if (isAdminRoute) {
           setScreen("admin");
           return;
@@ -557,6 +569,11 @@ export default function App() {
         bootstrapDoneRef.current = false;
         setUser(DEFAULT_APP_USER);
         setScore(DEFAULT_APP_USER.score);
+        // Xato bo'lsa ham splash darrov yo'qolib flash bo'lmasin.
+        const splashRemainingErr = SPLASH_MIN_MS - (Date.now() - splashStartedAt);
+        if (splashRemainingErr > 0) {
+          await new Promise((resolve) => setTimeout(resolve, splashRemainingErr));
+        }
         setScreen(isAdminRoute ? "admin" : "home");
       }
     }
