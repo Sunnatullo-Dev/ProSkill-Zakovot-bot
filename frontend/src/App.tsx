@@ -982,33 +982,38 @@ export default function App() {
             >
               <span
                 style={{
-                  fontSize: "12px",
-                  letterSpacing: "0.05em",
+                  fontSize: "15px",
+                  letterSpacing: "0.08em",
                   color: "var(--muted)",
-                  opacity: 0.7,
+                  opacity: 0.85,
                   textTransform: "lowercase",
                 }}
               >
                 from
               </span>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "11px" }}>
                 <img
                   src="/uchqun.png"
                   alt=""
-                  width={44}
-                  height={44}
-                  style={{ borderRadius: "11px", objectFit: "cover", display: "block" }}
+                  width={48}
+                  height={48}
+                  style={{ borderRadius: "12px", objectFit: "cover", display: "block" }}
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                   }}
                 />
                 <span
                   style={{
-                    fontSize: "17px",
-                    fontWeight: 800,
-                    color: "var(--text)",
-                    opacity: 0.9,
-                    letterSpacing: "0.01em",
+                    fontSize: "24px",
+                    fontWeight: 900,
+                    letterSpacing: "0.02em",
+                    // Logo ranglariga mos gradient: ko'k → binafsha → pushti → to'q sariq
+                    background:
+                      "linear-gradient(95deg, #4DA6FF 0%, #A855F7 38%, #EC4899 68%, #F59E0B 100%)",
+                    WebkitBackgroundClip: "text",
+                    backgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    color: "transparent",
                   }}
                 >
                   Uchqun
