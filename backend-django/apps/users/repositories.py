@@ -75,7 +75,8 @@ def _check_and_notify_milestone() -> None:
 
         text = (
             f"\U0001F389 Tabriklaymiz, adminlar!\n\n"
-            f"Zakovat botiga <b>{milestone}</b> ta foydalanuvchi yetib keldi! \U0001F680\n\n"
+            f"Yana 100 ta yangi foydalanuvchi qo'shildi! \U0001F680\n\n"
+            f"Hozir Zakovat botida jami <b>{total}</b> ta foydalanuvchi bor!\n\n"
             f"Davom etamiz! \U0001F4AA"
         )
         from apps.core.telegram_notifier import send_message_sync
