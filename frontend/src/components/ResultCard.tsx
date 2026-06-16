@@ -67,15 +67,23 @@ export default function ResultCard({
     <div
       className="animate-scaleIn"
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
+        // justifyContent: "center" olib tashlandi — uzun matn bo'lsa pastdagi
+        // tugma ekrandan chiqib ketadi va scroll qilinmaydi.
+        // Endi content tepadan boshlanadi, scroll orqali tugmaga yetish mumkin.
+        justifyContent: "flex-start",
         background: currentConfig.background,
-        padding: "24px"
+        padding: "24px",
+        paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
+        overflowY: "auto",
+        boxSizing: "border-box"
       }}
     >
+      {/* Vertikal bo'shliq — tepada vizual muvozanat uchun */}
+      <div style={{ flex: "0 0 32px" }} />
       <div style={{ marginBottom: "16px" }}>
         <StatusIcon status={status} />
       </div>

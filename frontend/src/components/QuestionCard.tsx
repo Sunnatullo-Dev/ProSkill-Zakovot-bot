@@ -519,55 +519,91 @@ export default function QuestionCard({
         </svg>
 
         {reveal ? (
+          /*
+           * Reveal overlay \u2014 ota elementlardagi `overflow: hidden` bilan bog'liq
+           * kesish muammosini oldini olish uchun position:fixed ishlatiladi.
+           * Uzun izoh bo'lsa flex-scroll ichida ko'rinadi,
+           * "Davom qilish" tugmasi esa doim pastda pinlanadi.
+           */
           <div
             style={{
-              width: "100%",
-              background: "var(--card)",
-              border: "1px solid var(--accent)",
-              borderRadius: "16px",
-              padding: "18px"
+              position: "fixed",
+              inset: 0,
+              zIndex: 50,
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--bg)",
+              paddingTop: "env(safe-area-inset-top, 0px)",
+              paddingBottom: "env(safe-area-inset-bottom, 0px)"
             }}
           >
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)", marginBottom: "12px" }}>
-              {"\u{1F4DA}"} Bilib oling
-            </div>
-            <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "2px" }}>
-              TO'G'RI JAVOB
-            </div>
-            <div style={{ fontSize: "20px", fontWeight: 800, color: "var(--success)", marginTop: "4px" }}>
-              {reveal.correctAnswer || "\u2014"}
-            </div>
+            {/* Scroll bo'ladigan yuqori qism */}
             <div
               style={{
-                fontSize: "14px",
-                color: reveal.explanation ? "var(--text)" : "var(--muted)",
-                fontStyle: reveal.explanation ? "normal" : "italic",
-                lineHeight: 1.6,
-                borderTop: "1px solid var(--border)",
-                marginTop: "12px",
-                paddingTop: "12px"
+                flex: 1,
+                overflowY: "auto",
+                overscrollBehavior: "contain",
+                padding: "24px 16px 12px"
               }}
             >
-              {reveal.explanation || "To'g'ri javobni eslab qoling."}
+              <div
+                style={{
+                  background: "var(--card)",
+                  border: "1px solid var(--accent)",
+                  borderRadius: "16px",
+                  padding: "18px"
+                }}
+              >
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)", marginBottom: "12px" }}>
+                  {"\u{1F4DA}"} Bilib oling
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "2px" }}>
+                  TO'G'RI JAVOB
+                </div>
+                <div style={{ fontSize: "20px", fontWeight: 800, color: "var(--success)", marginTop: "4px" }}>
+                  {reveal.correctAnswer || "\u2014"}
+                </div>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    color: reveal.explanation ? "var(--text)" : "var(--muted)",
+                    fontStyle: reveal.explanation ? "normal" : "italic",
+                    lineHeight: 1.6,
+                    borderTop: "1px solid var(--border)",
+                    marginTop: "12px",
+                    paddingTop: "12px"
+                  }}
+                >
+                  {reveal.explanation || "To'g'ri javobni eslab qoling."}
+                </div>
+              </div>
             </div>
-            <button
+
+            {/* Pinlangan tugma \u2014 doim ekranning pastida ko'rinadi */}
+            <div
               style={{
-                width: "100%",
-                marginTop: "16px",
-                padding: "15px",
-                background: "var(--accent)",
-                border: "none",
-                borderRadius: "14px",
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "white",
-                cursor: "pointer"
+                flexShrink: 0,
+                padding: "12px 16px"
               }}
-              type="button"
-              onClick={onContinue}
             >
-              Davom qilish {"\u2192"}
-            </button>
+              <button
+                style={{
+                  width: "100%",
+                  padding: "15px",
+                  background: "var(--accent)",
+                  border: "none",
+                  borderRadius: "14px",
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  color: "white",
+                  cursor: "pointer"
+                }}
+                type="button"
+                onClick={onContinue}
+              >
+                Davom qilish {"\u2192"}
+              </button>
+            </div>
           </div>
         ) : isRevealing ? (
           <div
