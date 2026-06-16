@@ -40,3 +40,23 @@ class BotAdmin(models.Model):
 
     def __str__(self):
         return f"{self.first_name or self.username or 'Admin'} ({self.telegram_id})"
+
+
+class MilestoneState(models.Model):
+    """Singleton qator — id=1 doim mavjud.
+
+    Qaysi foydalanuvchi milestoneigacha tabrik yuborilganligi saqlanadi.
+    Deployment qayta ishga tushganda ham DB'da saqlanadi, shuning uchun
+    bir xil milestone ikki marta hech qachon yuborilmaydi.
+    """
+
+    last_celebrated_user_milestone = models.PositiveIntegerField(
+        default=0,
+        help_text="Oxirgi tabrik yuborilgan foydalanuvchilar soni (100 ga karrali)",
+    )
+
+    class Meta:
+        db_table = "milestone_state"
+
+    def __str__(self) -> str:
+        return f"Milestone: {self.last_celebrated_user_milestone}"

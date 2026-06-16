@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from django.conf import settings
+from django.db import transaction
 from django.db.models import Count, F
 
 from apps.core.exceptions import AppError
 
-from .models import User
+from .models import MilestoneState, User
+
+
+logger = logging.getLogger(__name__)
 
 
 REFERRAL_LEADERBOARD_LIMIT = 20
@@ -28,13 +34,75 @@ def _map_user(user: User) -> dict[str, Any]:
     }
 
 
+def _get_all_admin_telegram_ids() -> list[int]:
+    """Super-admin'lar (env) + BotAdmin jadvalidagilarni birlashtiradi."""
+    ids: set[int] = set(getattr(settings, "ADMIN_TELEGRAM_IDS", []))
+    try:
+        from .models import BotAdmin
+        ids.update(BotAdmin.objects.values_list("telegram_id", flat=True))
+    except Exception:
+        pass
+    return [tid for tid in ids if isinstance(tid, int) and tid > 0]
+
+
+def _check_and_notify_milestone() -> None:
+    """Yangi foydalanuvchi yaratilgandan so'ng milestone tekshiriladi.
+
+    - Foydalanuvchilar soni 100 ga karrali bo'lsa va bu milestone ilgari
+      tabriklanmagan bo'lsa — barcha adminlarga xabar yuboriladi.
+    - select_for_update() — bir vaqtda ikki login bir xil milestoneni
+      ikki marta tabriklashini oldini oladi.
+    - Har qanday xato yutib yuboriladi va login hech qachon buzilamaydi.
+    """
+    try:
+        total = User.objects.count()
+        milestone = (total // 100) * 100
+        if milestone < 100:
+            return
+
+        with transaction.atomic():
+            state = MilestoneState.objects.select_for_update().get_or_create(id=1)[0]
+            if milestone <= state.last_celebrated_user_milestone:
+                return
+            state.last_celebrated_user_milestone = milestone
+            state.save(update_fields=["last_celebrated_user_milestone"])
+
+        # Tranzaksiyadan tashqarida yuboramiz — DB lock qisqa bo'lsin.
+        admin_ids = _get_all_admin_telegram_ids()
+        if not admin_ids:
+            logger.info("milestone_%d: adminlar yo'q, xabar yuborilmadi", milestone)
+            return
+
+        text = (
+            f"\U0001F389 Tabriklaymiz, adminlar!\n\n"
+            f"Zakovat botiga <b>{milestone}</b> ta foydalanuvchi yetib keldi! \U0001F680\n\n"
+            f"Davom etamiz! \U0001F4AA"
+        )
+        from apps.core.telegram_notifier import send_message_sync
+        for admin_id in admin_ids:
+            try:
+                send_message_sync(admin_id, text, with_mini_app_button=False)
+            except Exception:
+                logger.warning(
+                    "milestone_%d: admin %d ga xabar yuborishda xato",
+                    milestone, admin_id, exc_info=True,
+                )
+
+        logger.info(
+            "milestone_celebrated: milestone=%d admins=%d",
+            milestone, len(admin_ids),
+        )
+    except Exception:
+        logger.exception("milestone_check: kutilmagan xato — login davom etadi")
+
+
 def upsert_user(
     telegram_id: int,
     first_name: str | None,
     last_name: str | None,
     username: str | None,
 ) -> dict[str, Any]:
-    user, _ = User.objects.update_or_create(
+    user, created = User.objects.update_or_create(
         telegram_id=telegram_id,
         defaults={
             "first_name": first_name,
@@ -46,6 +114,10 @@ def upsert_user(
     if user.display_name in _LEGACY_DISPLAY_NAMES:
         User.objects.filter(telegram_id=telegram_id).update(display_name=None)
         user.display_name = None
+
+    if created:
+        _check_and_notify_milestone()
+
     return _map_user(user)
 
 
