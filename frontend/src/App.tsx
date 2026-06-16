@@ -969,7 +969,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Instagram-style "from Uchqun" footer lockup */}
+            {/* Instagram-style "from Vektor" footer lockup */}
             <div
               style={{
                 paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
@@ -1016,7 +1016,7 @@ export default function App() {
                     color: "transparent",
                   }}
                 >
-                  Uchqun
+                  Vektor
                 </span>
               </div>
             </div>
