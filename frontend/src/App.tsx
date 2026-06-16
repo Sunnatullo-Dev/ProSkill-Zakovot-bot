@@ -114,8 +114,8 @@ const NAV_SCREENS: Screen[] = ["home", "finish", "team", "profile", "leaderboard
 
 const TIMER_SECONDS = 90;
 const ANSWER_TIMEOUT_MS = 90000;
-const RESULT_AUTO_DELAY_MS = 3000;
-const PARTIAL_RESULT_AUTO_DELAY_MS = 3500;
+const RESULT_AUTO_DELAY_MS = 2000;
+const PARTIAL_RESULT_AUTO_DELAY_MS = 2500;
 // Kirish (splash) ekrani kamida shuncha ko'rinadi — brending (from Uchqun)
 // ko'rinib ulgursin. Bootstrap tezroq tugasa, qolgan vaqt kutiladi.
 const SPLASH_MIN_MS = 3000;
@@ -1083,7 +1083,7 @@ export default function App() {
 
         {screen === "result" && lastResult ? (
           <ResultScreen
-            autoNextSeconds={lastResult.status === "partial" ? 3.5 : 3}
+            autoNextSeconds={lastResult.status === "partial" ? 2.5 : 2}
             canReport={Boolean(currentTicket)}
             result={lastResult}
             userAnswer={lastUserAnswer}
