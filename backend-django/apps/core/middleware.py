@@ -9,12 +9,83 @@ import hmac
 import logging
 from typing import Callable
 
+from django.core.cache import cache
 from django.conf import settings
+from django.http import Http404, HttpResponse
 
 from .telegram_auth import TelegramUser, verify_init_data
 
 
 logger = logging.getLogger(__name__)
+
+_ADMIN_BRUTE_LIMIT = 5      # maksimal urinish soni
+_ADMIN_BRUTE_WINDOW = 900   # 15 daqiqa (soniyada)
+
+
+class AdminProtectionMiddleware:
+    """Admin panelni himoya qiladi:
+    1. ADMIN_ALLOWED_IPS sozlangan bo'lsa — faqat shu IP'lardan kirish ruxsati.
+    2. Brute-force: 5 ta noto'g'ri logindan keyin 15 daqiqa blok.
+    """
+
+    def __init__(self, get_response: Callable):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        admin_prefix = "/" + getattr(settings, "ADMIN_SECRET_PATH", "admin").strip("/") + "/"
+        if not request.path.startswith(admin_prefix):
+            return self.get_response(request)
+
+        ip = self._get_ip(request)
+
+        # 1. IP whitelist tekshiruvi
+        allowed_ips = getattr(settings, "ADMIN_ALLOWED_IPS", [])
+        if allowed_ips and ip not in allowed_ips:
+            logger.warning("Admin: IP bloklandi: %s (whitelist'da yo'q)", ip)
+            raise Http404
+
+        # 2. Brute-force bloklash tekshiruvi
+        block_key = f"admin_block:{ip}"
+        if cache.get(block_key):
+            logger.warning("Admin: IP vaqtinchalik bloklandi: %s", ip)
+            return HttpResponse(
+                "Juda ko'p urinish. 15 daqiqadan keyin qayta urinib ko'ring.",
+                status=429,
+                content_type="text/plain",
+            )
+
+        response = self.get_response(request)
+
+        # 3. Noto'g'ri login POST so'rovini kuzatish
+        if request.method == "POST" and response.status_code in (200, 302):
+            # Django admin login muvaffaqiyatsiz bo'lsa 200 (forma qayta ko'rsatiladi)
+            # Muvaffaqiyatli bo'lsa 302 (dashboard'ga redirect)
+            from django.contrib.auth import SESSION_KEY
+            if not request.session.get(SESSION_KEY):
+                self._record_fail(ip, block_key)
+            else:
+                cache.delete(f"admin_fails:{ip}")
+
+        return response
+
+    @staticmethod
+    def _get_ip(request) -> str:
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "unknown")
+
+    @staticmethod
+    def _record_fail(ip: str, block_key: str) -> None:
+        fail_key = f"admin_fails:{ip}"
+        fails = cache.get(fail_key, 0) + 1
+        cache.set(fail_key, fails, _ADMIN_BRUTE_WINDOW)
+        if fails >= _ADMIN_BRUTE_LIMIT:
+            cache.set(block_key, True, _ADMIN_BRUTE_WINDOW)
+            logger.warning(
+                "Admin: IP %s %d ta noto'g'ri urinishdan so'ng bloklandi (%d soniya)",
+                ip, fails, _ADMIN_BRUTE_WINDOW,
+            )
 
 
 class TelegramAuthMiddleware:

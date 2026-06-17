@@ -57,6 +57,24 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
 
+# Admin panel himoyasi
+# ADMIN_SECRET_PATH — admin URL'i (/admin/ o'rniga). Render env'ga qo'ying:
+#   ADMIN_SECRET_PATH=my-super-secret-panel-abc123
+# Bo'sh qoldirilsa "admin" ishlatiladi (xavfli — o'zgartiring!)
+ADMIN_SECRET_PATH = os.environ.get("ADMIN_SECRET_PATH", "admin").strip("/")
+if ADMIN_SECRET_PATH == "admin" and IS_PRODUCTION:
+    import sys as _sys
+    print(
+        "[settings] WARNING: ADMIN_SECRET_PATH o'rnatilmagan! "
+        "Admin panel /admin/ da ochiq. Render env'ga ADMIN_SECRET_PATH qo'ying.",
+        file=_sys.stderr,
+    )
+
+# ADMIN_ALLOWED_IPS — vergul bilan ajratilgan IP ro'yxati. Faqat shu IP'lar
+# admin panelga kira oladi. Bo'sh qoldirilsa IP cheklov yo'q (faqat URL yashirin).
+# Misol: ADMIN_ALLOWED_IPS=1.2.3.4,5.6.7.8
+ADMIN_ALLOWED_IPS: list[str] = env_list("ADMIN_ALLOWED_IPS")
+
 # DJANGO_ALLOWED_HOSTS — bo'sh bo'lsa FRONTEND_URL'dan derive qilamiz +
 # Render hostname pattern. Backend xavfsiz default'lar bilan ishlaydi
 # (crash qilmaydi), warning log yoziladi.
@@ -180,6 +198,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "apps.core.middleware.AdminProtectionMiddleware",
     "apps.core.middleware.TelegramAuthMiddleware",
 ]
 
