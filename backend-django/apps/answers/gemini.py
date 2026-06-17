@@ -21,6 +21,8 @@ MAX_USER_ANSWER_LEN = 300
 
 _PUNCTUATION_RE = re.compile(r"[().,!?\-]")
 _WHITESPACE_RE = re.compile(r"\s+")
+# O'zbek lotinida apostrof ko'rinishlari: ' ʻ ʼ ' ' ` ˈ
+_APOSTROPHE_RE = re.compile(r"[''ʻʼ`ˈ‘’ʼ]")
 
 # ─── O'zbek raqam so'zlari lug'ati (kardinal + ordinal formalar) ─────────────
 
@@ -118,6 +120,12 @@ def check_answer(question: str, correct_answer: str, user_answer: str) -> CheckA
     if not user_answer.strip():
         return CheckAnswerResult(status="incorrect", explanation="")
 
+    # 0-qadam: apostrof va imlo farqini e'tiborsiz qoldirib tez lokal tekshiruv.
+    # Agar shu bosqichda mos kelsa — Gemini'ga API so'rovi yubormaymiz.
+    # Misol: "o'rmonda" == "ormonda", "to'g'ri" == "togri", "g'alaba" == "galaba"
+    if _normalize(user_answer) == _normalize(correct_answer):
+        return CheckAnswerResult(status="correct", explanation="")
+
     safe_answer = _sanitize_input(user_answer)
     safe_question = _sanitize_input(question)
     safe_correct = _sanitize_input(correct_answer)
@@ -207,9 +215,12 @@ _GRADER_SYSTEM_INSTRUCTION = (
     '=== "correct" qoidalari (MA\'NO BIR XIL BO\'LSA) ===\n'
     'Quyidagi farqlar AHAMIYATSIZ — barchasi "correct":\n'
     '  Katta-kichik harf, tinish belgilari, qo\'shimcha so\'zlar\n'
-    '  O\'ZBEK ALIFBO: apostrof yozilmasa ham to\'g\'ri (mobil klaviaturada qiyin):\n'
-    '    "o\'zbekiston" = "ozbekiston", "to\'g\'ri" = "togri", "g\'alaba" = "galaba"\n'
-    '    "o\'n" = "on", "o\'ttiz" = "ottiz", "qo\'shiq" = "qoshiq"\n'
+    '  O\'ZBEK ALIFBO: apostrof (ʻ \' ‘ ’) yozilmasa DOIM to\'g\'ri:\n'
+    '    "o\'rmonda" = "ormonda", "o\'rmon" = "ormon"\n'
+    '    "o\'zbekiston" = "ozbekiston", "to\'g\'ri" = "togri"\n'
+    '    "g\'alaba" = "galaba", "o\'n" = "on", "o\'ttiz" = "ottiz"\n'
+    '    "qo\'shiq" = "qoshiq", "bo\'ldi" = "boldi", "so\'z" = "soz"\n'
+    '  BU QOIDANI UNUTMA: apostrof bilan va apostrofsiz bir xil javob!\n'
     '  Imlo xatolari (mobil yozuvda tabiiy):\n'
     '    "navoiy" = "navoi" = "navoy" = "navoyi"\n'
     '    "toshkent" = "tashkent" = "toshken"\n'
@@ -434,5 +445,6 @@ def _parse_gemini_response(text: str) -> Optional[CheckAnswerResult]:
 
 def _normalize(value: str) -> str:
     lowered = value.lower().strip()
-    cleaned = _PUNCTUATION_RE.sub(" ", lowered)
+    cleaned = _APOSTROPHE_RE.sub("", lowered)   # apostrof olib tashlash: o'rmon→ormon
+    cleaned = _PUNCTUATION_RE.sub(" ", cleaned)
     return _WHITESPACE_RE.sub(" ", cleaned).strip()
