@@ -37,6 +37,18 @@ if IS_PRODUCTION and ALLOW_GUEST_AUTH:
         "Bu sozlamani Render env'dan o'chiring."
     )
 
+# X-Dev-Tid impersonation bypass (bir browser'dan ko'p tab bilan test uchun).
+# XAVFSIZLIK: FAIL-CLOSED — default O'CHIQ. Faqat ALLOW_DEV_TID=true bo'lsa
+# yoqiladi. Shu sababli NODE_ENV unutilsa ham admin panel ochilib qolmaydi.
+# Production'da bu flag o'rnatilgan bo'lsa — darhol to'xtatamiz.
+ALLOW_DEV_TID = os.environ.get("ALLOW_DEV_TID", "").lower() == "true"
+if IS_PRODUCTION and ALLOW_DEV_TID:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "ALLOW_DEV_TID=true production'da ishlatib bo'lmaydi! "
+        "Bu sozlamani Render env'dan o'chiring."
+    )
+
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")

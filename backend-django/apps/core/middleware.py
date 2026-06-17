@@ -76,8 +76,11 @@ class TelegramAuthMiddleware:
 
         # DEV bypass: guest auth + X-Dev-Tid header bo'lsa shu telegram_id
         # bilan ishlatamiz. Bu bir browser'dan ko'p tab orqali multi-player
-        # test qilish imkonini beradi. Production'da o'tkazib yuboriladi.
-        if user is not None and user.telegram_id == 0 and not getattr(settings, "IS_PRODUCTION", False):
+        # test qilish imkonini beradi.
+        # XAVFSIZLIK: FAIL-CLOSED — faqat ALLOW_DEV_TID=true bo'lsa ishlaydi
+        # (default OFF). Shu sababli NODE_ENV/IS_PRODUCTION unutilsa ham bu
+        # bypass orqali admin sifatida kirib bo'lmaydi.
+        if user is not None and user.telegram_id == 0 and getattr(settings, "ALLOW_DEV_TID", False):
             dev_tid_raw = request.headers.get("X-Dev-Tid") or request.headers.get("x-dev-tid")
             if dev_tid_raw and dev_tid_raw.lstrip("-").isdigit():
                 dev_tid = int(dev_tid_raw)
