@@ -69,6 +69,26 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
 
+# Admin panel himoyasi
+# ADMIN_SECRET_PATH — env'da o'rnatilmasa, SECRET_KEY'dan avtomatik
+# 14 belgili maxfiy yo'l hosil qilinadi. /admin/ yo'li endi mavjud emas.
+# Render env'da override qilish mumkin: ADMIN_SECRET_PATH=o'z-maxfiy-yo'lingiz
+import hashlib as _hashlib
+_env_admin_path = os.environ.get("ADMIN_SECRET_PATH", "").strip().strip("/")
+if _env_admin_path and _env_admin_path != "admin":
+    ADMIN_SECRET_PATH = _env_admin_path
+else:
+    # SECRET_KEY dan deterministik, lekin tashqaridan taxmin qilib bo'lmaydigan yo'l
+    _derived = _hashlib.sha256(
+        f"zakovat-admin-path::{SECRET_KEY}".encode("utf-8")
+    ).hexdigest()[:14]
+    ADMIN_SECRET_PATH = f"cp-{_derived}"
+
+# ADMIN_ALLOWED_IPS — vergul bilan ajratilgan IP ro'yxati. Faqat shu IP'lar
+# admin panelga kira oladi. Bo'sh qoldirilsa IP cheklov yo'q (faqat URL yashirin).
+# Misol: ADMIN_ALLOWED_IPS=1.2.3.4,5.6.7.8
+ADMIN_ALLOWED_IPS: list[str] = env_list("ADMIN_ALLOWED_IPS")
+
 # DJANGO_ALLOWED_HOSTS — bo'sh bo'lsa FRONTEND_URL'dan derive qilamiz +
 # Render hostname pattern. Backend xavfsiz default'lar bilan ishlaydi
 # (crash qilmaydi), warning log yoziladi.
@@ -192,6 +212,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "apps.core.middleware.AdminProtectionMiddleware",
     "apps.core.middleware.TelegramAuthMiddleware",
 ]
 

@@ -7,6 +7,8 @@ from django.contrib import admin
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.urls import include, path, re_path
 
+_admin_path = getattr(settings, "ADMIN_SECRET_PATH", "admin").strip("/")
+
 
 def health(_request):
     return JsonResponse({"ok": True})
@@ -29,7 +31,7 @@ def spa_fallback(request, **_kwargs):
 
 urlpatterns = [
     path("health", health),
-    path("admin/", admin.site.urls),
+    path(f"{_admin_path}/", admin.site.urls),
     path("api/auth/", include("apps.auth_api.urls")),
     path("api/users/", include("apps.users.urls")),
     path("api/questions/", include("apps.questions.urls")),
@@ -43,5 +45,8 @@ urlpatterns = [
     path("api/channels/", include("apps.channels.urls")),
     path("api/gamerooms/", include("apps.gamerooms.urls")),
     path("api/admin/board/", include("apps.admin_board.urls")),
-    re_path(r"^(?!api/|admin/|health$|static/).*$", spa_fallback),
+    re_path(
+        rf"^(?!api/|{_admin_path}/|health$|static/).*$",
+        spa_fallback,
+    ),
 ]
