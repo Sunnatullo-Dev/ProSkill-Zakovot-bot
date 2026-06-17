@@ -507,7 +507,10 @@ export default function App() {
           await new Promise((resolve) => setTimeout(resolve, splashRemaining));
         }
 
-        if (isAdminRoute) {
+        // XAVFSIZLIK: /admin URL yo'li o'zi admin huquqi BERMAYDI —
+        // faqat backend tasdiqlagan admin (response.isAdmin) panelni ko'radi.
+        // Aks holda oddiy foydalanuvchi/buzg'unchi bosh sahifaga tushadi.
+        if (isAdminRoute && response.isAdmin) {
           setScreen("admin");
           return;
         }
@@ -574,7 +577,9 @@ export default function App() {
         if (splashRemainingErr > 0) {
           await new Promise((resolve) => setTimeout(resolve, splashRemainingErr));
         }
-        setScreen(isAdminRoute ? "admin" : "home");
+        // XAVFSIZLIK: login xato bo'lsa admin ekanini tasdiqlay olmaymiz —
+        // hech qachon admin ekraniga o'tmaymiz (oddiy bosh sahifa).
+        setScreen("home");
       }
     }
 
@@ -1193,7 +1198,7 @@ export default function App() {
 
         {screen === "profile" ? (
           <ProfileScreen
-            isAdmin={isAdminRoute || isAdminUser}
+            isAdmin={isAdminUser}
             playerName={playerName}
             record={recordScore}
             score={score}
@@ -1208,14 +1213,14 @@ export default function App() {
           />
         ) : null}
 
-        {screen === "admin" && (isAdminRoute || isAdminUser) ? (
+        {screen === "admin" && isAdminUser ? (
           <AdminPanel onExitToUser={() => setScreen("home")} />
         ) : null}
 
         {showBottomNav ? (
           <BottomNav
             active={navActive}
-            showAdmin={isAdminRoute || isAdminUser}
+            showAdmin={isAdminUser}
             onNavigate={handleNavigate}
           />
         ) : null}
