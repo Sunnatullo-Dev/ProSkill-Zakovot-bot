@@ -143,7 +143,7 @@ export default function App() {
     return <SvoyakDemoScreen />;
   }
 
-  const { initData, isReady, startParam, user: telegramUser, initDataMissing } = useTelegram();
+  const { initData, isReady, startParam, user: telegramUser, initDataMissing, inTelegram } = useTelegram();
   const { lang, setLang, t } = useLanguage();
   const [onboardingDone, setOnboardingDone] = useState<boolean>(() => readOnboardingDone());
   const [screen, setScreen] = useState<Screen>("loading");
@@ -803,6 +803,35 @@ export default function App() {
             : screen === "svoyak"
               ? "svoyak"
               : "home";
+
+  // Production'da faqat Telegram WebView orqali kirish — oddiy brauzer bloklangan.
+  const botUsername = import.meta.env.VITE_BOT_USERNAME as string | undefined;
+  if (import.meta.env.PROD && isReady && !inTelegram) {
+    return (
+      <main className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+        <section className="mx-auto grid min-h-screen w-full max-w-[430px] place-items-center px-6 text-center">
+          <div className="space-y-5">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-[var(--card)] text-4xl">
+              ✈️
+            </div>
+            <h1 className="text-xl font-black">{t("app_name")}</h1>
+            <p className="text-sm font-semibold text-[var(--muted)]">
+              Bu ilova faqat Telegram orqali ishlaydi.
+              Davom etish uchun botni oching.
+            </p>
+            {botUsername ? (
+              <a
+                href={`https://t.me/${botUsername}`}
+                className="block w-full rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-black text-[var(--bg)]"
+              >
+                Telegramda ochish
+              </a>
+            ) : null}
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   // Telegram ichida ochilgan, lekin initData topib bo'lmadi — auth ishlamaydi.
   // Foydalanuvchini "guest" sifatida o'tkazib yuborish o'rniga aniq xato ko'rsatamiz.
