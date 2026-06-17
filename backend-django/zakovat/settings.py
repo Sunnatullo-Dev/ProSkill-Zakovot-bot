@@ -58,17 +58,19 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
 
 # Admin panel himoyasi
-# ADMIN_SECRET_PATH — admin URL'i (/admin/ o'rniga). Render env'ga qo'ying:
-#   ADMIN_SECRET_PATH=my-super-secret-panel-abc123
-# Bo'sh qoldirilsa "admin" ishlatiladi (xavfli — o'zgartiring!)
-ADMIN_SECRET_PATH = os.environ.get("ADMIN_SECRET_PATH", "admin").strip("/")
-if ADMIN_SECRET_PATH == "admin" and IS_PRODUCTION:
-    import sys as _sys
-    print(
-        "[settings] WARNING: ADMIN_SECRET_PATH o'rnatilmagan! "
-        "Admin panel /admin/ da ochiq. Render env'ga ADMIN_SECRET_PATH qo'ying.",
-        file=_sys.stderr,
-    )
+# ADMIN_SECRET_PATH — env'da o'rnatilmasa, SECRET_KEY'dan avtomatik
+# 14 belgili maxfiy yo'l hosil qilinadi. /admin/ yo'li endi mavjud emas.
+# Render env'da override qilish mumkin: ADMIN_SECRET_PATH=o'z-maxfiy-yo'lingiz
+import hashlib as _hashlib
+_env_admin_path = os.environ.get("ADMIN_SECRET_PATH", "").strip().strip("/")
+if _env_admin_path and _env_admin_path != "admin":
+    ADMIN_SECRET_PATH = _env_admin_path
+else:
+    # SECRET_KEY dan deterministik, lekin tashqaridan taxmin qilib bo'lmaydigan yo'l
+    _derived = _hashlib.sha256(
+        f"zakovat-admin-path::{SECRET_KEY}".encode("utf-8")
+    ).hexdigest()[:14]
+    ADMIN_SECRET_PATH = f"cp-{_derived}"
 
 # ADMIN_ALLOWED_IPS — vergul bilan ajratilgan IP ro'yxati. Faqat shu IP'lar
 # admin panelga kira oladi. Bo'sh qoldirilsa IP cheklov yo'q (faqat URL yashirin).
