@@ -14,6 +14,7 @@ urlpatterns = [
     path("users/export", views.export_users),
     path("users/ids", views.all_telegram_ids),
     path("users/<int:telegram_id>/profile", views.user_profile),
+    path("users/<int:telegram_id>/message", views.send_user_message),
     # Admins
     path("admins", views.admins_collection),
     path("admins/<int:telegram_id>", views.admin_detail),

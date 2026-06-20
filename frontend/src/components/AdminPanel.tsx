@@ -11,6 +11,7 @@ import {
   getAdminUsers,
   getReportedQuestions,
   renameAdminCategory,
+  sendAdminUserMessage,
   updateAdminQuestion
 } from "../api/client";
 import { parseQuestionsFile } from "../utils/questionFileParser";
@@ -2790,6 +2791,12 @@ function UserProfileDetail({
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
+  // Xabar yuborish composer holati
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [msgText, setMsgText] = useState("");
+  const [msgSending, setMsgSending] = useState(false);
+  const [msgStatus, setMsgStatus] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     let active = true;
     void getAdminUserProfile(user.telegramId).then((res) => {
@@ -2850,6 +2857,21 @@ function UserProfileDetail({
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       });
+    }
+  }
+
+  async function handleSendMessage() {
+    if (!msgText.trim() || msgSending) return;
+    setMsgSending(true);
+    setMsgStatus(null);
+    const result = await sendAdminUserMessage(user.telegramId, msgText.trim());
+    setMsgSending(false);
+    if (result.ok) {
+      setMsgStatus({ kind: "success", text: "Xabar yuborildi" });
+      setMsgText("");
+      setMsgOpen(false);
+    } else {
+      setMsgStatus({ kind: "error", text: result.error });
     }
   }
 
@@ -2990,6 +3012,115 @@ function UserProfileDetail({
           {copied ? "ID nusxalandi!" : "Telegram'da ochish / ID nusxalash"}
         </button>
       )}
+
+      {/* Xabar yuborish tugmasi + composer */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <button
+          type="button"
+          style={{
+            width: "100%",
+            padding: "13px 16px",
+            background: msgOpen
+              ? "linear-gradient(135deg, rgba(124,58,237,0.22), rgba(77,166,255,0.16))"
+              : "var(--card)",
+            border: `1px solid ${msgOpen ? "rgba(124,58,237,0.55)" : "var(--border)"}`,
+            borderRadius: "14px",
+            fontSize: "14px",
+            fontWeight: 800,
+            color: msgOpen ? "#A78BFA" : "var(--muted)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            transition: "all 0.15s",
+            fontFamily: "inherit"
+          }}
+          onClick={() => {
+            setMsgOpen((v) => !v);
+            setMsgStatus(null);
+          }}
+        >
+          <span style={{ fontSize: "16px" }}>✉️</span>
+          Xabar yuborish
+        </button>
+
+        {/* Hint + status */}
+        {msgStatus ? (
+          <div
+            style={{
+              fontSize: "12.5px",
+              padding: "10px 12px",
+              borderRadius: "10px",
+              background: msgStatus.kind === "success" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.08)",
+              border: `1px solid ${msgStatus.kind === "success" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.3)"}`,
+              color: msgStatus.kind === "success" ? "var(--success)" : "var(--error)",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}
+          >
+            <span>{msgStatus.kind === "success" ? "✅" : "⚠️"}</span>
+            <span>{msgStatus.text}</span>
+          </div>
+        ) : null}
+
+        {msgOpen ? (
+          <div
+            style={{
+              background: "var(--card)",
+              border: "1px solid rgba(124,58,237,0.4)",
+              borderRadius: "14px",
+              padding: "14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px"
+            }}
+          >
+            <div style={{ fontSize: "11px", color: "#A78BFA", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>🤖</span>
+              Xabar bot orqali foydalanuvchiga yetkaziladi
+            </div>
+            <textarea
+              autoFocus
+              maxLength={4000}
+              placeholder="Xabar matnini yozing..."
+              rows={4}
+              style={{
+                ...inputStyle,
+                resize: "vertical",
+                minHeight: "88px"
+              }}
+              value={msgText}
+              onChange={(e) => setMsgText(e.target.value)}
+            />
+            <div style={{ fontSize: "10.5px", color: "var(--muted)", textAlign: "right" }}>
+              {msgText.length} / 4000
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                disabled={msgSending || !msgText.trim()}
+                style={primaryButton(msgSending || !msgText.trim(), "#7C3AED")}
+                type="button"
+                onClick={() => void handleSendMessage()}
+              >
+                {msgSending ? "Yuborilmoqda..." : "Yuborish"}
+              </button>
+              <button
+                style={ghostButton}
+                type="button"
+                onClick={() => {
+                  setMsgOpen(false);
+                  setMsgText("");
+                  setMsgStatus(null);
+                }}
+              >
+                Bekor qilish
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>

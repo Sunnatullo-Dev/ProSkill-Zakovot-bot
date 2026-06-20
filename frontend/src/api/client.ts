@@ -981,6 +981,17 @@ export async function getAdminUserProfile(
   return request<AdminUserProfile>(`/admin/users/${telegramId}/profile`);
 }
 
+/** Admin: foydalanuvchiga bot orqali xabar yuborish. */
+export async function sendAdminUserMessage(
+  telegramId: number,
+  text: string
+): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>(`/admin/users/${telegramId}/message`, {
+    method: "POST",
+    body: { text },
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T | null> {

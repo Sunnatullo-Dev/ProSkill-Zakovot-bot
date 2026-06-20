@@ -13,6 +13,7 @@ from apps.channels import repositories as channel_repo
 from apps.core.decorators import require_admin
 from apps.core.exceptions import AppError
 from apps.core.models import AppSettings
+from apps.core.telegram_notifier import send_message_sync
 from apps.game_results import repositories as game_result_repo
 from apps.game_results.repositories import count_all as count_game_results
 from apps.questions import repositories as question_repo
@@ -427,6 +428,76 @@ def user_profile(request, telegram_id: int):
         "referralCount": referral_count,
         "recentGames": history,
     })
+
+
+MESSAGE_MAX_LEN = 4000  # Telegram xabar limiti
+
+
+@api_view(["POST"])
+@require_admin
+def send_user_message(request, telegram_id: int):
+    """Admin foydalanuvchiga bot orqali xabar yuboradi.
+
+    POST /api/admin/users/<telegram_id>/message
+    Body: { "text": "..." }
+    """
+    user = user_repo.find_by_telegram_id(telegram_id)
+    if not user:
+        raise AppError(404, "Foydalanuvchi topilmadi")
+
+    body = request.data if isinstance(request.data, dict) else {}
+    text = body.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise AppError(400, "Xabar matni bo'sh bo'lmasin")
+    text = text.strip()
+    if len(text) > MESSAGE_MAX_LEN:
+        raise AppError(400, f"Xabar {MESSAGE_MAX_LEN} belgidan oshmasin")
+
+    try:
+        import requests as _requests
+        from django.conf import settings as _settings
+
+        token = _settings.TELEGRAM_BOT_TOKEN
+        if not token:
+            raise AppError(500, "Bot token sozlanmagan")
+
+        response = _requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={
+                "chat_id": telegram_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            },
+            timeout=10,
+        )
+        if not response.ok:
+            tg_body = response.json() if response.content else {}
+            tg_desc = tg_body.get("description", "")
+            # Foydalanuvchi botni bloklagan yoki hech qachon boshlamagan
+            if response.status_code == 403 or "blocked" in tg_desc.lower() or "not found" in tg_desc.lower() or "chat not found" in tg_desc.lower() or "user is deactivated" in tg_desc.lower():
+                raise AppError(
+                    400,
+                    "Foydalanuvchi botni bloklagan yoki hali boshlamagan — xabar yetkazilmadi"
+                )
+            logger.warning(
+                "admin_send_message_telegram_error chat=%s status=%s body=%s",
+                telegram_id, response.status_code, response.text[:200],
+            )
+            raise AppError(502, f"Telegram xato qaytardi: {tg_desc or response.status_code}")
+
+    except AppError:
+        raise
+    except Exception as exc:
+        logger.exception("admin_send_message_unexpected chat=%s", telegram_id)
+        raise AppError(500, f"Xabar yuborishda kutilmagan xato: {exc}") from exc
+
+    by = getattr(request.current_user, "telegram_id", 0)
+    logger.info(
+        "admin_sent_message",
+        extra={"event": "admin_sent_message", "to": telegram_id, "by": by, "len": len(text)},
+    )
+    return Response({"ok": True})
 
 
 @api_view(["GET"])
