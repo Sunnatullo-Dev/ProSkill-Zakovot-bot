@@ -2820,20 +2820,22 @@ function UserProfileDetail({
         window.open(url, "_blank", "noopener");
       }
     } else {
-      // Username yo'q — tg://user?id=... urinib ko'ramiz (hamma qurilmada ishlamaydi)
-      const deepLink = `tg://user?id=${user.telegramId}`;
-      if (tg?.openTelegramLink) {
-        try {
-          tg.openTelegramLink(deepLink);
-          return;
-        } catch {
-          // muvaffaqiyatsiz bo'lsa clipboard ga nusxa olamiz
-        }
-      }
-      // Fallback: ID ni clipboard ga nusxalash
+      // Username yo'q. Telegram platformasi numeric ID orqali ixtiyoriy
+      // foydalanuvchini ochishni KAFOLATLAMAYDI (faqat ba'zi native klientlarda,
+      // ID resolve bo'lsa, ishlaydi). Shuning uchun:
+      //   1) tg://user?id=... bilan ochishga BEST-EFFORT urinamiz
+      //   2) qaytib turmasdan, ID ni DOIM clipboard ga nusxalaymiz —
+      //      ochilmasa admin ID orqali qo'lda qidirib topadi.
       const idStr = String(user.telegramId);
+      const deepLink = `tg://user?id=${idStr}`;
+      try {
+        if (tg?.openTelegramLink) tg.openTelegramLink(deepLink);
+        else if (tg?.openLink) tg.openLink(deepLink);
+        else window.location.href = deepLink;
+      } catch { /* ochib bo'lmadi — pastda ID nusxalanadi */ }
+
+      // ID ni doim nusxalaymiz (ochilish kafolatlanmagani uchun zaxira).
       void navigator.clipboard.writeText(idStr).catch(() => {
-        // navigator.clipboard yo'q bo'lsa legacyCopy
         try {
           const ta = document.createElement("textarea");
           ta.value = idStr;
@@ -2984,8 +2986,8 @@ function UserProfileDetail({
           }}
           onClick={openTelegramProfile}
         >
-          <span style={{ fontSize: "15px" }}>{copied ? "✅" : "📋"}</span>
-          {copied ? "Nusxalandi!" : `Username yo'q — ID: ${user.telegramId} (nusxalash)`}
+          <span style={{ fontSize: "15px" }}>{copied ? "✅" : "💬"}</span>
+          {copied ? "ID nusxalandi!" : "Telegram'da ochish / ID nusxalash"}
         </button>
       )}
 
