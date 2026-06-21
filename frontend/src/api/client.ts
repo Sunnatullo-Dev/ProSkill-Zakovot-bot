@@ -1,6 +1,10 @@
 import type {
   AdminBoardListResponse,
   AdminBoardPost,
+  AdminPremiumAnalytics,
+  AdminPremiumHolder,
+  AdminPremiumRequest,
+  AdminPremiumRequestsResponse,
   AnswerResult,
   AnswerStatus,
   ApiResult,
@@ -1003,11 +1007,39 @@ export async function getPremiumInfo(): Promise<PremiumInfo | null> {
 }
 
 /**
- * Foydalanuvchi premium sotib olmoqchi — barcha adminlarga Telegram xabari yuboriladi.
- * Anti-spam: backend 6 soatda bir marta adminlarga yuboradi (takroriy tap spam qilmaydi).
+ * Foydalanuvchi to'lov cheki yuklaydi — multipart/form-data, `receipt` field (image file).
+ * Backend chekni Telegramga yuboradi, pending so'rov yaratadi.
  */
-export async function requestPremium(): Promise<ApiResult<{ ok: boolean }>> {
-  return requestResult<{ ok: boolean }>("/premium/request", { method: "POST" });
+export async function requestPremium(
+  receiptFile: File
+): Promise<ApiResult<{ ok: boolean; status: string; requestId: number }>> {
+  const url = `${API_BASE_URL}/premium/request`;
+  const initData = getTelegramInitData();
+
+  const form = new FormData();
+  form.append("receipt", receiptFile);
+
+  const headers = new Headers();
+  if (initData) {
+    headers.set("Authorization", `tma ${initData}`);
+  }
+  try {
+    const devTid = typeof window !== "undefined" ? window.localStorage.getItem("svoyak:devTid") : null;
+    if (devTid && /^\d+$/.test(devTid)) headers.set("X-Dev-Tid", devTid);
+  } catch { /* ignore */ }
+
+  try {
+    const response = await fetch(url, { method: "POST", headers, body: form });
+    const body = await parseResponse(response);
+    if (!response.ok) {
+      const message = (body as { message?: string } | null)?.message ?? `Xato (${response.status})`;
+      return { ok: false, error: message };
+    }
+    return { ok: true, data: body as { ok: boolean; status: string; requestId: number } };
+  } catch (error) {
+    console.error("requestPremium failed", error);
+    return { ok: false, error: "Internet aloqasi bilan muammo" };
+  }
 }
 
 /** Admin: premium global sozlamalarini olish. */
@@ -1056,6 +1088,54 @@ export async function revokeUserPremium(
   return requestResult(`/admin/users/${telegramId}/premium`, {
     method: "DELETE",
   });
+}
+
+// ─── Admin: Premium so'rovlar (receipt review) ────────────────────────────────
+
+/** Admin: premium so'rovlar ro'yxati (status filter + pagination). */
+export async function getAdminPremiumRequests(
+  params: { status?: "pending" | "approved" | "rejected"; page?: number; limit?: number } = {}
+): Promise<AdminPremiumRequestsResponse> {
+  const q = new URLSearchParams();
+  if (params.status) q.set("status", params.status);
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  const path = q.toString() ? `/admin/premium/requests?${q}` : "/admin/premium/requests";
+  const res = await request<AdminPremiumRequestsResponse>(path);
+  return res ?? { items: [], total: 0, page: params.page ?? 1, limit: params.limit ?? 20 };
+}
+
+/** Admin: premium so'rovni tasdiqlash. */
+export async function approveAdminPremiumRequest(
+  requestId: number,
+  durationDays?: number
+): Promise<ApiResult<AdminPremiumRequest>> {
+  return requestResult<AdminPremiumRequest>(`/admin/premium/requests/${requestId}/approve`, {
+    method: "POST",
+    body: durationDays !== undefined ? { durationDays } : {},
+  });
+}
+
+/** Admin: premium so'rovni rad etish. */
+export async function rejectAdminPremiumRequest(
+  requestId: number,
+  reason?: string
+): Promise<ApiResult<AdminPremiumRequest>> {
+  return requestResult<AdminPremiumRequest>(`/admin/premium/requests/${requestId}/reject`, {
+    method: "POST",
+    body: reason ? { reason } : {},
+  });
+}
+
+/** Admin: premium holderlar ro'yxati (hozirda aktiv). */
+export async function getAdminPremiumHolders(): Promise<{ items: AdminPremiumHolder[]; total: number }> {
+  const res = await request<{ items: AdminPremiumHolder[]; total: number }>("/admin/premium/holders");
+  return res ?? { items: [], total: 0 };
+}
+
+/** Admin: premium tahlil. */
+export async function getAdminPremiumAnalytics(): Promise<AdminPremiumAnalytics | null> {
+  return request<AdminPremiumAnalytics>("/admin/premium/analytics");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

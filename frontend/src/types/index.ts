@@ -201,6 +201,14 @@ export type PremiumUsage = {
   gameroom: PremiumUsageEntry;
 };
 
+/** Foydalanuvchining aktiv yoki rad etilgan premium so'rovi */
+export type MyPremiumRequest = {
+  id: number;
+  status: "pending" | "rejected";
+  createdAt: string | null;
+  rejectReason: string | null;
+};
+
 /** GET /api/premium/info response */
 export type PremiumInfo = {
   enabled: boolean;
@@ -208,10 +216,13 @@ export type PremiumInfo = {
   currency: string;
   durationDays: number;
   benefits: string;
+  /** To'lov ma'lumotlari — karta/Payme raqami, foydalanuvchiga ko'rsatiladi */
+  paymentDetails: string;
   sections: PremiumSections;
   isPremium: boolean;
   premiumUntil: string | null;
   usage: PremiumUsage;
+  myRequest: MyPremiumRequest | null;
 };
 
 /** GET/PATCH /api/admin/premium/settings body/response */
@@ -221,11 +232,56 @@ export type PremiumSettings = {
   currency: string;
   durationDays: number;
   benefits: string;
+  paymentDetails: string;
   sections: PremiumSections;
 };
 
 export type PremiumSettingsPatch = Partial<Omit<PremiumSettings, "sections">> & {
   sectionLimits?: Partial<PremiumSections>;
+};
+
+/** Admin: premium so'rov elementi */
+export type AdminPremiumRequest = {
+  id: number;
+  telegramId: number;
+  displayName: string;
+  username: string | null;
+  amount: number;
+  currency: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string | null;
+  reviewedAt: string | null;
+  reviewedByName: string | null;
+  rejectReason: string | null;
+};
+
+/** Admin: premium so'rovlar ro'yxati */
+export type AdminPremiumRequestsResponse = {
+  items: AdminPremiumRequest[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+/** Admin: premium holder (aktiv premium foydalanuvchi) */
+export type AdminPremiumHolder = {
+  telegramId: number;
+  firstName: string | null;
+  username: string | null;
+  premiumUntil: string;
+  grantedAt: string | null;
+  grantedByName: string | null;
+  grantedByTelegramId: number | null;
+};
+
+/** Admin: premium tahlil */
+export type AdminPremiumAnalytics = {
+  activePremiumCount: number;
+  pendingCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  totalRevenue: number;
+  recentRequests: AdminPremiumRequest[];
 };
 
 export type NavTab = "home" | "leaderboard" | "svoyak" | "team" | "profile" | "admin";

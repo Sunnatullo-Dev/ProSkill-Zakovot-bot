@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { getPremiumInfo, requestPremium } from "../api/client";
 import type { PremiumInfo, PremiumUsageEntry } from "../types";
@@ -48,7 +48,7 @@ export default function PremiumScreen({ onBack }: PremiumScreenProps) {
   const [info, setInfo] = useState<PremiumInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = () => {
     let active = true;
     void getPremiumInfo().then((res) => {
       if (active) {
@@ -56,10 +56,18 @@ export default function PremiumScreen({ onBack }: PremiumScreenProps) {
         setLoading(false);
       }
     });
-    return () => {
-      active = false;
-    };
-  }, []);
+    return () => { active = false; };
+  };
+
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleRefresh() {
+    setLoading(true);
+    void getPremiumInfo().then((res) => {
+      setInfo(res);
+      setLoading(false);
+    });
+  }
 
   return (
     <div style={containerStyle} className="animate-fadeInUp">
@@ -103,7 +111,7 @@ export default function PremiumScreen({ onBack }: PremiumScreenProps) {
       ) : info.isPremium ? (
         <ActivePremiumView info={info} />
       ) : (
-        <UpgradeView info={info} />
+        <UpgradeView info={info} onRefresh={handleRefresh} />
       )}
     </div>
   );
@@ -279,48 +287,35 @@ function ActivePremiumView({ info }: { info: PremiumInfo }) {
 
 // ─── Upgrade (non-premium) view ───────────────────────────────────────────────
 
-function UpgradeView({ info }: { info: PremiumInfo }) {
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
+function UpgradeView({ info, onRefresh }: { info: PremiumInfo; onRefresh: () => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const botUsername =
-    (window as Record<string, unknown>).__BOT_USERNAME as string | undefined ??
-    (import.meta.env.VITE_BOT_USERNAME as string | undefined);
-
-  function openBotChat() {
-    const tg = window.Telegram?.WebApp;
-    if (!botUsername) return;
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(`https://t.me/${botUsername}`);
-    } else if (tg?.openLink) {
-      tg.openLink(`https://t.me/${botUsername}`);
-    } else {
-      window.open(`https://t.me/${botUsername}`, "_blank", "noopener");
-    }
-  }
-
-  async function handleGetPremium() {
-    if (sending || sent) return;
-    setSending(true);
-    setSendError(null);
-
-    const result = await requestPremium();
-
-    setSending(false);
-
-    if (result.ok) {
-      setSent(true);
-      // Bot chatini ham ochamiz (foydalanuvchi bevosita murojaat qilishi uchun)
-      if (botUsername) openBotChat();
-    } else {
-      setSendError(result.error ?? "Xatolik yuz berdi. Qayta urinib ko'ring.");
-      // Xatolik bo'lsa ham bot chatini ochamiz
-      if (botUsername) openBotChat();
-    }
-  }
+  const myReq = info.myRequest;
+  const isPending = myReq?.status === "pending";
+  const isRejected = myReq?.status === "rejected";
 
   const hasPrice = info.price > 0;
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError(null);
+    const result = await requestPremium(file);
+    setUploading(false);
+
+    if (result.ok) {
+      setUploadSuccess(true);
+      onRefresh();
+    } else {
+      setUploadError(result.error ?? "Xatolik yuz berdi. Qayta urinib ko'ring.");
+    }
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "0 0 20px" }}>
@@ -350,13 +345,7 @@ function UpgradeView({ info }: { info: PremiumInfo }) {
                 padding: "8px 20px",
               }}
             >
-              <span
-                style={{
-                  fontSize: "26px",
-                  fontWeight: 900,
-                  color: "#1a0a00",
-                }}
-              >
+              <span style={{ fontSize: "26px", fontWeight: 900, color: "#1a0a00" }}>
                 {info.price.toLocaleString()} {info.currency}
               </span>
               <span
@@ -374,7 +363,7 @@ function UpgradeView({ info }: { info: PremiumInfo }) {
         </div>
       </HeroBanner>
 
-      {/* CTA block */}
+      {/* Status block — pending / rejected / upload CTA */}
       <div style={{ padding: "0 18px" }}>
         <div
           style={{
@@ -382,118 +371,157 @@ function UpgradeView({ info }: { info: PremiumInfo }) {
             border: "1.5px solid rgba(218,165,32,0.35)",
             borderRadius: "18px",
             padding: "18px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
           }}
         >
-          {/* Success state */}
-          {sent ? (
+          {/* Payment details */}
+          {info.paymentDetails ? (
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "10px",
-                padding: "6px 0",
+                background: "rgba(218,165,32,0.12)",
+                border: "1px solid rgba(218,165,32,0.3)",
+                borderRadius: "12px",
+                padding: "12px 14px",
               }}
             >
-              <div style={{ fontSize: "32px" }}>✅</div>
+              <div
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 800,
+                  color: "var(--gold)",
+                  letterSpacing: "1.2px",
+                  textTransform: "uppercase",
+                  marginBottom: "6px",
+                }}
+              >
+                To'lov ma'lumotlari
+              </div>
               <div
                 style={{
                   fontSize: "14px",
-                  fontWeight: 800,
-                  color: "var(--text)",
-                  textAlign: "center",
-                  lineHeight: 1.5,
-                }}
-              >
-                So'rovingiz adminga yuborildi!
-              </div>
-              <div
-                style={{
-                  fontSize: "13px",
-                  color: "var(--muted)",
-                  textAlign: "center",
-                  lineHeight: 1.5,
-                }}
-              >
-                Tez orada siz bilan bog'lanishadi.
-              </div>
-            </div>
-          ) : (
-            <>
-              <div
-                style={{
-                  fontSize: "13px",
+                  fontWeight: 700,
                   color: "var(--text)",
                   lineHeight: 1.6,
-                  marginBottom: "14px",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
                 }}
               >
-                Premium admin tomonidan qo'lda beriladi.
-                {botUsername
-                  ? " Tugmani bosing — so'rovingiz adminga yuboriladi va bot chati ochiladi."
-                  : " Premium olish uchun admin bilan bog'laning."}
+                {info.paymentDetails}
               </div>
+            </div>
+          ) : null}
 
-              {sendError ? (
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: "#EF4444",
-                    fontWeight: 600,
-                    marginBottom: "10px",
-                    padding: "8px 12px",
-                    background: "rgba(239,68,68,0.08)",
-                    borderRadius: "10px",
-                    border: "1px solid rgba(239,68,68,0.2)",
-                  }}
-                >
-                  {sendError}
+          {/* Pending state */}
+          {isPending && !uploadSuccess ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", padding: "6px 0" }}>
+              <div style={{ fontSize: "32px" }}>⏳</div>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)", textAlign: "center" }}>
+                To'lovingiz tekshirilmoqda
+              </div>
+              <div style={{ fontSize: "13px", color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>
+                Admin chekingizni ko'rib chiqayotir. Tez orada javob beriladi.
+              </div>
+            </div>
+          ) : null}
+
+          {/* Rejected state */}
+          {isRejected && !uploadSuccess ? (
+            <div
+              style={{
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                borderRadius: "12px",
+                padding: "12px 14px",
+              }}
+            >
+              <div style={{ fontSize: "13px", fontWeight: 800, color: "#EF4444", marginBottom: "4px" }}>
+                Rad etildi
+              </div>
+              <div style={{ fontSize: "12.5px", color: "var(--muted)", lineHeight: 1.5 }}>
+                {myReq?.rejectReason
+                  ? `Sabab: ${myReq.rejectReason}`
+                  : "Chek noto'g'ri yoki soxta bo'lishi mumkin. To'g'ri to'lov cheki bilan qayta urinib ko'ring."}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Success state */}
+          {uploadSuccess ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", padding: "6px 0" }}>
+              <div style={{ fontSize: "32px" }}>✅</div>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)", textAlign: "center" }}>
+                Chekingiz yuborildi!
+              </div>
+              <div style={{ fontSize: "13px", color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>
+                Admin tekshirgach Premium beriladi.
+              </div>
+            </div>
+          ) : null}
+
+          {/* Upload error */}
+          {uploadError ? (
+            <div
+              style={{
+                fontSize: "12px",
+                color: "#EF4444",
+                fontWeight: 600,
+                padding: "8px 12px",
+                background: "rgba(239,68,68,0.08)",
+                borderRadius: "10px",
+                border: "1px solid rgba(239,68,68,0.2)",
+              }}
+            >
+              {uploadError}
+            </div>
+          ) : null}
+
+          {/* Upload CTA — show when not pending (or when rejected = allow re-upload) */}
+          {!uploadSuccess && !isPending ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => { void handleFileChange(e); }}
+              />
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  width: "100%",
+                  padding: "15px 16px",
+                  background: uploading
+                    ? "rgba(218,165,32,0.5)"
+                    : "linear-gradient(135deg, #B8860B, #DAA520, #FFD700)",
+                  border: "none",
+                  borderRadius: "14px",
+                  fontSize: "15px",
+                  fontWeight: 900,
+                  color: "#1a0a00",
+                  cursor: uploading ? "not-allowed" : "pointer",
+                  boxShadow: uploading ? "none" : "0 8px 24px rgba(218,165,32,0.45)",
+                  letterSpacing: "0.2px",
+                  opacity: uploading ? 0.7 : 1,
+                  transition: "opacity 0.2s, box-shadow 0.2s",
+                }}
+              >
+                {uploading
+                  ? "Yuklanmoqda..."
+                  : isRejected
+                  ? "📸 Yangi chek yuklash"
+                  : "📸 Chek yuklash"}
+              </button>
+              {!isRejected ? (
+                <div style={{ fontSize: "12px", color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>
+                  To'lovni amalga oshiring, so'ng chek rasmini yuklang. Admin tekshirib, Premium beradi.
                 </div>
               ) : null}
-
-              {botUsername ? (
-                <button
-                  type="button"
-                  onClick={() => { void handleGetPremium(); }}
-                  disabled={sending}
-                  style={{
-                    width: "100%",
-                    padding: "15px 16px",
-                    background: sending
-                      ? "rgba(218,165,32,0.5)"
-                      : "linear-gradient(135deg, #B8860B, #DAA520, #FFD700)",
-                    border: "none",
-                    borderRadius: "14px",
-                    fontSize: "15px",
-                    fontWeight: 900,
-                    color: "#1a0a00",
-                    cursor: sending ? "not-allowed" : "pointer",
-                    boxShadow: sending ? "none" : "0 8px 24px rgba(218,165,32,0.45)",
-                    letterSpacing: "0.2px",
-                    opacity: sending ? 0.7 : 1,
-                    transition: "opacity 0.2s, box-shadow 0.2s",
-                  }}
-                >
-                  {sending ? "Yuborilmoqda..." : "⭐ Premium olish uchun murojaat"}
-                </button>
-              ) : (
-                <div
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: "var(--gold)",
-                    textAlign: "center",
-                    padding: "12px",
-                    background: "rgba(218,165,32,0.1)",
-                    borderRadius: "12px",
-                    border: "1px solid rgba(218,165,32,0.3)",
-                  }}
-                >
-                  Admin bilan bot orqali bog'laning
-                </div>
-              )}
             </>
-          )}
+          ) : null}
         </div>
       </div>
 

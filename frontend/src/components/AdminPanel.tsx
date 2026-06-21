@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties, ComponentType, ReactNode } from "react";
 import {
+  approveAdminPremiumRequest,
   bulkCreateAdminQuestions,
   createAdminQuestion,
   deleteAdminQuestion,
   getAdminCategories,
+  getAdminPremiumAnalytics,
+  getAdminPremiumHolders,
+  getAdminPremiumRequests,
   getAdminPremiumSettings,
-  getAdminPremiumUsers,
   getAdminQuestions,
   getAdminStats,
   getAdminUserProfile,
   getAdminUsers,
   getReportedQuestions,
   grantUserPremium,
+  rejectAdminPremiumRequest,
   renameAdminCategory,
   revokeUserPremium,
   sendAdminUserMessage,
@@ -23,14 +27,22 @@ import { parseQuestionsFile } from "../utils/questionFileParser";
 import type { ParsedQuestion, ParseResult } from "../utils/questionFileParser";
 import type {
   AdminCategoryStat,
-  AdminPremiumUser,
   AdminQuestion,
   AdminQuestionsResponse,
   AdminStats,
   AdminUserListItem,
   AdminUserProfile
 } from "../api/client";
-import type { Difficulty, PremiumSettings, PremiumSections, ReportedQuestion } from "../types";
+import type {
+  AdminPremiumAnalytics,
+  AdminPremiumHolder,
+  AdminPremiumRequest,
+  Difficulty,
+  PremiumSettings,
+  PremiumSections,
+  ReportedQuestion
+} from "../types";
+import { useAuthedMedia } from "../gameroom/useAuthedMedia";
 import ConfirmDialog from "./ConfirmDialog";
 import SvoyakAdminSection from "./admin/SvoyakAdminSection";
 import SettingsSection from "./admin/SettingsSection";
@@ -3441,6 +3453,8 @@ const PREMIUM_SECTION_LABELS: Record<string, string> = {
 };
 const PREMIUM_SECTION_KEYS = ["round", "daily", "battle", "svoyak", "gameroom"] as const;
 
+type PremiumTab = "holders" | "pending" | "analytics" | "settings";
+
 function defaultSections(): PremiumSections {
   const entry = { limited: false, free_limit: 0 };
   return {
@@ -3452,49 +3466,751 @@ function defaultSections(): PremiumSections {
   };
 }
 
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("uz-UZ", { day: "numeric", month: "short", year: "numeric" });
+}
+
 function PremiumAdminSection() {
-  const [settings, setSettings] = useState<PremiumSettings | null>(null);
+  const [tab, setTab] = useState<PremiumTab>("pending");
+
+  const TABS: Array<{ id: PremiumTab; label: string; emoji: string }> = [
+    { id: "holders", label: "Premium olganlar", emoji: "👑" },
+    { id: "pending", label: "Kutilmoqda", emoji: "⏳" },
+    { id: "analytics", label: "Tahlil", emoji: "📊" },
+    { id: "settings", label: "Sozlamalar", emoji: "⚙️" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+      {/* Sub-tab nav */}
+      <div
+        style={{
+          display: "flex",
+          gap: "6px",
+          overflowX: "auto",
+          margin: "0 0 18px",
+          padding: "2px 0 6px",
+          scrollbarWidth: "none",
+        }}
+      >
+        {TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              style={{
+                flex: "0 0 auto",
+                padding: "8px 14px",
+                borderRadius: "999px",
+                border: active ? "1.5px solid #DAA520" : "1.5px solid var(--border)",
+                background: active
+                  ? "linear-gradient(135deg, rgba(218,165,32,0.22), rgba(255,200,50,0.12))"
+                  : "var(--card)",
+                color: active ? "#DAA520" : "var(--muted)",
+                fontSize: "12.5px",
+                fontWeight: active ? 800 : 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                transition: "all 0.15s",
+              }}
+            >
+              <span>{t.emoji}</span>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "holders" ? <PremiumHoldersTab /> : null}
+      {tab === "pending" ? <PremiumPendingTab /> : null}
+      {tab === "analytics" ? <PremiumAnalyticsTab /> : null}
+      {tab === "settings" ? <PremiumSettingsTab /> : null}
+    </div>
+  );
+}
+
+// ─── Sub-tab: Holders ─────────────────────────────────────────────────────────
+
+function PremiumHoldersTab() {
+  const [data, setData] = useState<{ items: AdminPremiumHolder[]; total: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await getAdminPremiumHolders();
+    setData(res);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {[1, 2, 3].map((id) => (
+          <div key={id} style={{ height: "72px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }} />
+        ))}
+      </div>
+    );
+  }
+
+  const items = data?.items ?? [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+          Jami: <strong style={{ color: "var(--text)" }}>{data?.total ?? 0}</strong> ta aktiv premium
+        </div>
+        <button style={ghostButton} type="button" onClick={() => void load()}>
+          <RefreshIcon size={14} /> Yangilash
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <EmptyState icon={<StarIcon size={28} />} text="Hozirda aktiv premium foydalanuvchi yo'q" />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {items.map((h) => {
+            const name = h.firstName
+              ? h.username ? `${h.firstName} @${h.username}` : h.firstName
+              : h.username ? `@${h.username}` : `#${h.telegramId}`;
+            return (
+              <div
+                key={h.telegramId}
+                style={{
+                  background: "var(--card)",
+                  border: "1px solid rgba(218,165,32,0.3)",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "20px" }}>👑</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {name}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "3px" }}>
+                      Olingan: {fmtDate(h.grantedAt)} · Tugashi: {fmtDate(h.premiumUntil)}
+                    </div>
+                    {h.grantedByName ? (
+                      <div style={{ fontSize: "10.5px", color: "var(--gold)", marginTop: "2px" }}>
+                        Tasdiqlagan: {h.grantedByName}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Sub-tab: Pending requests ────────────────────────────────────────────────
+
+function PremiumPendingTab() {
+  const [items, setItems] = useState<AdminPremiumRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedReq, setSelectedReq] = useState<AdminPremiumRequest | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await getAdminPremiumRequests({ status: "pending", limit: 50 });
+    setItems(res.items);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  function handleDone() {
+    setSelectedReq(null);
+    void load();
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {[1, 2, 3].map((id) => (
+          <div key={id} style={{ height: "72px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+          Kutilmoqda: <strong style={{ color: "#F59E0B" }}>{items.length}</strong> ta
+        </div>
+        <button style={ghostButton} type="button" onClick={() => void load()}>
+          <RefreshIcon size={14} /> Yangilash
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <EmptyState icon={<CheckCircleIcon size={28} />} text="Ko'rib chiqiladigan so'rov yo'q" />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {items.map((req) => (
+            <button
+              key={req.id}
+              type="button"
+              onClick={() => setSelectedReq(req)}
+              style={{
+                background: "var(--card)",
+                border: "1px solid rgba(245,158,11,0.35)",
+                borderRadius: "14px",
+                padding: "12px 14px",
+                textAlign: "left",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                width: "100%",
+              }}
+            >
+              <span style={{ fontSize: "20px", flex: "0 0 auto" }}>⏳</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {req.displayName}{req.username ? ` @${req.username}` : ""}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "3px" }}>
+                  {fmtDate(req.createdAt)} · {req.amount.toLocaleString()} {req.currency}
+                </div>
+              </div>
+              <ChevronRightIcon size={16} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedReq ? (
+        <PendingRequestDetail req={selectedReq} onClose={() => setSelectedReq(null)} onDone={handleDone} />
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Pending request detail modal ─────────────────────────────────────────────
+
+function PendingRequestDetail({
+  req,
+  onClose,
+  onDone,
+}: {
+  req: AdminPremiumRequest;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  // Receipt image via authed proxy
+  const receiptPath = `/api/admin/premium/requests/${req.id}/receipt`;
+  const media = useAuthedMedia(receiptPath);
+
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [confirmReject, setConfirmReject] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  async function handleApprove() {
+    setBusy(true);
+    setErrMsg(null);
+    const res = await approveAdminPremiumRequest(req.id);
+    setBusy(false);
+    if (res.ok) {
+      setToast("Premium berildi");
+      setTimeout(() => { onDone(); }, 1200);
+    } else {
+      setErrMsg(res.error);
+    }
+  }
+
+  async function handleReject() {
+    setBusy(true);
+    setErrMsg(null);
+    const res = await rejectAdminPremiumRequest(req.id, rejectReason.trim() || undefined);
+    setBusy(false);
+    if (res.ok) {
+      setToast("Rad etildi");
+      setTimeout(() => { onDone(); }, 1200);
+    } else {
+      setErrMsg(res.error);
+    }
+  }
+
+  return (
+    <>
+      {/* Full-screen modal */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.75)",
+          zIndex: 900,
+          display: "flex",
+          flexDirection: "column",
+          backdropFilter: "blur(4px)",
+        }}
+        onClick={onClose}
+      >
+        <div
+          style={{
+            marginTop: "auto",
+            background: "var(--surface)",
+            borderRadius: "22px 22px 0 0",
+            padding: "20px 18px 34px",
+            maxHeight: "90vh",
+            overflowY: "auto",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: 900, color: "var(--text)" }}>
+                {req.displayName}
+              </div>
+              {req.username ? (
+                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                  @{req.username} · {fmtDate(req.createdAt)}
+                </div>
+              ) : (
+                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                  {fmtDate(req.createdAt)}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: "10px",
+                padding: "8px 12px",
+                fontSize: "12px",
+                fontWeight: 700,
+                color: "var(--text)",
+                cursor: "pointer",
+              }}
+            >
+              Yopish
+            </button>
+          </div>
+
+          {/* Amount */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "rgba(218,165,32,0.12)",
+              border: "1px solid rgba(218,165,32,0.3)",
+              borderRadius: "10px",
+              padding: "6px 12px",
+              marginBottom: "14px",
+            }}
+          >
+            <span style={{ fontSize: "13px", fontWeight: 800, color: "#DAA520" }}>
+              {req.amount.toLocaleString()} {req.currency}
+            </span>
+          </div>
+
+          {/* Receipt image */}
+          <div
+            style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "16px",
+              overflow: "hidden",
+              marginBottom: "16px",
+              minHeight: "160px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {media.status === "loading" ? (
+              <div style={{ fontSize: "12px", color: "var(--muted)", padding: "20px" }}>
+                Chek yuklanmoqda...
+              </div>
+            ) : media.status === "error" ? (
+              <div style={{ fontSize: "12px", color: "var(--error)", padding: "20px", textAlign: "center" }}>
+                Chek rasmini yuklab bo'lmadi
+              </div>
+            ) : media.status === "ready" ? (
+              <img
+                src={media.url}
+                alt="To'lov cheki"
+                style={{ width: "100%", display: "block", borderRadius: "16px" }}
+              />
+            ) : null}
+          </div>
+
+          {/* Error */}
+          {errMsg ? (
+            <div
+              style={{
+                fontSize: "12px",
+                color: "var(--error)",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                borderRadius: "10px",
+                padding: "10px 12px",
+                marginBottom: "12px",
+              }}
+            >
+              {errMsg}
+            </div>
+          ) : null}
+
+          {/* Toast */}
+          {toast ? (
+            <div
+              style={{
+                fontSize: "13px",
+                color: "var(--success)",
+                background: "rgba(34,197,94,0.1)",
+                border: "1px solid rgba(34,197,94,0.3)",
+                borderRadius: "10px",
+                padding: "10px 12px",
+                textAlign: "center",
+                marginBottom: "12px",
+                fontWeight: 700,
+              }}
+            >
+              ✅ {toast}
+            </div>
+          ) : null}
+
+          {/* Action buttons */}
+          {!toast ? (
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmApprove(true)}
+                style={{
+                  flex: 1,
+                  padding: "14px",
+                  background: busy ? "var(--border)" : "linear-gradient(135deg, #15803D, #22C55E)",
+                  border: "none",
+                  borderRadius: "12px",
+                  color: "white",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  cursor: busy ? "not-allowed" : "pointer",
+                  opacity: busy ? 0.6 : 1,
+                }}
+              >
+                Tasdiqlash
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmReject(true)}
+                style={{
+                  flex: 1,
+                  padding: "14px",
+                  background: busy ? "var(--border)" : "var(--error)",
+                  border: "none",
+                  borderRadius: "12px",
+                  color: "white",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  cursor: busy ? "not-allowed" : "pointer",
+                  opacity: busy ? 0.6 : 1,
+                }}
+              >
+                Rad etish
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Approve confirm */}
+      {confirmApprove ? (
+        <ConfirmDialog
+          title="Rostan ham tasdiqlamoqchimisiz?"
+          message={`${req.displayName} ga Premium beriladi.`}
+          confirmLabel="Ha, tasdiqlash"
+          cancelLabel="Bekor qilish"
+          variant="primary"
+          onCancel={() => setConfirmApprove(false)}
+          onConfirm={() => {
+            setConfirmApprove(false);
+            void handleApprove();
+          }}
+        />
+      ) : null}
+
+      {/* Reject confirm — with optional reason textarea */}
+      {confirmReject ? (
+        <RejectConfirmDialog
+          displayName={req.displayName}
+          reason={rejectReason}
+          onReasonChange={setRejectReason}
+          onCancel={() => setConfirmReject(false)}
+          onConfirm={() => {
+            setConfirmReject(false);
+            void handleReject();
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function RejectConfirmDialog({
+  displayName,
+  reason,
+  onReasonChange,
+  onCancel,
+  onConfirm,
+}: {
+  displayName: string;
+  reason: string;
+  onReasonChange: (v: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.65)",
+        zIndex: 1100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+      }}
+      onClick={onCancel}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "340px",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "20px",
+          padding: "22px",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontSize: "17px", fontWeight: 800, color: "var(--text)", marginBottom: "8px" }}>
+          Rostan ham rad etmoqchimisiz?
+        </div>
+        <div style={{ fontSize: "13px", color: "var(--muted)", lineHeight: 1.5, marginBottom: "14px" }}>
+          {displayName} ga so'rov rad etiladi. Sabab kiritilsa foydalanuvchiga sabab bilan yuboriladi; kiritilmasa standart xabar ketadi (soxta chek h.k.).
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <div style={labelStyle}>Rad etish sababi (ixtiyoriy)</div>
+          <textarea
+            rows={3}
+            placeholder="Masalan: chek sifati past, to'lov tasdiqlanmadi..."
+            style={{ ...inputStyle, resize: "vertical" }}
+            value={reason}
+            onChange={(e) => onReasonChange(e.target.value)}
+          />
+        </div>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: "13px",
+              borderRadius: "12px",
+              border: "1px solid var(--border)",
+              background: "var(--card)",
+              color: "var(--text)",
+              fontSize: "14px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Bekor qilish
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: "13px",
+              borderRadius: "12px",
+              border: "none",
+              background: "var(--error)",
+              color: "white",
+              fontSize: "14px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Rad etish
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sub-tab: Analytics ───────────────────────────────────────────────────────
+
+function PremiumAnalyticsTab() {
+  const [data, setData] = useState<AdminPremiumAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await getAdminPremiumAnalytics();
+    setData(res);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+        {[1, 2, 3, 4, 5].map((id) => (
+          <div key={id} style={{ height: "80px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }} />
+        ))}
+      </div>
+    );
+  }
+
+  if (!data) {
+    return <EmptyState icon={<StarIcon size={28} />} text="Tahlil ma'lumotlari yuklanmadi" />;
+  }
+
+  const stats: Array<{ label: string; value: string | number; color: string }> = [
+    { label: "Aktiv premium", value: data.activePremiumCount, color: "#DAA520" },
+    { label: "Kutilmoqda", value: data.pendingCount, color: "#F59E0B" },
+    { label: "Tasdiqlangan", value: data.approvedCount, color: "#22C55E" },
+    { label: "Rad etilgan", value: data.rejectedCount, color: "#EF4444" },
+    { label: "Umumiy daromad", value: `${data.totalRevenue.toLocaleString()} so'm`, color: "#A78BFA" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button style={ghostButton} type="button" onClick={() => void load()}>
+          <RefreshIcon size={14} /> Yangilash
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+        {stats.map((s) => (
+          <div
+            key={s.label}
+            style={{
+              background: "var(--card)",
+              border: `1px solid ${s.color}30`,
+              borderRadius: "16px",
+              padding: "14px",
+            }}
+          >
+            <div style={{ fontSize: "22px", fontWeight: 900, color: s.color, lineHeight: 1 }}>
+              {s.value}
+            </div>
+            <div style={{ fontSize: "10.5px", fontWeight: 700, color: "var(--muted)", letterSpacing: "1.2px", textTransform: "uppercase", marginTop: "6px" }}>
+              {s.label}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {data.recentRequests.length > 0 ? (
+        <div>
+          <div style={{ ...sectionHeaderStyle, marginBottom: "10px" }}>
+            So'nggi so'rovlar
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {data.recentRequests.slice(0, 5).map((r) => {
+              const statusColor = r.status === "approved" ? "#22C55E" : r.status === "rejected" ? "#EF4444" : "#F59E0B";
+              const statusLabel = r.status === "approved" ? "Tasdiqlandi" : r.status === "rejected" ? "Rad etildi" : "Kutilmoqda";
+              return (
+                <div
+                  key={r.id}
+                  style={{
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "12px",
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.displayName}{r.username ? ` @${r.username}` : ""}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                      {fmtDate(r.createdAt)} · {r.amount.toLocaleString()} {r.currency}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "11px", fontWeight: 800, color: statusColor, whiteSpace: "nowrap" }}>
+                    {statusLabel}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Sub-tab: Settings ────────────────────────────────────────────────────────
+
+function PremiumSettingsTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
-  // Local edit state
   const [enabled, setEnabled] = useState(false);
   const [price, setPrice] = useState("0");
   const [currency, setCurrency] = useState("so'm");
   const [durationDays, setDurationDays] = useState("30");
   const [benefits, setBenefits] = useState("");
+  const [paymentDetails, setPaymentDetails] = useState("");
   const [sections, setSections] = useState<PremiumSections>(defaultSections());
-
-  // Premium users list
-  const [premiumUsers, setPremiumUsers] = useState<AdminPremiumUser[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setSaveMsg(null);
     const s = await getAdminPremiumSettings();
     if (s) {
-      setSettings(s);
       setEnabled(s.enabled);
       setPrice(String(s.price));
       setCurrency(s.currency);
       setDurationDays(String(s.durationDays));
       setBenefits(s.benefits);
+      setPaymentDetails(s.paymentDetails ?? "");
       setSections(s.sections ?? defaultSections());
     }
     setLoading(false);
-
-    // Premium users
-    setLoadingUsers(true);
-    const users = await getAdminPremiumUsers();
-    setPremiumUsers(users);
-    setLoadingUsers(false);
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   function updateSection(key: string, field: "limited" | "free_limit", value: boolean | number) {
     setSections((prev) => ({
@@ -3512,11 +4228,11 @@ function PremiumAdminSection() {
       currency: currency.trim() || "so'm",
       durationDays: Number(durationDays) || 30,
       benefits,
+      paymentDetails,
       sectionLimits: sections,
     });
     setSaving(false);
     if (result.ok) {
-      setSettings(result.data);
       setSaveMsg({ kind: "success", text: "Saqlandi!" });
     } else {
       setSaveMsg({ kind: "error", text: result.error });
@@ -3527,10 +4243,7 @@ function PremiumAdminSection() {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         {[1, 2, 3].map((id) => (
-          <div
-            key={id}
-            style={{ height: "80px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }}
-          />
+          <div key={id} style={{ height: "80px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }} />
         ))}
       </div>
     );
@@ -3538,7 +4251,6 @@ function PremiumAdminSection() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
       {/* Master toggle */}
       <Card accent={enabled ? "#DAA520" : undefined}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
@@ -3557,9 +4269,7 @@ function PremiumAdminSection() {
               width: "50px",
               height: "28px",
               borderRadius: "999px",
-              background: enabled
-                ? "linear-gradient(135deg, #B8860B, #DAA520)"
-                : "var(--border)",
+              background: enabled ? "linear-gradient(135deg, #B8860B, #DAA520)" : "var(--border)",
               border: "none",
               cursor: "pointer",
               position: "relative",
@@ -3594,39 +4304,37 @@ function PremiumAdminSection() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
             <div>
               <div style={labelStyle}>Narx</div>
-              <input
-                style={inputStyle}
-                type="number"
-                min="0"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-              />
+              <input style={inputStyle} type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
             <div>
               <div style={labelStyle}>Valyuta</div>
-              <input
-                style={inputStyle}
-                type="text"
-                placeholder="so'm"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-              />
+              <input style={inputStyle} type="text" placeholder="so'm" value={currency} onChange={(e) => setCurrency(e.target.value)} />
             </div>
           </div>
           <div>
             <div style={labelStyle}>Muddat (kun)</div>
-            <input
-              style={inputStyle}
-              type="number"
-              min="1"
-              max="3650"
-              value={durationDays}
-              onChange={(e) => setDurationDays(e.target.value)}
-            />
+            <input style={inputStyle} type="number" min="1" max="3650" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} />
             <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "5px" }}>
               Grant berishda default muddat sifatida ishlatiladi
             </div>
           </div>
+        </div>
+      </Card>
+
+      {/* To'lov ma'lumotlari */}
+      <Card>
+        <div style={{ ...sectionHeaderStyle, marginBottom: "10px" }}>
+          💳 To'lov ma'lumotlari
+        </div>
+        <textarea
+          rows={3}
+          style={{ ...inputStyle, resize: "vertical" }}
+          placeholder="Masalan: 8600 1234 5678 9012 (Uzcard)&#10;Payme: +998901234567"
+          value={paymentDetails}
+          onChange={(e) => setPaymentDetails(e.target.value)}
+        />
+        <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "5px" }}>
+          Foydalanuvchiga Premium ekranida ko'rsatiladi — karta/Payme raqami
         </div>
       </Card>
 
@@ -3756,53 +4464,6 @@ function PremiumAdminSection() {
       >
         {saving ? "Saqlanmoqda..." : "⭐ Saqlash"}
       </button>
-
-      {/* Premium users list */}
-      <div>
-        <div style={{ ...sectionHeaderStyle, marginBottom: "10px" }}>
-          <UserIcon size={16} />
-          Aktiv premium foydalanuvchilar ({loadingUsers ? "…" : premiumUsers.length})
-        </div>
-        {loadingUsers ? (
-          <p style={{ fontSize: "12px", color: "var(--muted)" }}>Yuklanmoqda...</p>
-        ) : premiumUsers.length === 0 ? (
-          <EmptyState icon={<StarIcon size={28} />} text="Hozirda aktiv premium foydalanuvchi yo'q" />
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {premiumUsers.map((pu) => {
-              const name = pu.firstName ?? (pu.username ? `@${pu.username}` : `#${pu.telegramId}`);
-              const until = new Date(pu.premiumUntil).toLocaleDateString("uz-UZ", { day: "numeric", month: "short", year: "numeric" });
-              return (
-                <div
-                  key={pu.telegramId}
-                  style={{
-                    background: "var(--card)",
-                    border: "1px solid rgba(218,165,32,0.3)",
-                    borderRadius: "12px",
-                    padding: "11px 14px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                  }}
-                >
-                  <span style={{ fontSize: "18px" }}>⭐</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {name}
-                    </div>
-                    <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
-                      Tugashi: {until}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--gold)", fontWeight: 700 }}>
-                    ID: {pu.telegramId}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
