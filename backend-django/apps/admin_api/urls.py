@@ -25,7 +25,14 @@ urlpatterns = [
     # Required Channels
     path("channels", views.channels_collection),
     path("channels/<int:channel_pk>", views.channel_detail),
-    # Premium settings + users list
+    # Premium settings + holders + analytics
     path("premium/settings", premium_views.admin_premium_settings),
     path("premium/users", premium_views.admin_premium_users),
+    path("premium/holders", premium_views.admin_premium_users),  # alias
+    path("premium/analytics", premium_views.admin_premium_analytics),
+    # Premium payment requests
+    path("premium/requests", premium_views.admin_premium_requests),
+    path("premium/requests/<int:request_id>/receipt", premium_views.admin_receipt_proxy),
+    path("premium/requests/<int:request_id>/approve", premium_views.admin_approve_request),
+    path("premium/requests/<int:request_id>/reject", premium_views.admin_reject_request),
 ]

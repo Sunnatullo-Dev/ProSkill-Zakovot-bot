@@ -19,8 +19,11 @@ class User(models.Model):
     language = models.CharField(max_length=10, default="uz-latn")
     current_streak = models.IntegerField(default=0)
     # Premium obuna: null → bepul foydalanuvchi; future datetime → aktiv premium.
-    # Admin tomonidan qo'lda beriladi (to'lov integratsiyasi yo'q, 1-bosqich).
     premium_until = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Kim tomonidan / qachon berilgan — to'lov tasdiqlovchi admin yoki qo'lda.
+    premium_granted_by_telegram_id = models.BigIntegerField(null=True, blank=True)
+    premium_granted_by_name = models.CharField(max_length=255, null=True, blank=True)
+    premium_granted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -63,6 +66,14 @@ class PremiumSettings(models.Model):
 
     # Foydalanuvchiga ko'rinadigan foyda matni (premium ekrani uchun)
     benefits = models.TextField(blank=True, default="")
+
+    # To'lov yo'riqnomalari (karta raqami, Payme link va h.k.) — foydalanuvchiga
+    # ko'rsatiladi, qayerga to'lash kerakligini tushuntiradi.
+    payment_details = models.TextField(
+        blank=True,
+        default="",
+        help_text="To'lov ma'lumotlari: karta raqami, Payme/Click link, yo'riqnoma.",
+    )
 
     # Bo'lim cheklovlari — har bir bo'lim uchun { limited: bool, free_limit: int }.
     # Default: barcha limited=false → cheksiz.
@@ -126,6 +137,7 @@ class PremiumSettings(models.Model):
             "currency": self.currency,
             "durationDays": self.duration_days,
             "benefits": self.benefits,
+            "paymentDetails": self.payment_details,
             "sections": sections,
         }
 

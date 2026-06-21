@@ -1,15 +1,18 @@
 """Premium API endpoint'lari.
 
-Admin endpoint'lari: /api/admin/premium/*  — require_admin
-Public endpoint:    /api/premium/info       — require_auth
+Admin endpoint'lari : /api/admin/premium/*  — require_admin
+Public endpoint'lari: /api/premium/*         — require_auth
 """
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
 
+from django.conf import settings as django_settings
+from django.http import HttpResponse
 from django.utils import timezone
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.core.decorators import require_admin, require_auth
@@ -18,6 +21,7 @@ from apps.users import repositories as user_repo
 from apps.users.models import PremiumSettings, User
 
 from .limits import VALID_SECTIONS, get_usage
+from .models import PremiumRequest
 
 
 logger = logging.getLogger(__name__)
@@ -26,16 +30,7 @@ logger = logging.getLogger(__name__)
 # ── Yordamchi funksiyalar ─────────────────────────────────────────────────────
 
 def _validate_section_limits(raw) -> dict:
-    """section_limits PATCH body'dan validatsiya qiladi.
-
-    Kutilayotgan format:
-        {
-          "round":    { "limited": bool, "free_limit": int },
-          "daily":    { "limited": bool, "free_limit": int },
-          ...
-        }
-    Noma'lum bo'limlar e'tiborga olinmaydi.
-    """
+    """section_limits PATCH body'dan validatsiya qiladi."""
     if not isinstance(raw, dict):
         raise AppError(400, "sectionLimits dict bo'lishi kerak")
     cleaned = {}
@@ -59,15 +54,129 @@ def _validate_section_limits(raw) -> dict:
     return cleaned
 
 
-def _premium_user_dict(user: User) -> dict:
-    """Foydalanuvchi premium holatini dict'ga aylantiradi."""
-    return {
-        "isPremium": user.is_premium_active(),
-        "premiumUntil": user.premium_until.isoformat() if user.premium_until else None,
-    }
+def _admin_display_name(admin_user) -> str:
+    """Admin uchun ko'rinadigan ism hosil qiladi."""
+    first = (getattr(admin_user, "first_name", "") or "").strip()
+    last = (getattr(admin_user, "last_name", "") or "").strip()
+    name = f"{first} {last}".strip()
+    return name or f"Admin {admin_user.telegram_id}"
 
 
-# ── Admin: settings ──────────────────────────────────────────────────────────
+def _get_storage_chat(poster_telegram_id: int):
+    """Media saqlash uchun Telegram chat ID — admin_board bilan bir xil mantig'."""
+    chat_id = getattr(django_settings, "ADMIN_MEDIA_CHAT_ID", "")
+    if chat_id:
+        try:
+            return int(chat_id)
+        except (ValueError, TypeError):
+            return str(chat_id)
+    return poster_telegram_id
+
+
+# ── Media relay + proxy — admin_board.views dan qayta ishlatilgan ────────────
+
+def _relay_receipt_to_telegram(
+    *,
+    file_bytes: bytes,
+    file_name: str,
+    content_type: str,
+    chat_id,
+    bot_token: str,
+) -> str:
+    """Rasm chekini Telegram'ga yuborib file_id qaytaradi (sendPhoto)."""
+    import json
+    import urllib.request
+
+    boundary = "----ZakovatReceiptBoundary9x2k"
+
+    def _field(name: str, value: str) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n"
+        ).encode("utf-8")
+
+    def _file_part(name: str, fname: str, ctype: str, data: bytes) -> bytes:
+        header = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"; filename="{fname}"\r\n'
+            f"Content-Type: {ctype}\r\n\r\n"
+        ).encode("utf-8")
+        return header + data + b"\r\n"
+
+    body = (
+        _field("chat_id", str(chat_id))
+        + _file_part("photo", file_name, content_type, file_bytes)
+        + f"--{boundary}--\r\n".encode("utf-8")
+    )
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+            data = json.loads(resp.read().decode())
+    except Exception as exc:
+        logger.warning("Telegram sendPhoto (receipt) xatosi: %s", exc)
+        raise AppError(502, "Chekni Telegramga yuborishda xato yuz berdi")
+
+    if not data.get("ok"):
+        desc = data.get("description", "Noma'lum xato")
+        logger.warning("Telegram API receipt rad etdi: %s", desc)
+        raise AppError(502, f"Telegram chekni qabul qilmadi: {desc}")
+
+    photos = data.get("result", {}).get("photo", [])
+    if not photos:
+        raise AppError(502, "Telegram rasm file_id qaytarmadi")
+    return photos[-1]["file_id"]
+
+
+def _proxy_receipt_from_telegram(file_id: str, bot_token: str) -> tuple[bytes, str]:
+    """Telegram'dan file_id orqali fayl olib qaytaradi — admin_board bilan bir xil."""
+    import json
+    import urllib.request
+
+    _MAX_BYTES = 15 * 1024 * 1024  # 15 MB
+
+    get_file_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
+    try:
+        with urllib.request.urlopen(get_file_url, timeout=10) as resp:  # noqa: S310
+            data = json.loads(resp.read().decode())
+    except Exception as exc:
+        logger.warning("Telegram getFile (receipt) xatosi: %s", exc)
+        raise AppError(502, "Telegram chek manzilini olishda xato")
+
+    if not data.get("ok"):
+        raise AppError(404, "Telegram chek topilmadi (file_id eskirgan yoki noto'g'ri)")
+
+    file_path = data.get("result", {}).get("file_path", "")
+    if not file_path:
+        raise AppError(502, "Telegram file_path bo'sh qaytdi")
+
+    download_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
+    try:
+        with urllib.request.urlopen(download_url, timeout=30) as resp:  # noqa: S310
+            cl = resp.headers.get("Content-Length")
+            if cl is not None and int(cl) > _MAX_BYTES:
+                raise AppError(413, "Chek fayli juda katta")
+            content = resp.read(_MAX_BYTES + 1)
+            if len(content) > _MAX_BYTES:
+                raise AppError(413, "Chek fayli juda katta")
+            content_type = resp.headers.get("Content-Type", "image/jpeg")
+    except AppError:
+        raise
+    except Exception as exc:
+        logger.warning("Telegram chek yuklab olishda xato: %s", exc)
+        raise AppError(502, "Telegram chekni yuklab olishda xato")
+
+    return content, content_type
+
+
+# ── Admin: sozlamalar ─────────────────────────────────────────────────────────
 
 @api_view(["GET", "PATCH"])
 @require_admin
@@ -83,6 +192,7 @@ def admin_premium_settings(request):
         "currency": str,
         "durationDays": int,
         "benefits": str,
+        "paymentDetails": str,
         "sectionLimits": { "round": { "limited": bool, "free_limit": int }, ... }
       }
     """
@@ -136,9 +246,13 @@ def admin_premium_settings(request):
         obj.benefits = benefits.strip()
         updated_fields.append("benefits")
 
+    if "paymentDetails" in body:
+        pd = body["paymentDetails"] if isinstance(body["paymentDetails"], str) else ""
+        obj.payment_details = pd.strip()
+        updated_fields.append("payment_details")
+
     if "sectionLimits" in body:
         new_limits = _validate_section_limits(body["sectionLimits"])
-        # Mavjud limitlarni yangilaymiz (PATCH — faqat yuborilgan bo'limlar o'zgaradi)
         existing = obj.section_limits if isinstance(obj.section_limits, dict) else {}
         existing.update(new_limits)
         obj.section_limits = existing
@@ -159,18 +273,16 @@ def admin_premium_settings(request):
     return Response(PremiumSettings.get().to_dict())
 
 
-# ── Admin: foydalanuvchiga premium berish/olish ───────────────────────────────
+# ── Admin: foydalanuvchiga premium berish/olish (qo'lda) ─────────────────────
 
 @api_view(["POST"])
 @require_admin
 def admin_grant_premium(request, telegram_id: int):
-    """Foydalanuvchiga premium berish yoki uzaytirish.
+    """Foydalanuvchiga premium berish yoki uzaytirish (admin qo'lda).
 
     POST /api/admin/users/<telegram_id>/premium
     Body (ixtiyoriy): { "durationDays": int }
     Response: { ok: true, telegramId, premiumUntil, durationDays }
-
-    Agar allaqachon premium aktiv bo'lsa — premium_until'dan uzaytiradi.
     """
     user = User.objects.filter(telegram_id=telegram_id).first()
     if not user:
@@ -187,22 +299,28 @@ def admin_grant_premium(request, telegram_id: int):
         if not (1 <= duration_days <= 3650):
             raise AppError(400, "durationDays 1-3650 kun oralig'ida bo'lishi kerak")
     else:
-        # Default: PremiumSettings'dan olamiz
         settings = PremiumSettings.get()
         duration_days = settings.duration_days
 
     now = timezone.now()
-    # Hozirda aktiv premium bo'lsa — undan uzaytirish, aks holda hozirdan
     base = user.premium_until if (user.premium_until and user.premium_until > now) else now
     new_until = base + timedelta(days=duration_days)
 
-    User.objects.filter(telegram_id=telegram_id).update(premium_until=new_until)
+    admin_user = request.current_user
+    admin_name = _admin_display_name(admin_user)
 
-    by = getattr(request.current_user, "telegram_id", 0)
+    User.objects.filter(telegram_id=telegram_id).update(
+        premium_until=new_until,
+        premium_granted_by_telegram_id=admin_user.telegram_id,
+        premium_granted_by_name=admin_name,
+        premium_granted_at=now,
+    )
+
+    by = admin_user.telegram_id
     logger.info(
-        "premium_granted",
+        "premium_granted_manual",
         extra={
-            "event": "premium_granted",
+            "event": "premium_granted_manual",
             "to": telegram_id,
             "by": by,
             "days": duration_days,
@@ -230,7 +348,12 @@ def admin_revoke_premium(request, telegram_id: int):
     if not user:
         raise AppError(404, "Foydalanuvchi topilmadi")
 
-    User.objects.filter(telegram_id=telegram_id).update(premium_until=None)
+    User.objects.filter(telegram_id=telegram_id).update(
+        premium_until=None,
+        premium_granted_by_telegram_id=None,
+        premium_granted_by_name=None,
+        premium_granted_at=None,
+    )
 
     by = getattr(request.current_user, "telegram_id", 0)
     logger.info(
@@ -246,123 +369,482 @@ def admin_revoke_premium(request, telegram_id: int):
 @api_view(["GET"])
 @require_admin
 def admin_premium_users(request):
-    """Hozirda aktiv premium foydalanuvchilar ro'yxati.
+    """Hozirda aktiv premium foydalanuvchilar ro'yxati (kim bergan bilan).
 
-    GET /api/admin/premium/users
+    GET /api/admin/premium/users   (alias: /api/admin/premium/holders)
     Response: { items: [...], total: int }
     """
-    from django.utils import timezone as tz
-    qs = User.objects.filter(premium_until__gt=tz.now()).order_by("premium_until")
+    qs = User.objects.filter(premium_until__gt=timezone.now()).order_by("premium_until")
     items = [
         {
             "telegramId": u.telegram_id,
             "firstName": u.first_name,
             "username": u.username,
             "premiumUntil": u.premium_until.isoformat(),
+            "grantedAt": u.premium_granted_at.isoformat() if u.premium_granted_at else None,
+            "grantedByName": u.premium_granted_by_name,
+            "grantedByTelegramId": u.premium_granted_by_telegram_id,
         }
         for u in qs
     ]
     return Response({"items": items, "total": len(items)})
 
 
-# ── Public: premium so'rovi (foydalanuvchi → adminlarga xabar) ───────────────
+# ── Admin: to'lov so'rovlari ro'yxati ────────────────────────────────────────
 
-_PREMIUM_REQUEST_CACHE_TTL = 6 * 60 * 60  # 6 soat
+@api_view(["GET"])
+@require_admin
+def admin_premium_requests(request):
+    """Premium so'rovlar ro'yxati.
+
+    GET /api/admin/premium/requests?status=pending|approved|rejected&page=&limit=
+    Response: { items: [...], total: int, page: int, limit: int }
+    """
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 50
+
+    status_filter = (request.query_params.get("status") or "").strip()
+    valid_statuses = {PremiumRequest.STATUS_PENDING, PremiumRequest.STATUS_APPROVED, PremiumRequest.STATUS_REJECTED}
+    if status_filter and status_filter not in valid_statuses:
+        raise AppError(400, "status 'pending' | 'approved' | 'rejected' bo'lishi kerak")
+
+    try:
+        page = max(1, int(request.query_params.get("page") or 1))
+    except (TypeError, ValueError):
+        raise AppError(400, "page noto'g'ri")
+    try:
+        limit = max(1, min(MAX_LIMIT, int(request.query_params.get("limit") or DEFAULT_LIMIT)))
+    except (TypeError, ValueError):
+        raise AppError(400, "limit noto'g'ri")
+
+    qs = PremiumRequest.objects.all()
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    total = qs.count()
+    offset = (page - 1) * limit
+    items = [req.to_dict() for req in qs[offset: offset + limit]]
+
+    return Response({"items": items, "total": total, "page": page, "limit": limit})
+
+
+# ── Admin: chek rasmini ko'rish (media proxy) ────────────────────────────────
+
+@api_view(["GET"])
+@require_admin
+def admin_receipt_proxy(request, request_id: int):
+    """Chek rasmi — Telegram proxy orqali.
+
+    GET /api/admin/premium/requests/<id>/receipt
+    """
+    bot_token = getattr(django_settings, "TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        raise AppError(502, "Bot token sozlanmagan")
+
+    pr = PremiumRequest.objects.filter(pk=request_id).first()
+    if not pr:
+        raise AppError(404, "So'rov topilmadi")
+    if not pr.receipt_file_id:
+        raise AppError(404, "Bu so'rovda chek yo'q")
+
+    content, content_type = _proxy_receipt_from_telegram(pr.receipt_file_id, bot_token)
+    response = HttpResponse(content, content_type=content_type)
+    response["Cache-Control"] = "private, max-age=3600"
+    return response
+
+
+# ── Admin: so'rovni tasdiqlash ────────────────────────────────────────────────
+
+@api_view(["POST"])
+@require_admin
+def admin_approve_request(request, request_id: int):
+    """Premium so'rovni tasdiqlash va foydalanuvchiga premium berish.
+
+    POST /api/admin/premium/requests/<id>/approve
+    Body (ixtiyoriy): { "durationDays": int }
+    Response: so'rov dict'i (yangilangan)
+
+    Idempotent: allaqachon tasdiqlangan bo'lsa double-grant qilmaydi.
+    """
+    from django.db import transaction
+    from apps.core.telegram_notifier import send_message_sync
+    from apps.users.repositories import _get_all_admin_telegram_ids
+
+    pr = PremiumRequest.objects.filter(pk=request_id).first()
+    if not pr:
+        raise AppError(404, "So'rov topilmadi")
+
+    if pr.status == PremiumRequest.STATUS_APPROVED:
+        # Idempotent — ikki marta bermaslik
+        return Response(pr.to_dict())
+
+    if pr.status == PremiumRequest.STATUS_REJECTED:
+        raise AppError(400, "Rad etilgan so'rovni tasdiqlash mumkin emas")
+
+    body = request.data if isinstance(request.data, dict) else {}
+    duration_days_raw = body.get("durationDays")
+
+    if duration_days_raw is not None:
+        try:
+            duration_days = int(duration_days_raw)
+        except (TypeError, ValueError):
+            raise AppError(400, "durationDays raqam bo'lishi kerak")
+        if not (1 <= duration_days <= 3650):
+            raise AppError(400, "durationDays 1-3650 kun oralig'ida bo'lishi kerak")
+    else:
+        duration_days = PremiumSettings.get().duration_days
+
+    now = timezone.now()
+    admin_user = request.current_user
+    admin_name = _admin_display_name(admin_user)
+
+    with transaction.atomic():
+        # Premium muddatini hisoblash: mavjud aktiv premium'dan uzaytirish
+        user = User.objects.select_for_update().filter(telegram_id=pr.telegram_id).first()
+        if not user:
+            raise AppError(404, "Foydalanuvchi topilmadi (akkaunt o'chirilgandir)")
+
+        base = user.premium_until if (user.premium_until and user.premium_until > now) else now
+        new_until = base + timedelta(days=duration_days)
+
+        user.premium_until = new_until
+        user.premium_granted_by_telegram_id = admin_user.telegram_id
+        user.premium_granted_by_name = admin_name
+        user.premium_granted_at = now
+        user.save(update_fields=[
+            "premium_until",
+            "premium_granted_by_telegram_id",
+            "premium_granted_by_name",
+            "premium_granted_at",
+        ])
+
+        pr.status = PremiumRequest.STATUS_APPROVED
+        pr.reviewed_by_telegram_id = admin_user.telegram_id
+        pr.reviewed_by_name = admin_name
+        pr.reviewed_at = now
+        pr.granted_until = new_until
+        pr.save(update_fields=[
+            "status",
+            "reviewed_by_telegram_id",
+            "reviewed_by_name",
+            "reviewed_at",
+            "granted_until",
+        ])
+
+    logger.info(
+        "premium_request_approved",
+        extra={
+            "event": "premium_request_approved",
+            "request_id": pr.pk,
+            "telegram_id": pr.telegram_id,
+            "by": admin_user.telegram_id,
+            "days": duration_days,
+            "until": new_until.isoformat(),
+        },
+    )
+
+    # Foydalanuvchiga xabar
+    try:
+        send_message_sync(
+            pr.telegram_id,
+            f"🎉 <b>To'lovingiz tasdiqlandi!</b>\n\n"
+            f"Premium <b>{duration_days} kunga</b> faollashtirildi.\n"
+            f"Muddati: {new_until.strftime('%d.%m.%Y')}\n\n"
+            f"Zakovatdan rohatlaning! 🏆",
+            with_mini_app_button=True,
+        )
+    except Exception:
+        logger.warning(
+            "premium_approve_notify_user_failed telegram_id=%s", pr.telegram_id, exc_info=True
+        )
+
+    return Response(pr.to_dict())
+
+
+# ── Admin: so'rovni rad etish ─────────────────────────────────────────────────
+
+@api_view(["POST"])
+@require_admin
+def admin_reject_request(request, request_id: int):
+    """Premium so'rovni rad etish.
+
+    POST /api/admin/premium/requests/<id>/reject
+    Body (ixtiyoriy): { "reason": str }
+    Response: so'rov dict'i (yangilangan)
+    """
+    from apps.core.telegram_notifier import send_message_sync
+
+    pr = PremiumRequest.objects.filter(pk=request_id).first()
+    if not pr:
+        raise AppError(404, "So'rov topilmadi")
+
+    if pr.status == PremiumRequest.STATUS_REJECTED:
+        return Response(pr.to_dict())  # idempotent
+
+    if pr.status == PremiumRequest.STATUS_APPROVED:
+        raise AppError(400, "Allaqachon tasdiqlangan so'rovni rad etib bo'lmaydi")
+
+    body = request.data if isinstance(request.data, dict) else {}
+    reason = (body.get("reason") or "").strip()
+
+    now = timezone.now()
+    admin_user = request.current_user
+    admin_name = _admin_display_name(admin_user)
+
+    pr.status = PremiumRequest.STATUS_REJECTED
+    pr.reviewed_by_telegram_id = admin_user.telegram_id
+    pr.reviewed_by_name = admin_name
+    pr.reviewed_at = now
+    pr.reject_reason = reason
+    pr.save(update_fields=[
+        "status",
+        "reviewed_by_telegram_id",
+        "reviewed_by_name",
+        "reviewed_at",
+        "reject_reason",
+    ])
+
+    logger.info(
+        "premium_request_rejected",
+        extra={
+            "event": "premium_request_rejected",
+            "request_id": pr.pk,
+            "telegram_id": pr.telegram_id,
+            "by": admin_user.telegram_id,
+            "reason": reason[:100],
+        },
+    )
+
+    # Foydalanuvchiga xabar
+    if reason:
+        user_text = (
+            f"❌ <b>To'lovingiz rad etildi.</b>\n\n"
+            f"Sabab: {reason}\n\n"
+            f"To'g'ri to'lov cheki bilan qayta urinib ko'ring."
+        )
+    else:
+        user_text = (
+            "❌ <b>To'lovingiz tasdiqlanmadi.</b>\n\n"
+            "Chek noto'g'ri yoki soxta bo'lishi mumkin. "
+            "Iltimos to'g'ri to'lov cheki bilan qayta urinib ko'ring."
+        )
+
+    try:
+        send_message_sync(pr.telegram_id, user_text, with_mini_app_button=True)
+    except Exception:
+        logger.warning(
+            "premium_reject_notify_user_failed telegram_id=%s", pr.telegram_id, exc_info=True
+        )
+
+    return Response(pr.to_dict())
+
+
+# ── Admin: tahlil ────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@require_admin
+def admin_premium_analytics(request):
+    """Premium tizimi tahlili.
+
+    GET /api/admin/premium/analytics
+    Response: { activePremiumCount, pendingCount, approvedCount, rejectedCount,
+                totalRevenue, recentRequests }
+    """
+    from django.db.models import Sum
+
+    active_count = User.objects.filter(premium_until__gt=timezone.now()).count()
+    pending_count = PremiumRequest.objects.filter(status=PremiumRequest.STATUS_PENDING).count()
+    approved_count = PremiumRequest.objects.filter(status=PremiumRequest.STATUS_APPROVED).count()
+    rejected_count = PremiumRequest.objects.filter(status=PremiumRequest.STATUS_REJECTED).count()
+
+    revenue_agg = PremiumRequest.objects.filter(
+        status=PremiumRequest.STATUS_APPROVED
+    ).aggregate(total=Sum("amount"))
+    total_revenue = revenue_agg["total"] or 0
+
+    recent = [
+        req.to_dict()
+        for req in PremiumRequest.objects.all()[:10]
+    ]
+
+    return Response({
+        "activePremiumCount": active_count,
+        "pendingCount": pending_count,
+        "approvedCount": approved_count,
+        "rejectedCount": rejected_count,
+        "totalRevenue": total_revenue,
+        "recentRequests": recent,
+    })
+
+
+# ── Public: premium so'rovi (chek bilan) ─────────────────────────────────────
+
+_IMAGE_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 @api_view(["POST"])
 @require_auth
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def premium_request(request):
-    """Foydalanuvchi premium sotib olmoqchi — barcha adminlarga xabar yuborish.
+    """Foydalanuvchi to'lov cheki yuklaydi va pending so'rov yaratiladi.
 
     POST /api/premium/request
-    Auth: require_auth
-    Body: {} (bo'sh)
-    Response: { ok: true }
+    Content-Type: multipart/form-data
+    Fields:
+      receipt  — rasm fayl (majburiy, image/*, <=10MB)
+      note     — ixtiyoriy eslatma (e'tiborga olinmaydi, faqat log uchun)
+    Response: { ok: true, status: "pending", requestId: int }
 
-    Anti-spam: har bir foydalanuvchi 6 soatda bir marta adminlarga xabar yuboradi.
-    Takroriy so'rovlar { ok: true } qaytaradi, lekin adminlarga yuborilmaydi.
+    Cheklovlar:
+      - Foydalanuvchida allaqachon PENDING so'rov bo'lsa — xato.
+      - Faqat image/* qabul qilinadi.
     """
-    from django.core.cache import cache
     from apps.core.telegram_notifier import send_message_sync
     from apps.users.repositories import _get_all_admin_telegram_ids
 
     user = request.current_user
     telegram_id: int = user.telegram_id
 
-    cache_key = f"premium_request:{telegram_id}"
+    # Allaqachon kutilayotgan so'rov bor-yo'qligini tekshirish
+    existing_pending = PremiumRequest.objects.filter(
+        telegram_id=telegram_id,
+        status=PremiumRequest.STATUS_PENDING,
+    ).first()
+    if existing_pending:
+        raise AppError(
+            400,
+            "Sizning so'rovingiz allaqachon ko'rib chiqilmoqda. "
+            "Admin tasdiqlagunga yoki rad etgunga qadar yangi so'rov yubora olmaysiz."
+        )
 
-    # Anti-spam: agar so'rov allaqachon yuborilgan bo'lsa — qaytib kel
-    if cache.get(cache_key):
-        logger.info("premium_request:throttled telegram_id=%s", telegram_id)
-        return Response({"ok": True})
+    # Rasm fayl
+    receipt_file = request.FILES.get("receipt")
+    if not receipt_file:
+        raise AppError(400, "Chek rasmi ('receipt' field) majburiy")
 
-    # Cache'ga qo'yib, keyingi 6 soat uchun bloklaymiz
-    cache.set(cache_key, 1, timeout=_PREMIUM_REQUEST_CACHE_TTL)
+    ct = receipt_file.content_type or ""
+    if not ct.startswith("image/"):
+        raise AppError(400, "Faqat rasm fayli yuklash mumkin (image/*)")
 
-    # Foydalanuvchi ma'lumotlari
+    file_bytes = receipt_file.read()
+    if len(file_bytes) > _IMAGE_MAX_BYTES:
+        raise AppError(400, "Rasm hajmi 10 MB dan oshmasligi kerak")
+    if len(file_bytes) == 0:
+        raise AppError(400, "Fayl bo'sh")
+
+    bot_token = getattr(django_settings, "TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        raise AppError(502, "Bot token sozlanmagan — server admini bilan bog'laning")
+
+    # Chekni Telegram'ga yuborish
+    storage_chat = _get_storage_chat(telegram_id)
+    file_id = _relay_receipt_to_telegram(
+        file_bytes=file_bytes,
+        file_name=receipt_file.name or "receipt.jpg",
+        content_type=ct,
+        chat_id=storage_chat,
+        bot_token=bot_token,
+    )
+
+    # Narx snapshot
+    ps = PremiumSettings.get()
+    amount = ps.price
+    currency = ps.currency
+
+    # Foydalanuvchi ismi snapshot
     first_name = (user.first_name or "").strip()
     last_name = (user.last_name or "").strip()
-    name = f"{first_name} {last_name}".strip() or "Noma'lum"
+    display_name = f"{first_name} {last_name}".strip() or "Noma'lum"
     username = user.username
 
-    if username:
-        user_mention = f"@{username}"
-    else:
-        user_mention = f"ID: {telegram_id}"
+    pr = PremiumRequest.objects.create(
+        telegram_id=telegram_id,
+        display_name=display_name,
+        username=username,
+        status=PremiumRequest.STATUS_PENDING,
+        receipt_file_id=file_id,
+        receipt_media_type="image",
+        amount=amount,
+        currency=currency,
+    )
 
-    text = (
-        f"⭐ <b>Yangi Premium soʿrovi!</b>\n\n"
-        f"\U0001F464 {name} ({user_mention})\n"
-        f"\U0001F194 {telegram_id}\n\n"
-        f"Foydalanuvchi Premium sotib olmoqchi. "
-        f"Admin panel → Foydalanuvchilar → shu foydalanuvchini topib "
-        f"⭐ Premium berish bosing."
+    logger.info(
+        "premium_request_created",
+        extra={
+            "event": "premium_request_created",
+            "request_id": pr.pk,
+            "telegram_id": telegram_id,
+            "amount": amount,
+        },
+    )
+
+    # Adminlarga xabar
+    mention = f"@{username}" if username else f"ID: {telegram_id}"
+    admin_text = (
+        f"⭐ <b>Yangi to'lov cheki!</b>\n\n"
+        f"👤 {display_name} ({mention})\n"
+        f"🆔 {telegram_id}\n"
+        f"💰 {amount} {currency}\n\n"
+        f"Premiumga to'lov qildi — chekni tekshiring va tasdiqlang yoki rad eting.\n"
+        f"Admin panel → Premium → So'rovlar"
     )
 
     admin_ids = _get_all_admin_telegram_ids()
     if not admin_ids:
-        logger.warning("premium_request: adminlar yo'q, xabar yuborilmadi")
+        logger.warning("premium_request_created: adminlar yo'q, xabar yuborilmadi")
     else:
         for admin_id in admin_ids:
             try:
-                send_message_sync(admin_id, text, with_mini_app_button=False)
+                send_message_sync(admin_id, admin_text, with_mini_app_button=False)
             except Exception:
                 logger.warning(
                     "premium_request: admin %s ga xabar yuborishda xato",
                     admin_id,
                     exc_info=True,
                 )
-        logger.info(
-            "premium_request:sent telegram_id=%s admins=%d",
-            telegram_id,
-            len(admin_ids),
-        )
 
-    return Response({"ok": True})
+    return Response({"ok": True, "status": "pending", "requestId": pr.pk}, status=201)
 
 
-# ── Public: premium info (foydalanuvchi uchun) ────────────────────────────────
+# ── Public: premium info ──────────────────────────────────────────────────────
 
 @api_view(["GET"])
 @require_auth
 def premium_info(request):
-    """Joriy foydalanuvchi uchun premium holati va sozlamalar.
+    """Joriy foydalanuvchi uchun premium holati, sozlamalar va joriy so'rov.
 
     GET /api/premium/info
     Response:
     {
-      enabled, price, currency, durationDays, benefits, sections,
+      enabled, price, currency, durationDays, benefits, paymentDetails, sections,
       isPremium, premiumUntil,
-      usage: { round: { used, limit, remaining, limited }, ... }
+      usage: { round: { used, limit, remaining, limited }, ... },
+      myRequest: { id, status, createdAt, rejectReason } | null
     }
     """
     user = request.current_user
-    settings = PremiumSettings.get()
+    ps = PremiumSettings.get()
     usage = get_usage(user)
 
-    data = settings.to_dict()
+    data = ps.to_dict()
     data["isPremium"] = user.is_premium_active()
     data["premiumUntil"] = user.premium_until.isoformat() if user.premium_until else None
     data["usage"] = usage
+
+    # Foydalanuvchining aktiv so'rovi (pending yoki so'nggi rad etilgan)
+    my_req = (
+        PremiumRequest.objects.filter(telegram_id=user.telegram_id)
+        .order_by("-created_at")
+        .first()
+    )
+    if my_req and my_req.status in (PremiumRequest.STATUS_PENDING, PremiumRequest.STATUS_REJECTED):
+        data["myRequest"] = {
+            "id": my_req.pk,
+            "status": my_req.status,
+            "createdAt": my_req.created_at.isoformat() if my_req.created_at else None,
+            "rejectReason": my_req.reject_reason,
+        }
+    else:
+        data["myRequest"] = None
+
     return Response(data)
