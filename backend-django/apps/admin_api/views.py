@@ -19,6 +19,7 @@ from apps.game_results.repositories import count_all as count_game_results
 from apps.questions import repositories as question_repo
 from apps.teams.models import Team
 from apps.users import repositories as user_repo
+from apps.users.models import User as _UserModel
 from apps.users.repositories import count_all as count_users
 
 
@@ -414,8 +415,8 @@ def user_profile(request, telegram_id: int):
 
     GET /api/admin/users/<telegram_id>/profile
     """
-    user = user_repo.find_by_telegram_id(telegram_id)
-    if not user:
+    user_obj = _UserModel.objects.filter(telegram_id=telegram_id).first()
+    if not user_obj:
         raise AppError(404, "Foydalanuvchi topilmadi")
 
     stats = game_result_repo.get_stats(telegram_id)
@@ -423,10 +424,12 @@ def user_profile(request, telegram_id: int):
     referral_count = user_repo.get_referral_count(telegram_id)
 
     return Response({
-        "user": user,
+        "user": user_repo.find_by_telegram_id(telegram_id),
         "stats": stats,
         "referralCount": referral_count,
         "recentGames": history,
+        "isPremium": user_obj.is_premium_active(),
+        "premiumUntil": user_obj.premium_until.isoformat() if user_obj.premium_until else None,
     })
 
 

@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from apps.core.decorators import require_admin, require_auth
 from apps.core.exceptions import AppError
 from apps.core.ratelimit import user_or_ip
+from apps.premium.limits import check_and_consume
 
 from . import repositories
 
@@ -25,6 +26,8 @@ VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 @api_view(["GET"])
 @require_auth
 def get_round(request):
+    check_and_consume(request.current_user, "round")
+
     count = _parse_int(request.query_params.get("count"), default=DEFAULT_ROUND_COUNT, lo=1, hi=MAX_ROUND_COUNT)
     category = (request.query_params.get("category") or "").strip() or None
     difficulty = (request.query_params.get("difficulty") or "").strip() or None

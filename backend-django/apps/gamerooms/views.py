@@ -18,6 +18,7 @@ from rest_framework.response import Response
 
 from apps.core.decorators import require_admin, require_auth
 from apps.core.exceptions import AppError
+from apps.premium.limits import check_and_consume
 
 from . import repositories
 
@@ -49,6 +50,7 @@ def admin_rooms(request):
     # POST — yangi xona yaratish (global admin kerak)
     if not _is_admin(user.telegram_id):
         raise AppError(403, "Admin huquqi kerak")
+    check_and_consume(user, "gameroom")
 
     body = request.data if isinstance(request.data, dict) else {}
     name = (body.get("name") or "").strip()

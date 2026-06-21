@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from apps.core.decorators import require_auth
 from apps.core.exceptions import AppError
+from apps.premium.limits import check_and_consume
 
 from . import service
 
@@ -35,6 +36,8 @@ def get_pending(request):
 @ratelimit(key="ip", rate="10/m", block=True)
 def challenge_opponent(request):
     user = request.current_user
+    check_and_consume(user, "battle")
+
     body = request.data if isinstance(request.data, dict) else {}
     opponent_code = (body.get("opponent_code") or "").strip()
 

@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 from apps.core.decorators import require_auth
 from apps.core.exceptions import AppError
+from apps.premium.limits import check_and_consume
 from apps.questions.repositories import get_questions_by_ids
 
 from . import repositories
@@ -15,6 +16,8 @@ from . import repositories
 @require_auth
 def get_today(request):
     user = request.current_user
+    check_and_consume(user, "daily")
+
     challenge = repositories.get_or_create_today()
     completed = repositories.has_completed_today(user.telegram_id)
     streak = repositories.get_user_streak(user.telegram_id)

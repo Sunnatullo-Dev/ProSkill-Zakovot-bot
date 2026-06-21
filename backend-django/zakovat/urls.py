@@ -45,6 +45,7 @@ urlpatterns = [
     path("api/channels/", include("apps.channels.urls")),
     path("api/gamerooms/", include("apps.gamerooms.urls")),
     path("api/admin/board/", include("apps.admin_board.urls")),
+    path("api/premium/", include("apps.premium.urls_public")),
     re_path(
         rf"^(?!api/|{_admin_path}/|health$|static/).*$",
         spa_fallback,
