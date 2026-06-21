@@ -1002,6 +1002,14 @@ export async function getPremiumInfo(): Promise<PremiumInfo | null> {
   return request<PremiumInfo>("/premium/info");
 }
 
+/**
+ * Foydalanuvchi premium sotib olmoqchi — barcha adminlarga Telegram xabari yuboriladi.
+ * Anti-spam: backend 6 soatda bir marta adminlarga yuboradi (takroriy tap spam qilmaydi).
+ */
+export async function requestPremium(): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>("/premium/request", { method: "POST" });
+}
+
 /** Admin: premium global sozlamalarini olish. */
 export async function getAdminPremiumSettings(): Promise<PremiumSettings | null> {
   return request<PremiumSettings>("/admin/premium/settings");

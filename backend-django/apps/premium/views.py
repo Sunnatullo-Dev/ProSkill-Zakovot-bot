@@ -265,6 +265,83 @@ def admin_premium_users(request):
     return Response({"items": items, "total": len(items)})
 
 
+# ── Public: premium so'rovi (foydalanuvchi → adminlarga xabar) ───────────────
+
+_PREMIUM_REQUEST_CACHE_TTL = 6 * 60 * 60  # 6 soat
+
+
+@api_view(["POST"])
+@require_auth
+def premium_request(request):
+    """Foydalanuvchi premium sotib olmoqchi — barcha adminlarga xabar yuborish.
+
+    POST /api/premium/request
+    Auth: require_auth
+    Body: {} (bo'sh)
+    Response: { ok: true }
+
+    Anti-spam: har bir foydalanuvchi 6 soatda bir marta adminlarga xabar yuboradi.
+    Takroriy so'rovlar { ok: true } qaytaradi, lekin adminlarga yuborilmaydi.
+    """
+    from django.core.cache import cache
+    from apps.core.telegram_notifier import send_message_sync
+    from apps.users.repositories import _get_all_admin_telegram_ids
+
+    user = request.current_user
+    telegram_id: int = user.telegram_id
+
+    cache_key = f"premium_request:{telegram_id}"
+
+    # Anti-spam: agar so'rov allaqachon yuborilgan bo'lsa — qaytib kel
+    if cache.get(cache_key):
+        logger.info("premium_request:throttled telegram_id=%s", telegram_id)
+        return Response({"ok": True})
+
+    # Cache'ga qo'yib, keyingi 6 soat uchun bloklaymiz
+    cache.set(cache_key, 1, timeout=_PREMIUM_REQUEST_CACHE_TTL)
+
+    # Foydalanuvchi ma'lumotlari
+    first_name = (user.first_name or "").strip()
+    last_name = (user.last_name or "").strip()
+    name = f"{first_name} {last_name}".strip() or "Noma'lum"
+    username = user.username
+
+    if username:
+        user_mention = f"@{username}"
+    else:
+        user_mention = f"ID: {telegram_id}"
+
+    text = (
+        f"⭐ <b>Yangi Premium soʿrovi!</b>\n\n"
+        f"\U0001F464 {name} ({user_mention})\n"
+        f"\U0001F194 {telegram_id}\n\n"
+        f"Foydalanuvchi Premium sotib olmoqchi. "
+        f"Admin panel → Foydalanuvchilar → shu foydalanuvchini topib "
+        f"⭐ Premium berish bosing."
+    )
+
+    admin_ids = _get_all_admin_telegram_ids()
+    if not admin_ids:
+        logger.warning("premium_request: adminlar yo'q, xabar yuborilmadi")
+    else:
+        for admin_id in admin_ids:
+            try:
+                send_message_sync(admin_id, text, with_mini_app_button=False)
+            except Exception:
+                logger.warning(
+                    "premium_request: admin %s ga xabar yuborishda xato",
+                    admin_id,
+                    exc_info=True,
+                )
+        logger.info(
+            "premium_request:sent telegram_id=%s admins=%d",
+            telegram_id,
+            len(admin_ids),
+        )
+
+    return Response({"ok": True})
+
+
 # ── Public: premium info (foydalanuvchi uchun) ────────────────────────────────
 
 @api_view(["GET"])

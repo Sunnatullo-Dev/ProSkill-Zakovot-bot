@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { getPremiumInfo } from "../api/client";
+import { getPremiumInfo, requestPremium } from "../api/client";
 import type { PremiumInfo, PremiumUsageEntry } from "../types";
 
 type PremiumScreenProps = {
@@ -280,22 +280,47 @@ function ActivePremiumView({ info }: { info: PremiumInfo }) {
 // ─── Upgrade (non-premium) view ───────────────────────────────────────────────
 
 function UpgradeView({ info }: { info: PremiumInfo }) {
-  function handleGetPremium() {
-    // Acquisition is manual — admin grants. We open Telegram support link or show instructions.
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const botUsername =
+    (window as Record<string, unknown>).__BOT_USERNAME as string | undefined ??
+    (import.meta.env.VITE_BOT_USERNAME as string | undefined);
+
+  function openBotChat() {
     const tg = window.Telegram?.WebApp;
-    const botUsername = (window as Record<string, unknown>).__BOT_USERNAME as string | undefined
-      ?? import.meta.env.VITE_BOT_USERNAME as string | undefined;
-    if (botUsername && tg?.openTelegramLink) {
+    if (!botUsername) return;
+    if (tg?.openTelegramLink) {
       tg.openTelegramLink(`https://t.me/${botUsername}`);
-    } else if (botUsername && tg?.openLink) {
+    } else if (tg?.openLink) {
       tg.openLink(`https://t.me/${botUsername}`);
-    } else if (botUsername) {
+    } else {
       window.open(`https://t.me/${botUsername}`, "_blank", "noopener");
     }
   }
 
+  async function handleGetPremium() {
+    if (sending || sent) return;
+    setSending(true);
+    setSendError(null);
+
+    const result = await requestPremium();
+
+    setSending(false);
+
+    if (result.ok) {
+      setSent(true);
+      // Bot chatini ham ochamiz (foydalanuvchi bevosita murojaat qilishi uchun)
+      if (botUsername) openBotChat();
+    } else {
+      setSendError(result.error ?? "Xatolik yuz berdi. Qayta urinib ko'ring.");
+      // Xatolik bo'lsa ham bot chatini ochamiz
+      if (botUsername) openBotChat();
+    }
+  }
+
   const hasPrice = info.price > 0;
-  const botUsername = import.meta.env.VITE_BOT_USERNAME as string | undefined;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "0 0 20px" }}>
@@ -359,55 +384,115 @@ function UpgradeView({ info }: { info: PremiumInfo }) {
             padding: "18px",
           }}
         >
-          <div
-            style={{
-              fontSize: "13px",
-              color: "var(--text)",
-              lineHeight: 1.6,
-              marginBottom: "14px",
-            }}
-          >
-            Premium admin tomonidan qo'lda beriladi.
-            {botUsername
-              ? " Premium olish uchun quyidagi tugmani bosing va adminga murojaat qiling."
-              : " Premium olish uchun admin bilan bog'laning."}
-          </div>
-
-          {botUsername ? (
-            <button
-              type="button"
-              onClick={handleGetPremium}
-              style={{
-                width: "100%",
-                padding: "15px 16px",
-                background: "linear-gradient(135deg, #B8860B, #DAA520, #FFD700)",
-                border: "none",
-                borderRadius: "14px",
-                fontSize: "15px",
-                fontWeight: 900,
-                color: "#1a0a00",
-                cursor: "pointer",
-                boxShadow: "0 8px 24px rgba(218,165,32,0.45)",
-                letterSpacing: "0.2px",
-              }}
-            >
-              ⭐ Premium olish uchun murojaat
-            </button>
-          ) : (
+          {/* Success state */}
+          {sent ? (
             <div
               style={{
-                fontSize: "13px",
-                fontWeight: 700,
-                color: "var(--gold)",
-                textAlign: "center",
-                padding: "12px",
-                background: "rgba(218,165,32,0.1)",
-                borderRadius: "12px",
-                border: "1px solid rgba(218,165,32,0.3)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px",
+                padding: "6px 0",
               }}
             >
-              Admin bilan bot orqali bog'laning
+              <div style={{ fontSize: "32px" }}>✅</div>
+              <div
+                style={{
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  color: "var(--text)",
+                  textAlign: "center",
+                  lineHeight: 1.5,
+                }}
+              >
+                So'rovingiz adminga yuborildi!
+              </div>
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "var(--muted)",
+                  textAlign: "center",
+                  lineHeight: 1.5,
+                }}
+              >
+                Tez orada siz bilan bog'lanishadi.
+              </div>
             </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "var(--text)",
+                  lineHeight: 1.6,
+                  marginBottom: "14px",
+                }}
+              >
+                Premium admin tomonidan qo'lda beriladi.
+                {botUsername
+                  ? " Tugmani bosing — so'rovingiz adminga yuboriladi va bot chati ochiladi."
+                  : " Premium olish uchun admin bilan bog'laning."}
+              </div>
+
+              {sendError ? (
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#EF4444",
+                    fontWeight: 600,
+                    marginBottom: "10px",
+                    padding: "8px 12px",
+                    background: "rgba(239,68,68,0.08)",
+                    borderRadius: "10px",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                  }}
+                >
+                  {sendError}
+                </div>
+              ) : null}
+
+              {botUsername ? (
+                <button
+                  type="button"
+                  onClick={() => { void handleGetPremium(); }}
+                  disabled={sending}
+                  style={{
+                    width: "100%",
+                    padding: "15px 16px",
+                    background: sending
+                      ? "rgba(218,165,32,0.5)"
+                      : "linear-gradient(135deg, #B8860B, #DAA520, #FFD700)",
+                    border: "none",
+                    borderRadius: "14px",
+                    fontSize: "15px",
+                    fontWeight: 900,
+                    color: "#1a0a00",
+                    cursor: sending ? "not-allowed" : "pointer",
+                    boxShadow: sending ? "none" : "0 8px 24px rgba(218,165,32,0.45)",
+                    letterSpacing: "0.2px",
+                    opacity: sending ? 0.7 : 1,
+                    transition: "opacity 0.2s, box-shadow 0.2s",
+                  }}
+                >
+                  {sending ? "Yuborilmoqda..." : "⭐ Premium olish uchun murojaat"}
+                </button>
+              ) : (
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "var(--gold)",
+                    textAlign: "center",
+                    padding: "12px",
+                    background: "rgba(218,165,32,0.1)",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(218,165,32,0.3)",
+                  }}
+                >
+                  Admin bilan bot orqali bog'laning
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
