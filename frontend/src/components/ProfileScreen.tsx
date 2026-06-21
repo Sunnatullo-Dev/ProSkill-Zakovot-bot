@@ -68,8 +68,10 @@ type ProfileScreenProps = {
   score: number;
   record: number;
   isAdmin: boolean;
+  isPremium?: boolean;
   onUserUpdate?: (user: AppUser) => void;
   onScoreBonus?: (amount: number) => void;
+  onPremiumOpen?: () => void;
 };
 
 function StatTile({
@@ -146,8 +148,10 @@ export default function ProfileScreen({
   score,
   record,
   isAdmin,
+  isPremium,
   onUserUpdate,
-  onScoreBonus
+  onScoreBonus,
+  onPremiumOpen,
 }: ProfileScreenProps) {
   const { lang, setLang, t } = useLanguage();
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
@@ -421,6 +425,19 @@ export default function ProfileScreen({
                   >
                     {playerName}
                   </span>
+                  {isPremium ? (
+                    <span
+                      title="Premium a'zo"
+                      style={{
+                        fontSize: "16px",
+                        flex: "0 0 auto",
+                        lineHeight: 1,
+                        filter: "drop-shadow(0 0 4px rgba(218,165,32,0.7))",
+                      }}
+                    >
+                      ⭐
+                    </span>
+                  ) : null}
                   {canEdit ? (
                     <button
                       aria-label="Ismni o'zgartirish"
@@ -513,6 +530,39 @@ export default function ProfileScreen({
           </div>
         </div>
       </div>
+
+      {onPremiumOpen ? (
+        <button
+          type="button"
+          onClick={onPremiumOpen}
+          style={{
+            width: "100%",
+            background: isPremium
+              ? "linear-gradient(135deg, rgba(184,134,11,0.18), rgba(218,165,32,0.1))"
+              : "var(--card)",
+            border: isPremium ? "1.5px solid rgba(218,165,32,0.45)" : "1px solid var(--border)",
+            borderRadius: "14px",
+            padding: "12px 16px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            textAlign: "left",
+            marginBottom: "12px",
+          }}
+        >
+          <span style={{ fontSize: "20px" }}>⭐</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+              {isPremium ? "Premium a'zo" : "Zakovat Premium"}
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
+              {isPremium ? "Cheksiz kirish faol" : "Cheksiz o'yin tajribasini oching"}
+            </div>
+          </div>
+          <span style={{ fontSize: "14px", color: "var(--gold)" }}>›</span>
+        </button>
+      ) : null}
 
       <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
         <StatTile label="Joriy ball" value={score} color="var(--gold)" large />

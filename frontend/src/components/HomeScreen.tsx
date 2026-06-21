@@ -11,9 +11,11 @@ type HomeScreenProps = {
   record: number;
   score: number;
   dailyInfo?: DailyInfo | null;
+  showPremiumPaywall?: boolean;
   onStart: (filter: RoundFilter) => void;
   onDailyOpen?: () => void;
   onGameRoomOpen?: () => void;
+  onPremiumOpen?: () => void;
 };
 
 const cardStyle = {
@@ -82,9 +84,11 @@ export default function HomeScreen({
   record,
   score,
   dailyInfo,
+  showPremiumPaywall,
   onStart,
   onDailyOpen,
   onGameRoomOpen,
+  onPremiumOpen,
 }: HomeScreenProps) {
   const t = useT();
   const appSettings = useAppSettings();
@@ -262,7 +266,79 @@ export default function HomeScreen({
         </button>
       ) : null}
 
-      {error ? (
+      {onPremiumOpen ? (
+        <button
+          type="button"
+          onClick={onPremiumOpen}
+          style={{
+            width: "100%",
+            background: "linear-gradient(135deg, rgba(184,134,11,0.18), rgba(218,165,32,0.12))",
+            border: "1.5px solid rgba(218,165,32,0.45)",
+            borderRadius: "16px",
+            padding: "14px 16px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            textAlign: "left",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "22px" }}>⭐</span>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+                Zakovat Premium
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                Cheksiz o'yin, barcha bo'limlar
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "18px", color: "var(--gold)" }}>›</span>
+        </button>
+      ) : null}
+
+      {showPremiumPaywall && onPremiumOpen ? (
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(184,134,11,0.16), rgba(218,165,32,0.1))",
+            border: "1.5px solid rgba(218,165,32,0.5)",
+            borderRadius: "16px",
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+          }}
+        >
+          <span style={{ fontSize: "22px", flex: "0 0 auto" }}>⭐</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)" }}>
+              Limit tugadi
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+              {error || "Bugungi bepul limit tugadi."}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onPremiumOpen}
+            style={{
+              padding: "9px 14px",
+              background: "linear-gradient(135deg, #B8860B, #DAA520)",
+              border: "none",
+              borderRadius: "10px",
+              fontSize: "12px",
+              fontWeight: 800,
+              color: "#1a0a00",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              flex: "0 0 auto",
+            }}
+          >
+            Premium
+          </button>
+        </div>
+      ) : error ? (
         <div
           style={{
             fontSize: "13px",

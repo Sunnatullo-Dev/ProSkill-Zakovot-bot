@@ -5,26 +5,32 @@ import {
   createAdminQuestion,
   deleteAdminQuestion,
   getAdminCategories,
+  getAdminPremiumSettings,
+  getAdminPremiumUsers,
   getAdminQuestions,
   getAdminStats,
   getAdminUserProfile,
   getAdminUsers,
   getReportedQuestions,
+  grantUserPremium,
   renameAdminCategory,
+  revokeUserPremium,
   sendAdminUserMessage,
+  updateAdminPremiumSettings,
   updateAdminQuestion
 } from "../api/client";
 import { parseQuestionsFile } from "../utils/questionFileParser";
 import type { ParsedQuestion, ParseResult } from "../utils/questionFileParser";
 import type {
   AdminCategoryStat,
+  AdminPremiumUser,
   AdminQuestion,
   AdminQuestionsResponse,
   AdminStats,
   AdminUserListItem,
   AdminUserProfile
 } from "../api/client";
-import type { Difficulty, ReportedQuestion } from "../types";
+import type { Difficulty, PremiumSettings, PremiumSections, ReportedQuestion } from "../types";
 import ConfirmDialog from "./ConfirmDialog";
 import SvoyakAdminSection from "./admin/SvoyakAdminSection";
 import SettingsSection from "./admin/SettingsSection";
@@ -45,6 +51,7 @@ import {
   RefreshIcon,
   SearchIcon,
   ShieldIcon,
+  StarIcon,
   SwordsIcon,
   TagIcon,
   TeamIcon,
@@ -58,7 +65,7 @@ type AdminPanelProps = {
   onExitToUser: () => void;
 };
 
-type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels" | "users" | "board";
+type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels" | "users" | "board" | "premium";
 
 type SectionMeta = {
   id: Section;
@@ -131,6 +138,13 @@ const SECTIONS: SectionMeta[] = [
     Icon: BroadcastIcon,
     accent: "#F59E0B",
     subtitle: "Adminlarga murojaat — e'lonlar va xabarlar"
+  },
+  {
+    id: "premium",
+    label: "Premium",
+    Icon: StarIcon,
+    accent: "#DAA520",
+    subtitle: "Premium tizimi — narx, bo'lim limitlari, foydalanuvchilarga berish"
   }
 ];
 
@@ -420,6 +434,7 @@ export default function AdminPanel({ onExitToUser }: AdminPanelProps) {
           {section === "users" ? <UsersSection /> : null}
           {section === "settings" ? <SettingsSection /> : null}
           {section === "board" ? <BoardSection /> : null}
+          {section === "premium" ? <PremiumAdminSection /> : null}
         </div>
       </div>
     </div>
@@ -2797,16 +2812,30 @@ function UserProfileDetail({
   const [msgSending, setMsgSending] = useState(false);
   const [msgStatus, setMsgStatus] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    void getAdminUserProfile(user.telegramId).then((res) => {
-      if (active) {
-        setProfile(res);
-        setLoading(false);
-      }
-    });
-    return () => { active = false; };
+  // Premium holati
+  const [isPremium, setIsPremium] = useState(false);
+  const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
+  const [grantDays, setGrantDays] = useState("30");
+  const [premiumBusy, setPremiumBusy] = useState(false);
+  const [premiumMsg, setPremiumMsg] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    const res = await getAdminUserProfile(user.telegramId);
+    if (res) {
+      setProfile(res);
+      // isPremium va premiumUntil profil javobida keladi
+      const raw = res as AdminUserProfile & { isPremium?: boolean; premiumUntil?: string | null };
+      setIsPremium(Boolean(raw.isPremium));
+      setPremiumUntil(raw.premiumUntil ?? null);
+      setGrantDays("30");
+    }
+    setLoading(false);
   }, [user.telegramId]);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
 
   const displayName = userDisplayName(user);
   const initial = (displayName[0] ?? "?").toUpperCase();
@@ -2872,6 +2901,35 @@ function UserProfileDetail({
       setMsgOpen(false);
     } else {
       setMsgStatus({ kind: "error", text: result.error });
+    }
+  }
+
+  async function handleGrantPremium() {
+    setPremiumBusy(true);
+    setPremiumMsg(null);
+    const days = Number(grantDays) || 30;
+    const result = await grantUserPremium(user.telegramId, days);
+    setPremiumBusy(false);
+    if (result.ok) {
+      setIsPremium(true);
+      setPremiumUntil(result.data.premiumUntil);
+      setPremiumMsg({ kind: "success", text: `Premium berildi — ${days} kun` });
+    } else {
+      setPremiumMsg({ kind: "error", text: result.error });
+    }
+  }
+
+  async function handleRevokePremium() {
+    setPremiumBusy(true);
+    setPremiumMsg(null);
+    const result = await revokeUserPremium(user.telegramId);
+    setPremiumBusy(false);
+    if (result.ok) {
+      setIsPremium(false);
+      setPremiumUntil(null);
+      setPremiumMsg({ kind: "success", text: "Premium olindi" });
+    } else {
+      setPremiumMsg({ kind: "error", text: result.error });
     }
   }
 
@@ -3122,6 +3180,114 @@ function UserProfileDetail({
         ) : null}
       </div>
 
+      {/* ── Premium berish / olish ── */}
+      <div
+        style={{
+          background: isPremium
+            ? "linear-gradient(135deg, rgba(184,134,11,0.16), rgba(218,165,32,0.1))"
+            : "var(--card)",
+          border: isPremium
+            ? "1.5px solid rgba(218,165,32,0.45)"
+            : "1px solid var(--border)",
+          borderRadius: "16px",
+          padding: "16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "22px" }}>⭐</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+              {isPremium ? "Premium a'zo" : "Premium yo'q"}
+            </div>
+            {isPremium && premiumUntil ? (
+              <div style={{ fontSize: "11px", color: "var(--gold)", marginTop: "2px", fontWeight: 700 }}>
+                Tugashi: {new Date(premiumUntil).toLocaleDateString("uz-UZ", { day: "numeric", month: "short", year: "numeric" })}
+              </div>
+            ) : (
+              <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                Bepul foydalanuvchi
+              </div>
+            )}
+          </div>
+        </div>
+
+        {premiumMsg ? (
+          <div
+            style={{
+              fontSize: "12.5px",
+              padding: "9px 12px",
+              borderRadius: "10px",
+              background: premiumMsg.kind === "success" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.08)",
+              border: `1px solid ${premiumMsg.kind === "success" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.3)"}`,
+              color: premiumMsg.kind === "success" ? "var(--success)" : "var(--error)",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span>{premiumMsg.kind === "success" ? "✅" : "⚠️"}</span>
+            {premiumMsg.text}
+          </div>
+        ) : null}
+
+        {/* Grant form */}
+        <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+          <div style={{ flex: 1 }}>
+            <div style={labelStyle}>Muddat (kun)</div>
+            <input
+              type="number"
+              min="1"
+              max="3650"
+              style={inputStyle}
+              value={grantDays}
+              onChange={(e) => setGrantDays(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            disabled={premiumBusy}
+            onClick={() => void handleGrantPremium()}
+            style={{
+              padding: "12px 16px",
+              background: premiumBusy ? "var(--border)" : "linear-gradient(135deg, #B8860B, #DAA520)",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "13px",
+              fontWeight: 800,
+              color: premiumBusy ? "var(--muted)" : "#1a0a00",
+              cursor: premiumBusy ? "not-allowed" : "pointer",
+              whiteSpace: "nowrap",
+              flex: "0 0 auto",
+            }}
+          >
+            {premiumBusy ? "..." : "⭐ Berish"}
+          </button>
+        </div>
+
+        {isPremium ? (
+          <button
+            type="button"
+            disabled={premiumBusy}
+            onClick={() => void handleRevokePremium()}
+            style={{
+              padding: "11px",
+              background: premiumBusy ? "var(--border)" : "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.35)",
+              borderRadius: "12px",
+              fontSize: "13px",
+              fontWeight: 700,
+              color: premiumBusy ? "var(--muted)" : "#EF4444",
+              cursor: premiumBusy ? "not-allowed" : "pointer",
+            }}
+          >
+            Premiumni olish (bekor qilish)
+          </button>
+        ) : null}
+      </div>
+
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {[1, 2, 3].map((id) => (
@@ -3260,6 +3426,383 @@ function UserProfileDetail({
       ) : (
         <EmptyState icon={<UserIcon size={36} />} text="Profil ma'lumotlarini olib bo'lmadi" />
       )}
+    </div>
+  );
+}
+
+// ─── Premium Admin Section ────────────────────────────────────────────────────
+
+const PREMIUM_SECTION_LABELS: Record<string, string> = {
+  round: "Oddiy o'yin",
+  daily: "Kunlik topshiriq",
+  battle: "Jamoaviy bellashuv",
+  svoyak: "Svoyak",
+  gameroom: "O'yin xonasi",
+};
+const PREMIUM_SECTION_KEYS = ["round", "daily", "battle", "svoyak", "gameroom"] as const;
+
+function defaultSections(): PremiumSections {
+  const entry = { limited: false, free_limit: 0 };
+  return {
+    round: { ...entry },
+    daily: { ...entry },
+    battle: { ...entry },
+    svoyak: { ...entry },
+    gameroom: { ...entry },
+  };
+}
+
+function PremiumAdminSection() {
+  const [settings, setSettings] = useState<PremiumSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  // Local edit state
+  const [enabled, setEnabled] = useState(false);
+  const [price, setPrice] = useState("0");
+  const [currency, setCurrency] = useState("so'm");
+  const [durationDays, setDurationDays] = useState("30");
+  const [benefits, setBenefits] = useState("");
+  const [sections, setSections] = useState<PremiumSections>(defaultSections());
+
+  // Premium users list
+  const [premiumUsers, setPremiumUsers] = useState<AdminPremiumUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setSaveMsg(null);
+    const s = await getAdminPremiumSettings();
+    if (s) {
+      setSettings(s);
+      setEnabled(s.enabled);
+      setPrice(String(s.price));
+      setCurrency(s.currency);
+      setDurationDays(String(s.durationDays));
+      setBenefits(s.benefits);
+      setSections(s.sections ?? defaultSections());
+    }
+    setLoading(false);
+
+    // Premium users
+    setLoadingUsers(true);
+    const users = await getAdminPremiumUsers();
+    setPremiumUsers(users);
+    setLoadingUsers(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  function updateSection(key: string, field: "limited" | "free_limit", value: boolean | number) {
+    setSections((prev) => ({
+      ...prev,
+      [key]: { ...prev[key as keyof PremiumSections], [field]: value },
+    }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveMsg(null);
+    const result = await updateAdminPremiumSettings({
+      enabled,
+      price: Number(price) || 0,
+      currency: currency.trim() || "so'm",
+      durationDays: Number(durationDays) || 30,
+      benefits,
+      sectionLimits: sections,
+    });
+    setSaving(false);
+    if (result.ok) {
+      setSettings(result.data);
+      setSaveMsg({ kind: "success", text: "Saqlandi!" });
+    } else {
+      setSaveMsg({ kind: "error", text: result.error });
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {[1, 2, 3].map((id) => (
+          <div
+            key={id}
+            style={{ height: "80px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+      {/* Master toggle */}
+      <Card accent={enabled ? "#DAA520" : undefined}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+              Premium tizimi
+            </div>
+            <div style={{ fontSize: "11.5px", color: "var(--muted)", marginTop: "3px" }}>
+              {enabled ? "Yoqilgan — limitlar ishlaydi" : "O'chirilgan — hamma erkin kiradi"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEnabled((v) => !v)}
+            style={{
+              width: "50px",
+              height: "28px",
+              borderRadius: "999px",
+              background: enabled
+                ? "linear-gradient(135deg, #B8860B, #DAA520)"
+                : "var(--border)",
+              border: "none",
+              cursor: "pointer",
+              position: "relative",
+              transition: "background 0.2s",
+              flex: "0 0 auto",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: "3px",
+                left: enabled ? "25px" : "3px",
+                width: "22px",
+                height: "22px",
+                borderRadius: "50%",
+                background: "white",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+                transition: "left 0.2s",
+              }}
+            />
+          </button>
+        </div>
+      </Card>
+
+      {/* Narx, valyuta, muddat */}
+      <Card>
+        <div style={{ ...sectionHeaderStyle, marginBottom: "14px" }}>
+          <StarIcon size={16} />
+          Narx va muddat
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            <div>
+              <div style={labelStyle}>Narx</div>
+              <input
+                style={inputStyle}
+                type="number"
+                min="0"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
+            </div>
+            <div>
+              <div style={labelStyle}>Valyuta</div>
+              <input
+                style={inputStyle}
+                type="text"
+                placeholder="so'm"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>Muddat (kun)</div>
+            <input
+              style={inputStyle}
+              type="number"
+              min="1"
+              max="3650"
+              value={durationDays}
+              onChange={(e) => setDurationDays(e.target.value)}
+            />
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "5px" }}>
+              Grant berishda default muddat sifatida ishlatiladi
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Benefits */}
+      <Card>
+        <div style={{ ...sectionHeaderStyle, marginBottom: "10px" }}>
+          ✨ Foydalari (UI uchun)
+        </div>
+        <textarea
+          rows={4}
+          style={{ ...inputStyle, resize: "vertical" }}
+          placeholder="Har qator — bitta foyda. Masalan: Cheksiz o'yin&#10;Barcha bo'limlar"
+          value={benefits}
+          onChange={(e) => setBenefits(e.target.value)}
+        />
+        <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "5px" }}>
+          Har bir satr Premium ekranida alohida imtiyoz sifatida ko'rsatiladi
+        </div>
+      </Card>
+
+      {/* Section limits */}
+      <Card>
+        <div style={{ ...sectionHeaderStyle, marginBottom: "4px" }}>
+          🎯 Bo'lim cheklovlari
+        </div>
+        <div style={{ fontSize: "11.5px", color: "var(--muted)", marginBottom: "14px", lineHeight: 1.5 }}>
+          Faqat "Cheklansin" yoqilgan bo'limda limit ishlaydi.
+          Bepul limit = 0 → o'sha bo'lim bepul foydalanuvchilarga to'liq yopiladi.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {PREMIUM_SECTION_KEYS.map((key) => {
+            const sec = sections[key];
+            return (
+              <div
+                key={key}
+                style={{
+                  background: "var(--surface)",
+                  border: `1px solid ${sec.limited ? "rgba(218,165,32,0.4)" : "var(--border)"}`,
+                  borderRadius: "12px",
+                  padding: "12px 14px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: sec.limited ? "10px" : 0 }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)" }}>
+                    {PREMIUM_SECTION_LABELS[key]}
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "11px", color: sec.limited ? "var(--gold)" : "var(--muted)", fontWeight: 600 }}>
+                      {sec.limited ? "Cheklansin" : "Cheksiz"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updateSection(key, "limited", !sec.limited)}
+                      style={{
+                        width: "40px",
+                        height: "22px",
+                        borderRadius: "999px",
+                        background: sec.limited ? "linear-gradient(135deg, #B8860B, #DAA520)" : "var(--border)",
+                        border: "none",
+                        cursor: "pointer",
+                        position: "relative",
+                        transition: "background 0.2s",
+                        flex: "0 0 auto",
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "2px",
+                          left: sec.limited ? "20px" : "2px",
+                          width: "18px",
+                          height: "18px",
+                          borderRadius: "50%",
+                          background: "white",
+                          boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                          transition: "left 0.2s",
+                        }}
+                      />
+                    </button>
+                  </div>
+                </div>
+                {sec.limited ? (
+                  <div>
+                    <div style={{ ...labelStyle, marginBottom: "5px" }}>Kunlik bepul limit</div>
+                    <input
+                      type="number"
+                      min="0"
+                      style={{ ...inputStyle, maxWidth: "120px" }}
+                      value={sec.free_limit}
+                      onChange={(e) => updateSection(key, "free_limit", Number(e.target.value) || 0)}
+                    />
+                    <div style={{ fontSize: "10.5px", color: "var(--muted)", marginTop: "4px" }}>
+                      0 = bu bo'lim bepul foydalanuvchilarga yopiq
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Save button */}
+      {saveMsg ? (
+        <div
+          style={{
+            fontSize: "13px",
+            padding: "10px 12px",
+            borderRadius: "10px",
+            background: saveMsg.kind === "success" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.08)",
+            border: `1px solid ${saveMsg.kind === "success" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.3)"}`,
+            color: saveMsg.kind === "success" ? "var(--success)" : "var(--error)",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <span>{saveMsg.kind === "success" ? "✅" : "⚠️"}</span>
+          {saveMsg.text}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        disabled={saving}
+        style={primaryButton(saving, "#DAA520")}
+        onClick={() => void handleSave()}
+      >
+        {saving ? "Saqlanmoqda..." : "⭐ Saqlash"}
+      </button>
+
+      {/* Premium users list */}
+      <div>
+        <div style={{ ...sectionHeaderStyle, marginBottom: "10px" }}>
+          <UserIcon size={16} />
+          Aktiv premium foydalanuvchilar ({loadingUsers ? "…" : premiumUsers.length})
+        </div>
+        {loadingUsers ? (
+          <p style={{ fontSize: "12px", color: "var(--muted)" }}>Yuklanmoqda...</p>
+        ) : premiumUsers.length === 0 ? (
+          <EmptyState icon={<StarIcon size={28} />} text="Hozirda aktiv premium foydalanuvchi yo'q" />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {premiumUsers.map((pu) => {
+              const name = pu.firstName ?? (pu.username ? `@${pu.username}` : `#${pu.telegramId}`);
+              const until = new Date(pu.premiumUntil).toLocaleDateString("uz-UZ", { day: "numeric", month: "short", year: "numeric" });
+              return (
+                <div
+                  key={pu.telegramId}
+                  style={{
+                    background: "var(--card)",
+                    border: "1px solid rgba(218,165,32,0.3)",
+                    borderRadius: "12px",
+                    padding: "11px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <span style={{ fontSize: "18px" }}>⭐</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {name}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                      Tugashi: {until}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--gold)", fontWeight: 700 }}>
+                    ID: {pu.telegramId}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -14,6 +14,9 @@ import type {
   LeaderboardData,
   LeaderboardUser,
   PendingChallenge,
+  PremiumInfo,
+  PremiumSettings,
+  PremiumSettingsPatch,
   Question,
   ReferralData,
   ReportedQuestion,
@@ -989,6 +992,61 @@ export async function sendAdminUserMessage(
   return requestResult<{ ok: boolean }>(`/admin/users/${telegramId}/message`, {
     method: "POST",
     body: { text },
+  });
+}
+
+// ─── Premium ──────────────────────────────────────────────────────────────────
+
+/** Joriy foydalanuvchi uchun premium holati, narx, bo'lim limitlari va foydalanish. */
+export async function getPremiumInfo(): Promise<PremiumInfo | null> {
+  return request<PremiumInfo>("/premium/info");
+}
+
+/** Admin: premium global sozlamalarini olish. */
+export async function getAdminPremiumSettings(): Promise<PremiumSettings | null> {
+  return request<PremiumSettings>("/admin/premium/settings");
+}
+
+/** Admin: premium sozlamalarini yangilash (PATCH). */
+export async function updateAdminPremiumSettings(
+  patch: PremiumSettingsPatch
+): Promise<ApiResult<PremiumSettings>> {
+  return requestResult<PremiumSettings>("/admin/premium/settings", {
+    method: "PATCH",
+    body: patch,
+  });
+}
+
+export type AdminPremiumUser = {
+  telegramId: number;
+  firstName: string | null;
+  username: string | null;
+  premiumUntil: string;
+};
+
+/** Admin: hozirda aktiv premium foydalanuvchilar ro'yxati. */
+export async function getAdminPremiumUsers(): Promise<AdminPremiumUser[]> {
+  const res = await request<{ items: AdminPremiumUser[]; total: number }>("/admin/premium/users");
+  return res?.items ?? [];
+}
+
+/** Admin: foydalanuvchiga premium berish. */
+export async function grantUserPremium(
+  telegramId: number,
+  durationDays?: number
+): Promise<ApiResult<{ ok: boolean; telegramId: number; premiumUntil: string; durationDays: number }>> {
+  return requestResult(`/admin/users/${telegramId}/premium`, {
+    method: "POST",
+    body: durationDays !== undefined ? { durationDays } : {},
+  });
+}
+
+/** Admin: foydalanuvchidan premiumni olish. */
+export async function revokeUserPremium(
+  telegramId: number
+): Promise<ApiResult<{ ok: boolean; telegramId: number }>> {
+  return requestResult(`/admin/users/${telegramId}/premium`, {
+    method: "DELETE",
   });
 }
 

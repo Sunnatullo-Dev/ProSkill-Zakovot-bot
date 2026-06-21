@@ -4,6 +4,7 @@ import {
   checkSubscriptions,
   getDailyToday,
   getAnswerTicket,
+  getPremiumInfo,
   getRound,
   getTopUsers,
   login,
@@ -31,6 +32,7 @@ import ProfileScreen from "./components/ProfileScreen";
 import SvoyakRouter from "./svoyak/SvoyakRouter";
 import SvoyakDemoScreen from "./svoyak/SvoyakDemoScreen";
 import GameRoomRouter from "./gameroom/GameRoomRouter";
+import PremiumScreen from "./components/PremiumScreen";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
 import { useLanguage } from "./i18n/LanguageContext";
@@ -192,6 +194,8 @@ export default function App() {
   // Backend tasdiqlagan admin holati — ADMIN_TELEGRAM_IDS env'iga
   // qo'shilgan foydalanuvchilar uchun BottomNav'da Admin tugmasi chiqadi.
   const [isAdminUser, setIsAdminUser] = useState(false);
+  // Premium holati — login'dan yoki getPremiumInfo'dan olinadi.
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
   // Bootstrap fakat bir martagina ishlasin — `lang` o'zgarganda qayta
   // login qilib foydalanuvchini Profile'dan Home'ga otib yubormasin.
   const bootstrapDoneRef = useRef(false);
@@ -482,6 +486,8 @@ export default function App() {
         await loadTopUsers();
         // Daily challenge info'ni background'da yuklash (bloklamaymiz)
         void getDailyToday().then((info) => { if (info) setDailyInfo(info); });
+        // Premium holati — background'da yuklaymiz (bloklamaymiz)
+        void getPremiumInfo().then((pInfo) => { if (pInfo) setIsPremiumUser(pInfo.isPremium); });
         // Majburiy kanal obuna tekshiruvi — loading tugamasin (await).
         // Foydalanuvchi subscribe bo'lmay turib o'ynay olmasligi uchun
         // ekran o'tishdan OLDIN tekshiramiz. Admin uchun o'tkazib yuboramiz.
@@ -613,11 +619,15 @@ export default function App() {
     return undefined;
   }, [handleBack, screen]);
 
+  // Premium paywall state — 403 "Premium oling" xatosi kelib qolganda true
+  const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
+
   const startGame = useCallback(
     async (filter: RoundFilter) => {
       hapticTap();
       setIsStarting(true);
       setErrorMessage("");
+      setShowPremiumPaywall(false);
 
       try {
         const questions = await getRound(filter);
@@ -647,6 +657,12 @@ export default function App() {
         fetchTicketFor(questions[0].id);
       } catch (error) {
         console.error("Start game failed", error);
+        // 403 bilan kelgan "Premium oling" xatosi — paywall ko'rsatamiz
+        const msg = error instanceof Error ? error.message : String(error ?? "");
+        if (msg.toLowerCase().includes("premium")) {
+          setShowPremiumPaywall(true);
+          setErrorMessage(msg);
+        }
         setScreen("home");
       } finally {
         setIsStarting(false);
@@ -1091,9 +1107,11 @@ export default function App() {
             record={recordScore}
             score={score}
             dailyInfo={dailyInfo}
-            onStart={startGame}
+            showPremiumPaywall={showPremiumPaywall}
+            onStart={(filter) => { setShowPremiumPaywall(false); void startGame(filter); }}
             onDailyOpen={() => setScreen("daily")}
             onGameRoomOpen={() => setScreen("gameroom")}
+            onPremiumOpen={() => { setShowPremiumPaywall(false); setScreen("premium"); }}
           />
         ) : null}
 
@@ -1199,6 +1217,7 @@ export default function App() {
         {screen === "profile" ? (
           <ProfileScreen
             isAdmin={isAdminUser}
+            isPremium={isPremiumUser}
             playerName={playerName}
             record={recordScore}
             score={score}
@@ -1210,11 +1229,16 @@ export default function App() {
               setUser(updated);
               setScore(updated.score);
             }}
+            onPremiumOpen={() => setScreen("premium")}
           />
         ) : null}
 
         {screen === "admin" && isAdminUser ? (
           <AdminPanel onExitToUser={() => setScreen("home")} />
+        ) : null}
+
+        {screen === "premium" ? (
+          <PremiumScreen onBack={() => setScreen("home")} />
         ) : null}
 
         {showBottomNav ? (

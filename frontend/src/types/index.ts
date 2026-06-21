@@ -168,7 +168,65 @@ export type Screen =
   | "battle"
   | "svoyak"
   | "daily"
-  | "gameroom";
+  | "gameroom"
+  | "premium";
+
+// ─── Premium ──────────────────────────────────────────────────────────────────
+
+export type PremiumSectionConfig = {
+  limited: boolean;
+  free_limit: number;
+};
+
+export type PremiumSections = {
+  round: PremiumSectionConfig;
+  daily: PremiumSectionConfig;
+  battle: PremiumSectionConfig;
+  svoyak: PremiumSectionConfig;
+  gameroom: PremiumSectionConfig;
+};
+
+export type PremiumUsageEntry = {
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  limited: boolean;
+};
+
+export type PremiumUsage = {
+  round: PremiumUsageEntry;
+  daily: PremiumUsageEntry;
+  battle: PremiumUsageEntry;
+  svoyak: PremiumUsageEntry;
+  gameroom: PremiumUsageEntry;
+};
+
+/** GET /api/premium/info response */
+export type PremiumInfo = {
+  enabled: boolean;
+  price: number;
+  currency: string;
+  durationDays: number;
+  benefits: string;
+  sections: PremiumSections;
+  isPremium: boolean;
+  premiumUntil: string | null;
+  usage: PremiumUsage;
+};
+
+/** GET/PATCH /api/admin/premium/settings body/response */
+export type PremiumSettings = {
+  enabled: boolean;
+  price: number;
+  currency: string;
+  durationDays: number;
+  benefits: string;
+  sections: PremiumSections;
+};
+
+export type PremiumSettingsPatch = Partial<Omit<PremiumSettings, "sections">> & {
+  sectionLimits?: Partial<PremiumSections>;
+};
 
 export type NavTab = "home" | "leaderboard" | "svoyak" | "team" | "profile" | "admin";
 
