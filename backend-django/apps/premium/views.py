@@ -246,6 +246,16 @@ def admin_premium_settings(request):
         obj.benefits = benefits.strip()
         updated_fields.append("benefits")
 
+    if "cardNumber" in body:
+        cn = body["cardNumber"] if isinstance(body["cardNumber"], str) else ""
+        obj.card_number = cn.strip()
+        updated_fields.append("card_number")
+
+    if "cardHolder" in body:
+        ch = body["cardHolder"] if isinstance(body["cardHolder"], str) else ""
+        obj.card_holder = ch.strip()
+        updated_fields.append("card_holder")
+
     if "paymentDetails" in body:
         pd = body["paymentDetails"] if isinstance(body["paymentDetails"], str) else ""
         obj.payment_details = pd.strip()
@@ -833,7 +843,9 @@ def premium_info(request):
         logger.exception("premium_info: PremiumSettings xato — minimal javob qaytariladi")
         data = {
             "enabled": False, "price": 0, "currency": "so'm",
-            "durationDays": 30, "benefits": "", "paymentDetails": "", "sections": {},
+            "durationDays": 30, "benefits": "",
+            "cardNumber": "", "cardHolder": "", "paymentDetails": "",
+            "sections": {},
         }
 
     try:

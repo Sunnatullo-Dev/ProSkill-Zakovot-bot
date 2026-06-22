@@ -216,7 +216,11 @@ export type PremiumInfo = {
   currency: string;
   durationDays: number;
   benefits: string;
-  /** To'lov ma'lumotlari — karta/Payme raqami, foydalanuvchiga ko'rsatiladi */
+  /** Karta raqami — foydalanuvchiga nusxalab olish uchun ko'rsatiladi */
+  cardNumber: string;
+  /** Karta egasi F.I.O */
+  cardHolder: string;
+  /** Qo'shimcha to'lov izohi (ixtiyoriy: Payme/Click link va h.k.) */
   paymentDetails: string;
   sections: PremiumSections;
   isPremium: boolean;
@@ -232,6 +236,8 @@ export type PremiumSettings = {
   currency: string;
   durationDays: number;
   benefits: string;
+  cardNumber: string;
+  cardHolder: string;
   paymentDetails: string;
   sections: PremiumSections;
 };

@@ -67,8 +67,22 @@ class PremiumSettings(models.Model):
     # Foydalanuvchiga ko'rinadigan foyda matni (premium ekrani uchun)
     benefits = models.TextField(blank=True, default="")
 
-    # To'lov yo'riqnomalari (karta raqami, Payme link va h.k.) — foydalanuvchiga
-    # ko'rsatiladi, qayerga to'lash kerakligini tushuntiradi.
+    # Strukturali to'lov ma'lumotlari — karta raqami va egasi (admin kiritadi,
+    # foydalanuvchi nusxalab oladi).
+    card_number = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="Karta raqami (masalan: 8600 1234 5678 9012). Foydalanuvchiga ko'rsatiladi.",
+    )
+    card_holder = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Karta egasi F.I.O (masalan: Aliyev Vali). Foydalanuvchiga ko'rsatiladi.",
+    )
+
+    # To'lov yo'riqnomalari — ixtiyoriy qo'shimcha izoh (Payme/Click link va h.k.)
     payment_details = models.TextField(
         blank=True,
         default="",
@@ -151,6 +165,8 @@ class PremiumSettings(models.Model):
             "currency": self.currency,
             "durationDays": self.duration_days,
             "benefits": self.benefits,
+            "cardNumber": self.card_number,
+            "cardHolder": self.card_holder,
             "paymentDetails": self.payment_details,
             "sections": sections,
         }

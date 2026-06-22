@@ -4191,6 +4191,8 @@ function PremiumSettingsTab() {
   const [currency, setCurrency] = useState("so'm");
   const [durationDays, setDurationDays] = useState("30");
   const [benefits, setBenefits] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardHolder, setCardHolder] = useState("");
   const [paymentDetails, setPaymentDetails] = useState("");
   const [sections, setSections] = useState<PremiumSections>(defaultSections());
 
@@ -4204,6 +4206,8 @@ function PremiumSettingsTab() {
       setCurrency(s.currency);
       setDurationDays(String(s.durationDays));
       setBenefits(s.benefits);
+      setCardNumber(s.cardNumber ?? "");
+      setCardHolder(s.cardHolder ?? "");
       setPaymentDetails(s.paymentDetails ?? "");
       setSections(s.sections ?? defaultSections());
     }
@@ -4228,6 +4232,8 @@ function PremiumSettingsTab() {
       currency: currency.trim() || "so'm",
       durationDays: Number(durationDays) || 30,
       benefits,
+      cardNumber,
+      cardHolder,
       paymentDetails,
       sectionLimits: sections,
     });
@@ -4323,18 +4329,46 @@ function PremiumSettingsTab() {
 
       {/* To'lov ma'lumotlari */}
       <Card>
-        <div style={{ ...sectionHeaderStyle, marginBottom: "10px" }}>
+        <div style={{ ...sectionHeaderStyle, marginBottom: "14px" }}>
           💳 To'lov ma'lumotlari
         </div>
-        <textarea
-          rows={3}
-          style={{ ...inputStyle, resize: "vertical" }}
-          placeholder="Masalan: 8600 1234 5678 9012 (Uzcard)&#10;Payme: +998901234567"
-          value={paymentDetails}
-          onChange={(e) => setPaymentDetails(e.target.value)}
-        />
-        <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "5px" }}>
-          Foydalanuvchiga Premium ekranida ko'rsatiladi — karta/Payme raqami
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div>
+            <div style={labelStyle}>Karta raqami</div>
+            <input
+              style={inputStyle}
+              type="text"
+              placeholder="8600 1234 5678 9012"
+              value={cardNumber}
+              onChange={(e) => setCardNumber(e.target.value)}
+            />
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "5px" }}>
+              Foydalanuvchi bu raqamni nusxalab oladi — aniq kiriting
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>Karta egasi (F.I.O)</div>
+            <input
+              style={inputStyle}
+              type="text"
+              placeholder="Aliyev Vali"
+              value={cardHolder}
+              onChange={(e) => setCardHolder(e.target.value)}
+            />
+          </div>
+          <div>
+            <div style={labelStyle}>Qo'shimcha izoh (ixtiyoriy)</div>
+            <textarea
+              rows={2}
+              style={{ ...inputStyle, resize: "vertical" }}
+              placeholder="Masalan: Payme: +998901234567 yoki boshqa yo'riqnoma"
+              value={paymentDetails}
+              onChange={(e) => setPaymentDetails(e.target.value)}
+            />
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "5px" }}>
+              Karta raqami ostida kichik izoh sifatida ko'rsatiladi (bo'sh qoldirsa yashiriladi)
+            </div>
+          </div>
         </div>
       </Card>
 

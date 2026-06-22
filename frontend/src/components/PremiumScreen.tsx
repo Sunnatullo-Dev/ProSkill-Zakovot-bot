@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { getPremiumInfo, requestPremium } from "../api/client";
 import type { PremiumInfo, PremiumUsageEntry } from "../types";
@@ -376,42 +376,8 @@ function UpgradeView({ info, onRefresh }: { info: PremiumInfo; onRefresh: () => 
             gap: "14px",
           }}
         >
-          {/* Payment details */}
-          {info.paymentDetails ? (
-            <div
-              style={{
-                background: "rgba(218,165,32,0.12)",
-                border: "1px solid rgba(218,165,32,0.3)",
-                borderRadius: "12px",
-                padding: "12px 14px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 800,
-                  color: "var(--gold)",
-                  letterSpacing: "1.2px",
-                  textTransform: "uppercase",
-                  marginBottom: "6px",
-                }}
-              >
-                To'lov ma'lumotlari
-              </div>
-              <div
-                style={{
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  color: "var(--text)",
-                  lineHeight: 1.6,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                {info.paymentDetails}
-              </div>
-            </div>
-          ) : null}
+          {/* Payment block */}
+          <PaymentBlock info={info} />
 
           {/* Pending state */}
           {isPending && !uploadSuccess ? (
@@ -533,6 +499,139 @@ function UpgradeView({ info, onRefresh }: { info: PremiumInfo; onRefresh: () => 
 
       {/* Usage */}
       <UsageBlock info={info} />
+    </div>
+  );
+}
+
+// ─── Payment block ────────────────────────────────────────────────────────────
+
+function PaymentBlock({ info }: { info: PremiumInfo }) {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCopy = useCallback(() => {
+    void navigator.clipboard.writeText(info.cardNumber).then(() => {
+      setCopied(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
+    });
+  }, [info.cardNumber]);
+
+  // Card number yo'q — "ma'lumot kiritilmagan" holat
+  if (!info.cardNumber) {
+    return (
+      <div
+        style={{
+          background: "rgba(239,68,68,0.07)",
+          border: "1px solid rgba(239,68,68,0.2)",
+          borderRadius: "12px",
+          padding: "14px",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "10px",
+        }}
+      >
+        <span style={{ fontSize: "18px", flex: "0 0 auto", marginTop: "1px" }}>💳</span>
+        <div style={{ fontSize: "13px", color: "var(--muted)", lineHeight: 1.55, fontWeight: 600 }}>
+          To'lov ma'lumotlari hali kiritilmagan. Iltimos admin bilan bog'laning.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        background: "rgba(218,165,32,0.12)",
+        border: "1.5px solid rgba(218,165,32,0.4)",
+        borderRadius: "14px",
+        padding: "14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+      }}
+    >
+      {/* Label */}
+      <div
+        style={{
+          fontSize: "10px",
+          fontWeight: 800,
+          color: "var(--gold)",
+          letterSpacing: "1.2px",
+          textTransform: "uppercase",
+        }}
+      >
+        💳 To'lov uchun karta
+      </div>
+
+      {/* Card number + copy button */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "10px",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "'Courier New', Courier, monospace",
+            fontSize: "18px",
+            fontWeight: 900,
+            color: "var(--text)",
+            letterSpacing: "2px",
+            wordBreak: "break-all",
+            flex: 1,
+          }}
+        >
+          {info.cardNumber}
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          style={{
+            padding: "7px 12px",
+            background: copied
+              ? "rgba(34,197,94,0.18)"
+              : "rgba(218,165,32,0.22)",
+            border: `1px solid ${copied ? "rgba(34,197,94,0.4)" : "rgba(218,165,32,0.4)"}`,
+            borderRadius: "9px",
+            fontSize: "12px",
+            fontWeight: 800,
+            color: copied ? "#22C55E" : "var(--gold)",
+            cursor: "pointer",
+            flex: "0 0 auto",
+            transition: "all 0.15s",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {copied ? "✅ Nusxalandi!" : "📋 Nusxalash"}
+        </button>
+      </div>
+
+      {/* Card holder */}
+      {info.cardHolder ? (
+        <div style={{ fontSize: "13px", color: "var(--muted)", fontWeight: 700 }}>
+          Egasi: <span style={{ color: "var(--text)" }}>{info.cardHolder}</span>
+        </div>
+      ) : null}
+
+      {/* Optional extra note */}
+      {info.paymentDetails ? (
+        <div
+          style={{
+            fontSize: "12.5px",
+            color: "var(--muted)",
+            lineHeight: 1.5,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            borderTop: "1px solid rgba(218,165,32,0.2)",
+            paddingTop: "8px",
+          }}
+        >
+          {info.paymentDetails}
+        </div>
+      ) : null}
     </div>
   );
 }
