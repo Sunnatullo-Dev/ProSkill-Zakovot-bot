@@ -317,6 +317,21 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 WHITENOISE_ROOT = BASE_DIR.parent / "frontend" / "dist"
 WHITENOISE_INDEX_FILE = "index.html"
 
+
+def _whitenoise_headers(headers, path, url):
+    """index.html'ni HECH QACHON keshlamaslik — Telegram/brauzer doim eng
+    so'nggi mini-app versiyasini olsin. Hashlangan JS/CSS (index-XXXX.js)
+    abadiy keshlanadi, lekin index.html ularning yangi nomlariga ishora
+    qiladi. Aks holda foydalanuvchi eski versiyani ko'rib qoladi."""
+    if path.endswith(".html") or url in ("", "/", "/index.html"):
+        headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        headers["Pragma"] = "no-cache"
+        headers["Expires"] = "0"
+
+
+# WhiteNoise "/" uchun index.html'ni shu funksiya bilan no-cache qiladi.
+WHITENOISE_ADD_HEADERS_FUNCTION = _whitenoise_headers
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 TIME_ZONE = "UTC"

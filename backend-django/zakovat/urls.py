@@ -20,7 +20,15 @@ def _spa_response():
     if root:
         index = os.path.join(str(root), "index.html")
         if os.path.exists(index):
-            return FileResponse(open(index, "rb"), content_type="text/html")
+            resp = FileResponse(open(index, "rb"), content_type="text/html")
+            # index.html HECH QACHON keshlanmasin — Telegram/brauzer doim eng
+            # so'nggi versiyani olsin. (Ichidagi hashlangan JS/CSS abadiy
+            # keshlansa ham, index.html ularning YANGI nomlariga ishora qiladi.)
+            # Aks holda foydalanuvchi eski versiyani ko'rib qoladi.
+            resp["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            resp["Pragma"] = "no-cache"
+            resp["Expires"] = "0"
+            return resp
     return JsonResponse({"ok": True, "name": "Zakovat API (Django)"})
 
 
