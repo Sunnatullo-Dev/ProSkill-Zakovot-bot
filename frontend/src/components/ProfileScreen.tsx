@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import {
   checkAchievements,
@@ -163,6 +164,7 @@ export default function ProfileScreen({
   const [referralCount, setReferralCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(playerName);
   const [savingName, setSavingName] = useState(false);
@@ -848,54 +850,66 @@ export default function ProfileScreen({
         </div>
       ) : null}
 
-      {history.length > 0 ? (
+      <button
+        type="button"
+        style={{
+          width: "100%",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "16px",
+          padding: "14px 16px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          textAlign: "left",
+          marginTop: "12px",
+        }}
+        onClick={() => {
+          hapticTap();
+          setHistoryOpen(true);
+        }}
+      >
         <div
           style={{
-            background: "var(--card)",
-            border: "1px solid var(--border)",
-            borderRadius: "20px",
-            padding: "16px",
+            width: "40px",
+            height: "40px",
+            borderRadius: "12px",
+            background: "rgba(77,166,255,0.14)",
+            color: "var(--accent)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: "0 0 auto",
+            fontSize: "20px",
           }}
         >
-          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--muted)", letterSpacing: "1px", marginBottom: "12px" }}>
-            O'YIN TARIXI
+          🎮
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+            O'yinlar tarixi
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {history.map((item) => {
-              const d = new Date(item.createdAt);
-              const label = d.toLocaleDateString("uz-UZ", { day: "numeric", month: "short" });
-              const time = d.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
-              return (
-                <div
-                  key={item.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 12px",
-                    background: "var(--bg)",
-                    borderRadius: "12px",
-                    border: "1px solid var(--border)"
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: "12px", color: "var(--muted)" }}>{label} · {time}</div>
-                    <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text)", marginTop: "2px" }}>
-                      {item.correctCount}/{item.totalCount} to'g'ri · {item.accuracy}%
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "18px", fontWeight: 900, color: "var(--gold)" }}>
-                      +{item.roundScore}
-                    </div>
-                    <div style={{ fontSize: "10px", color: "var(--muted)", letterSpacing: "1px" }}>BALL</div>
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+            {isLoading
+              ? "Yuklanmoqda..."
+              : history.length > 0
+              ? `${history.length} ta o'yin`
+              : "Hali o'yin o'ynalmagan"}
           </div>
         </div>
-      ) : null}
+        <span style={{ fontSize: "16px", color: "var(--muted)" }}>›</span>
+      </button>
+
+      {historyOpen
+        ? createPortal(
+            <GameHistoryOverlay
+              history={history}
+              onClose={() => setHistoryOpen(false)}
+            />,
+            document.body
+          )
+        : null}
 
       {shareOpen ? (
         <ShareSheet
@@ -907,6 +921,211 @@ export default function ProfileScreen({
       {unlocks.length > 0 ? (
         <AchievementToast unlocks={unlocks} onClose={() => setUnlocks([])} />
       ) : null}
+    </div>
+  );
+}
+
+function GameHistoryOverlay({
+  history,
+  onClose,
+}: {
+  history: GameHistoryItem[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "var(--bg)",
+        zIndex: 1200,
+        display: "flex",
+        flexDirection: "column",
+        maxWidth: "430px",
+        margin: "0 auto",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "16px 20px",
+          borderBottom: "1px solid var(--border)",
+          flex: "0 0 auto",
+          paddingTop: "calc(16px + env(safe-area-inset-top))",
+        }}
+      >
+        <button
+          type="button"
+          aria-label="Orqaga"
+          style={{
+            width: "36px",
+            height: "36px",
+            borderRadius: "10px",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            color: "var(--text)",
+            fontSize: "18px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: "0 0 auto",
+          }}
+          onClick={onClose}
+        >
+          ‹
+        </button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: "17px", fontWeight: 900, color: "var(--text)" }}>
+            O'yinlar tarixi
+          </div>
+          {history.length > 0 ? (
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
+              {history.length} ta o'yin
+            </div>
+          ) : null}
+        </div>
+        <span style={{ fontSize: "22px", flex: "0 0 auto" }}>🎮</span>
+      </div>
+
+      {/* Scrollable list */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px 20px",
+          paddingBottom: "calc(24px + env(safe-area-inset-bottom))",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        {history.length === 0 ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "12px",
+              paddingTop: "60px",
+            }}
+          >
+            <span style={{ fontSize: "48px", opacity: 0.35 }}>🎮</span>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
+              Hali o'yin o'ynalmagan
+            </div>
+          </div>
+        ) : (
+          [...history].reverse().map((item) => {
+            const d = new Date(item.createdAt);
+            const date = d.toLocaleDateString("uz-UZ", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            });
+            const time = d.toLocaleTimeString("uz-UZ", {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            return (
+              <div
+                key={item.id}
+                style={{
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "14px",
+                  padding: "14px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                }}
+              >
+                {/* Left: date + result */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--muted)",
+                      fontWeight: 600,
+                      marginBottom: "5px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <span>{date}</span>
+                    <span style={{ opacity: 0.5 }}>·</span>
+                    <span>{time}</span>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 800,
+                      color: "var(--text)",
+                    }}
+                  >
+                    {item.correctCount}/{item.totalCount} to'g'ri
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color:
+                        item.accuracy >= 80
+                          ? "var(--success)"
+                          : item.accuracy >= 50
+                          ? "var(--accent)"
+                          : "var(--muted)",
+                      fontWeight: 700,
+                      marginTop: "2px",
+                    }}
+                  >
+                    {item.accuracy}% aniqlik
+                  </div>
+                </div>
+
+                {/* Right: score badge */}
+                <div
+                  style={{
+                    flex: "0 0 auto",
+                    textAlign: "center",
+                    background: "rgba(218,165,32,0.12)",
+                    border: "1px solid rgba(218,165,32,0.28)",
+                    borderRadius: "12px",
+                    padding: "8px 14px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "22px",
+                      fontWeight: 900,
+                      color: "var(--gold)",
+                      lineHeight: 1,
+                    }}
+                  >
+                    +{item.roundScore}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "9px",
+                      color: "var(--gold)",
+                      fontWeight: 800,
+                      letterSpacing: "1.5px",
+                      opacity: 0.7,
+                      marginTop: "3px",
+                    }}
+                  >
+                    BALL
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
