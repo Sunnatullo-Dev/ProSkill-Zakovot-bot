@@ -576,33 +576,29 @@ function PaymentBlock({ info }: { info: PremiumInfo }) {
         💳 To'lov uchun karta
       </div>
 
-      {/* Card number + copy button */}
+      {/* Card number — full-width single row, never wraps */}
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "10px",
+          fontFamily: "'Courier New', Courier, monospace",
+          fontSize: "clamp(14px, 4.8vw, 20px)",
+          fontWeight: 900,
+          color: "var(--text)",
+          letterSpacing: "1px",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
       >
-        <div
-          style={{
-            fontFamily: "'Courier New', Courier, monospace",
-            fontSize: "18px",
-            fontWeight: 900,
-            color: "var(--text)",
-            letterSpacing: "2px",
-            wordBreak: "break-all",
-            flex: 1,
-          }}
-        >
-          {info.cardNumber}
-        </div>
+        {info.cardNumber}
+      </div>
+
+      {/* Copy button — own row so it never squeezes the number */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         <button
           type="button"
           onClick={handleCopy}
           style={{
-            padding: "7px 12px",
+            padding: "7px 14px",
             background: copied
               ? "rgba(34,197,94,0.18)"
               : "rgba(218,165,32,0.22)",
@@ -612,7 +608,6 @@ function PaymentBlock({ info }: { info: PremiumInfo }) {
             fontWeight: 800,
             color: copied ? "#22C55E" : "var(--gold)",
             cursor: "pointer",
-            flex: "0 0 auto",
             transition: "all 0.15s",
             whiteSpace: "nowrap",
           }}
@@ -621,10 +616,13 @@ function PaymentBlock({ info }: { info: PremiumInfo }) {
         </button>
       </div>
 
-      {/* Card holder */}
+      {/* Card holder — label muted, name high-contrast */}
       {info.cardHolder ? (
-        <div style={{ fontSize: "13px", color: "var(--muted)", fontWeight: 700 }}>
-          Egasi: <span style={{ color: "var(--text)" }}>{info.cardHolder}</span>
+        <div style={{ fontSize: "13px", color: "var(--muted)", fontWeight: 600 }}>
+          Egasi:{" "}
+          <span style={{ color: "var(--text)", fontWeight: 800, fontSize: "15px" }}>
+            {info.cardHolder}
+          </span>
         </div>
       ) : null}
 
