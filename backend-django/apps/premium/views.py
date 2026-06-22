@@ -823,11 +823,26 @@ def premium_info(request):
     }
     """
     user = request.current_user
-    ps = PremiumSettings.get()
 
-    data = ps.to_dict()
-    data["isPremium"] = user.is_premium_active()
-    data["premiumUntil"] = user.premium_until.isoformat() if user.premium_until else None
+    # Asosiy sozlama — har qanday xatoda ham (migratsiya/ustun yo'qligi) ekran
+    # "Ma'lumot yuklanmadi" bo'lib qolmasligi uchun minimal javob qaytaramiz.
+    try:
+        ps = PremiumSettings.get()
+        data = ps.to_dict()
+    except Exception:
+        logger.exception("premium_info: PremiumSettings xato — minimal javob qaytariladi")
+        data = {
+            "enabled": False, "price": 0, "currency": "so'm",
+            "durationDays": 30, "benefits": "", "paymentDetails": "", "sections": {},
+        }
+
+    try:
+        data["isPremium"] = user.is_premium_active()
+        data["premiumUntil"] = user.premium_until.isoformat() if user.premium_until else None
+    except Exception:
+        logger.exception("premium_info: premium status xato")
+        data["isPremium"] = False
+        data["premiumUntil"] = None
 
     # usage va myRequest IXTIYORIY — xato bo'lsa (masalan migratsiya hali
     # qo'llanmagan: premium_premiumrequest jadvali yo'q) butun Premium ekrani
