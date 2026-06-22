@@ -824,27 +824,36 @@ def premium_info(request):
     """
     user = request.current_user
     ps = PremiumSettings.get()
-    usage = get_usage(user)
 
     data = ps.to_dict()
     data["isPremium"] = user.is_premium_active()
     data["premiumUntil"] = user.premium_until.isoformat() if user.premium_until else None
-    data["usage"] = usage
 
-    # Foydalanuvchining aktiv so'rovi (pending yoki so'nggi rad etilgan)
-    my_req = (
-        PremiumRequest.objects.filter(telegram_id=user.telegram_id)
-        .order_by("-created_at")
-        .first()
-    )
-    if my_req and my_req.status in (PremiumRequest.STATUS_PENDING, PremiumRequest.STATUS_REJECTED):
-        data["myRequest"] = {
-            "id": my_req.pk,
-            "status": my_req.status,
-            "createdAt": my_req.created_at.isoformat() if my_req.created_at else None,
-            "rejectReason": my_req.reject_reason,
-        }
-    else:
-        data["myRequest"] = None
+    # usage va myRequest IXTIYORIY — xato bo'lsa (masalan migratsiya hali
+    # qo'llanmagan: premium_premiumrequest jadvali yo'q) butun Premium ekrani
+    # "Ma'lumot yuklanmadi" bo'lib qolmasligi uchun FAIL-SOFT qilamiz: asosiy
+    # ma'lumot (narx, imtiyozlar) baribir qaytadi, ekran ochiladi.
+    try:
+        data["usage"] = get_usage(user)
+    except Exception:
+        logger.exception("premium_info: get_usage xato — bo'sh usage qaytariladi")
+        data["usage"] = {}
+
+    data["myRequest"] = None
+    try:
+        my_req = (
+            PremiumRequest.objects.filter(telegram_id=user.telegram_id)
+            .order_by("-created_at")
+            .first()
+        )
+        if my_req and my_req.status in (PremiumRequest.STATUS_PENDING, PremiumRequest.STATUS_REJECTED):
+            data["myRequest"] = {
+                "id": my_req.pk,
+                "status": my_req.status,
+                "createdAt": my_req.created_at.isoformat() if my_req.created_at else None,
+                "rejectReason": my_req.reject_reason,
+            }
+    except Exception:
+        logger.exception("premium_info: myRequest xato — null qaytariladi")
 
     return Response(data)
