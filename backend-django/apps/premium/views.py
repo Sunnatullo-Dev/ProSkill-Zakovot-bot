@@ -884,3 +884,47 @@ def premium_info(request):
         logger.exception("premium_info: myRequest xato — null qaytariladi")
 
     return Response(data)
+
+
+# ── Public: premium xarid tarixi ─────────────────────────────────────────────
+
+@api_view(["GET"])
+@require_auth
+def premium_history(request):
+    """Joriy foydalanuvchining tasdiqlangan premium so'rovlari tarixi.
+
+    GET /api/premium/history
+    Response: { items: [ { id, amount, currency, createdAt, durationDays, grantedUntil } ] }
+    """
+    user = request.current_user
+    qs = (
+        PremiumRequest.objects.filter(
+            telegram_id=user.telegram_id,
+            status=PremiumRequest.STATUS_APPROVED,
+        )
+        .order_by("-created_at")
+    )
+
+    items = []
+    for req in qs:
+        # durationDays ni granted_until - reviewed_at'dan hisoblaymiz, yo'q bo'lsa settings'dan
+        duration_days = None
+        if req.granted_until and req.reviewed_at:
+            delta = req.granted_until - req.reviewed_at
+            duration_days = max(1, round(delta.total_seconds() / 86400))
+        if duration_days is None:
+            try:
+                duration_days = PremiumSettings.get().duration_days
+            except Exception:
+                duration_days = 30
+
+        items.append({
+            "id": req.pk,
+            "amount": req.amount,
+            "currency": req.currency,
+            "createdAt": req.created_at.isoformat() if req.created_at else None,
+            "durationDays": duration_days,
+            "grantedUntil": req.granted_until.isoformat() if req.granted_until else None,
+        })
+
+    return Response({"items": items})

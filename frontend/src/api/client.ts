@@ -1138,6 +1138,21 @@ export async function getAdminPremiumAnalytics(): Promise<AdminPremiumAnalytics 
   return request<AdminPremiumAnalytics>("/admin/premium/analytics");
 }
 
+/** Joriy foydalanuvchining tasdiqlangan premium xaridlari tarixi. */
+export type PremiumHistoryItem = {
+  id: number;
+  amount: number;
+  currency: string;
+  createdAt: string;
+  durationDays: number;
+  grantedUntil: string | null;
+};
+
+export async function getPremiumHistory(): Promise<PremiumHistoryItem[]> {
+  const res = await request<{ items: PremiumHistoryItem[] }>("/premium/history");
+  return res?.items ?? [];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T | null> {

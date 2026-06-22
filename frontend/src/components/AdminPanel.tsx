@@ -3769,174 +3769,187 @@ function PendingRequestDetail({
             marginTop: "auto",
             background: "var(--surface)",
             borderRadius: "22px 22px 0 0",
-            padding: "20px 18px 34px",
-            maxHeight: "90vh",
-            overflowY: "auto",
+            maxHeight: "90dvh",
+            display: "flex",
+            flexDirection: "column",
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-            <div>
-              <div style={{ fontSize: "15px", fontWeight: 900, color: "var(--text)" }}>
-                {req.displayName}
+          {/* Scrollable content */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "20px 18px 8px" }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div>
+                <div style={{ fontSize: "15px", fontWeight: 900, color: "var(--text)" }}>
+                  {req.displayName}
+                </div>
+                {req.username ? (
+                  <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                    @{req.username} · {fmtDate(req.createdAt)}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                    {fmtDate(req.createdAt)}
+                  </div>
+                )}
               </div>
-              {req.username ? (
-                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                  @{req.username} · {fmtDate(req.createdAt)}
-                </div>
-              ) : (
-                <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                  {fmtDate(req.createdAt)}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  padding: "8px 12px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  color: "var(--text)",
+                  cursor: "pointer",
+                }}
+              >
+                Yopish
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
+
+            {/* Amount */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "rgba(218,165,32,0.12)",
+                border: "1px solid rgba(218,165,32,0.3)",
+                borderRadius: "10px",
+                padding: "6px 12px",
+                marginBottom: "14px",
+              }}
+            >
+              <span style={{ fontSize: "13px", fontWeight: 800, color: "#DAA520" }}>
+                {req.amount.toLocaleString()} {req.currency}
+              </span>
+            </div>
+
+            {/* Receipt image */}
+            <div
               style={{
                 background: "var(--card)",
                 border: "1px solid var(--border)",
-                borderRadius: "10px",
-                padding: "8px 12px",
-                fontSize: "12px",
-                fontWeight: 700,
-                color: "var(--text)",
-                cursor: "pointer",
+                borderRadius: "16px",
+                overflow: "hidden",
+                marginBottom: "8px",
+                minHeight: "160px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              Yopish
-            </button>
+              {media.status === "loading" ? (
+                <div style={{ fontSize: "12px", color: "var(--muted)", padding: "20px" }}>
+                  Chek yuklanmoqda...
+                </div>
+              ) : media.status === "error" ? (
+                <div style={{ fontSize: "12px", color: "var(--error)", padding: "20px", textAlign: "center" }}>
+                  Chek rasmini yuklab bo'lmadi
+                </div>
+              ) : media.status === "ready" ? (
+                <img
+                  src={media.url}
+                  alt="To'lov cheki"
+                  style={{ maxWidth: "100%", maxHeight: "60vh", display: "block", objectFit: "contain", borderRadius: "16px" }}
+                />
+              ) : null}
+            </div>
           </div>
 
-          {/* Amount */}
+          {/* Pinned footer — har doim ko'rinib turadi */}
           <div
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "rgba(218,165,32,0.12)",
-              border: "1px solid rgba(218,165,32,0.3)",
-              borderRadius: "10px",
-              padding: "6px 12px",
-              marginBottom: "14px",
+              flexShrink: 0,
+              padding: "12px 18px",
+              paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+              borderTop: "1px solid var(--border)",
+              background: "var(--surface)",
             }}
           >
-            <span style={{ fontSize: "13px", fontWeight: 800, color: "#DAA520" }}>
-              {req.amount.toLocaleString()} {req.currency}
-            </span>
-          </div>
+            {/* Error */}
+            {errMsg ? (
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "var(--error)",
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.25)",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                  marginBottom: "10px",
+                }}
+              >
+                {errMsg}
+              </div>
+            ) : null}
 
-          {/* Receipt image */}
-          <div
-            style={{
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "16px",
-              overflow: "hidden",
-              marginBottom: "16px",
-              minHeight: "160px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {media.status === "loading" ? (
-              <div style={{ fontSize: "12px", color: "var(--muted)", padding: "20px" }}>
-                Chek yuklanmoqda...
+            {/* Toast */}
+            {toast ? (
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "var(--success)",
+                  background: "rgba(34,197,94,0.1)",
+                  border: "1px solid rgba(34,197,94,0.3)",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                  textAlign: "center",
+                  fontWeight: 700,
+                }}
+              >
+                ✅ {toast}
               </div>
-            ) : media.status === "error" ? (
-              <div style={{ fontSize: "12px", color: "var(--error)", padding: "20px", textAlign: "center" }}>
-                Chek rasmini yuklab bo'lmadi
+            ) : null}
+
+            {/* Action buttons */}
+            {!toast ? (
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmApprove(true)}
+                  style={{
+                    flex: 1,
+                    padding: "14px",
+                    background: busy ? "var(--border)" : "linear-gradient(135deg, #15803D, #22C55E)",
+                    border: "none",
+                    borderRadius: "12px",
+                    color: "white",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    cursor: busy ? "not-allowed" : "pointer",
+                    opacity: busy ? 0.6 : 1,
+                  }}
+                >
+                  Tasdiqlash
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmReject(true)}
+                  style={{
+                    flex: 1,
+                    padding: "14px",
+                    background: busy ? "var(--border)" : "var(--error)",
+                    border: "none",
+                    borderRadius: "12px",
+                    color: "white",
+                    fontSize: "14px",
+                    fontWeight: 800,
+                    cursor: busy ? "not-allowed" : "pointer",
+                    opacity: busy ? 0.6 : 1,
+                  }}
+                >
+                  Rad etish
+                </button>
               </div>
-            ) : media.status === "ready" ? (
-              <img
-                src={media.url}
-                alt="To'lov cheki"
-                style={{ width: "100%", display: "block", borderRadius: "16px" }}
-              />
             ) : null}
           </div>
-
-          {/* Error */}
-          {errMsg ? (
-            <div
-              style={{
-                fontSize: "12px",
-                color: "var(--error)",
-                background: "rgba(239,68,68,0.08)",
-                border: "1px solid rgba(239,68,68,0.25)",
-                borderRadius: "10px",
-                padding: "10px 12px",
-                marginBottom: "12px",
-              }}
-            >
-              {errMsg}
-            </div>
-          ) : null}
-
-          {/* Toast */}
-          {toast ? (
-            <div
-              style={{
-                fontSize: "13px",
-                color: "var(--success)",
-                background: "rgba(34,197,94,0.1)",
-                border: "1px solid rgba(34,197,94,0.3)",
-                borderRadius: "10px",
-                padding: "10px 12px",
-                textAlign: "center",
-                marginBottom: "12px",
-                fontWeight: 700,
-              }}
-            >
-              ✅ {toast}
-            </div>
-          ) : null}
-
-          {/* Action buttons */}
-          {!toast ? (
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setConfirmApprove(true)}
-                style={{
-                  flex: 1,
-                  padding: "14px",
-                  background: busy ? "var(--border)" : "linear-gradient(135deg, #15803D, #22C55E)",
-                  border: "none",
-                  borderRadius: "12px",
-                  color: "white",
-                  fontSize: "14px",
-                  fontWeight: 800,
-                  cursor: busy ? "not-allowed" : "pointer",
-                  opacity: busy ? 0.6 : 1,
-                }}
-              >
-                Tasdiqlash
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setConfirmReject(true)}
-                style={{
-                  flex: 1,
-                  padding: "14px",
-                  background: busy ? "var(--border)" : "var(--error)",
-                  border: "none",
-                  borderRadius: "12px",
-                  color: "white",
-                  fontSize: "14px",
-                  fontWeight: 800,
-                  cursor: busy ? "not-allowed" : "pointer",
-                  opacity: busy ? 0.6 : 1,
-                }}
-              >
-                Rad etish
-              </button>
-            </div>
-          ) : null}
         </div>
       </div>
 

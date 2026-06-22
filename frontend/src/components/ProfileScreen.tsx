@@ -4,11 +4,12 @@ import {
   checkAchievements,
   getGameHistory,
   getGameStats,
+  getPremiumHistory,
   getReferrals,
   updateMyDisplayName,
   updateMyLanguage
 } from "../api/client";
-import type { AchievementUnlock } from "../api/client";
+import type { AchievementUnlock, PremiumHistoryItem } from "../api/client";
 import type { AppUser, GameHistoryItem, GameStats } from "../types";
 import { computeAchievements } from "../utils/achievements";
 import { buildInviteShare } from "../utils/share";
@@ -69,6 +70,7 @@ type ProfileScreenProps = {
   record: number;
   isAdmin: boolean;
   isPremium?: boolean;
+  premiumUntil?: string | null;
   onUserUpdate?: (user: AppUser) => void;
   onScoreBonus?: (amount: number) => void;
   onPremiumOpen?: () => void;
@@ -149,6 +151,7 @@ export default function ProfileScreen({
   record,
   isAdmin,
   isPremium,
+  premiumUntil,
   onUserUpdate,
   onScoreBonus,
   onPremiumOpen,
@@ -156,6 +159,7 @@ export default function ProfileScreen({
   const { lang, setLang, t } = useLanguage();
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
   const [history, setHistory] = useState<GameHistoryItem[]>([]);
+  const [premiumHistory, setPremiumHistory] = useState<PremiumHistoryItem[]>([]);
   const [referralCount, setReferralCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
@@ -181,11 +185,17 @@ export default function ProfileScreen({
 
     async function load() {
       setIsLoading(true);
-      const [gameStats, referrals, hist] = await Promise.all([getGameStats(), getReferrals(), getGameHistory(10)]);
+      const [gameStats, referrals, hist, pHist] = await Promise.all([
+        getGameStats(),
+        getReferrals(),
+        getGameHistory(10),
+        getPremiumHistory(),
+      ]);
 
       if (active) {
         setStats(gameStats);
         setHistory(hist);
+        setPremiumHistory(pHist);
         setReferralCount(referrals.myCount);
         setIsLoading(false);
       }
@@ -531,16 +541,40 @@ export default function ProfileScreen({
         </div>
       </div>
 
-      {onPremiumOpen ? (
+      {isPremium ? (
+        <div
+          style={{
+            width: "100%",
+            background: "linear-gradient(135deg, rgba(184,134,11,0.18), rgba(218,165,32,0.1))",
+            border: "1.5px solid rgba(218,165,32,0.45)",
+            borderRadius: "14px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            marginBottom: "12px",
+          }}
+        >
+          <span style={{ fontSize: "20px" }}>⭐</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "14px", fontWeight: 800, color: "#DAA520" }}>
+              Premium a'zo
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
+              {premiumUntil
+                ? `${new Date(premiumUntil).toLocaleDateString("uz-UZ", { day: "numeric", month: "long", year: "numeric" })} gacha`
+                : "Faol"}
+            </div>
+          </div>
+        </div>
+      ) : onPremiumOpen ? (
         <button
           type="button"
           onClick={onPremiumOpen}
           style={{
             width: "100%",
-            background: isPremium
-              ? "linear-gradient(135deg, rgba(184,134,11,0.18), rgba(218,165,32,0.1))"
-              : "var(--card)",
-            border: isPremium ? "1.5px solid rgba(218,165,32,0.45)" : "1px solid var(--border)",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: "14px",
             padding: "12px 16px",
             cursor: "pointer",
@@ -554,10 +588,10 @@ export default function ProfileScreen({
           <span style={{ fontSize: "20px" }}>⭐</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
-              {isPremium ? "Premium a'zo" : "Zakovat Premium"}
+              Zakovat Premium
             </div>
             <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
-              {isPremium ? "Cheksiz kirish faol" : "Cheksiz o'yin tajribasini oching"}
+              Cheksiz o'yin tajribasini oching
             </div>
           </div>
           <span style={{ fontSize: "14px", color: "var(--gold)" }}>›</span>
@@ -770,6 +804,49 @@ export default function ProfileScreen({
         </button>
       </div>
 
+
+      {premiumHistory.length > 0 ? (
+        <div
+          style={{
+            background: "var(--card)",
+            border: "1px solid rgba(218,165,32,0.3)",
+            borderRadius: "20px",
+            padding: "16px",
+            marginTop: "18px",
+          }}
+        >
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--muted)", letterSpacing: "1px", marginBottom: "12px" }}>
+            PREMIUMLAR TARIXI
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {premiumHistory.map((item) => {
+              const d = new Date(item.createdAt);
+              const dateLabel = d.toLocaleDateString("uz-UZ", { day: "numeric", month: "short", year: "numeric" });
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 12px",
+                    background: "var(--bg)",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(218,165,32,0.15)",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                    📅 {dateLabel} · ⏳ {item.durationDays} kun
+                  </div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#DAA520" }}>
+                    💰 {item.amount.toLocaleString()} {item.currency}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {history.length > 0 ? (
         <div

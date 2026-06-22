@@ -196,6 +196,7 @@ export default function App() {
   const [isAdminUser, setIsAdminUser] = useState(false);
   // Premium holati — login'dan yoki getPremiumInfo'dan olinadi.
   const [isPremiumUser, setIsPremiumUser] = useState(false);
+  const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
   // Bootstrap fakat bir martagina ishlasin — `lang` o'zgarganda qayta
   // login qilib foydalanuvchini Profile'dan Home'ga otib yubormasin.
   const bootstrapDoneRef = useRef(false);
@@ -487,7 +488,12 @@ export default function App() {
         // Daily challenge info'ni background'da yuklash (bloklamaymiz)
         void getDailyToday().then((info) => { if (info) setDailyInfo(info); });
         // Premium holati — background'da yuklaymiz (bloklamaymiz)
-        void getPremiumInfo().then((pInfo) => { if (pInfo) setIsPremiumUser(pInfo.isPremium); });
+        void getPremiumInfo().then((pInfo) => {
+          if (pInfo) {
+            setIsPremiumUser(pInfo.isPremium);
+            setPremiumUntil(pInfo.premiumUntil ?? null);
+          }
+        });
         // Majburiy kanal obuna tekshiruvi — loading tugamasin (await).
         // Foydalanuvchi subscribe bo'lmay turib o'ynay olmasligi uchun
         // ekran o'tishdan OLDIN tekshiramiz. Admin uchun o'tkazib yuboramiz.
@@ -1111,7 +1117,7 @@ export default function App() {
             onStart={(filter) => { setShowPremiumPaywall(false); void startGame(filter); }}
             onDailyOpen={() => setScreen("daily")}
             onGameRoomOpen={() => setScreen("gameroom")}
-            onPremiumOpen={() => { setShowPremiumPaywall(false); setScreen("premium"); }}
+            onPremiumOpen={showPremiumPaywall ? () => { setShowPremiumPaywall(false); setScreen("premium"); } : undefined}
           />
         ) : null}
 
@@ -1218,6 +1224,7 @@ export default function App() {
           <ProfileScreen
             isAdmin={isAdminUser}
             isPremium={isPremiumUser}
+            premiumUntil={premiumUntil}
             playerName={playerName}
             record={recordScore}
             score={score}
