@@ -167,6 +167,8 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
 
   const totalQ = auto?.totalQuestions ?? 0;
   const qIdx = (auto?.questionIndex ?? 0) + 1;
+  // Progressiv ball: 1-savol 10 ball, 2-savol 20 ball, ...
+  const currentQuestionPoints = qIdx * 10;
   const myAttempt = auto?.myAttempt ?? null;
   const attempts = auto?.attempts ?? [];
   const isPlaying = !!auto?.isPlaying;
@@ -177,9 +179,19 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
         <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>🎯 Svoyak</div>
         {isPlaying && (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "13px", color: "var(--muted)" }}>
-              Savol {qIdx}/{totalQ}
+              {qIdx}/{totalQ}
+            </span>
+            {/* Joriy savol ball qiymati */}
+            <span style={{
+              fontSize: "12px", fontWeight: 900, padding: "3px 8px",
+              borderRadius: "8px",
+              background: "rgba(245,200,66,0.20)",
+              color: "var(--svoyak-gold, #f5c842)",
+              border: "1px solid rgba(245,200,66,0.4)",
+            }}>
+              +{currentQuestionPoints}
             </span>
             {/* Faza belgisi */}
             <span style={{
@@ -345,7 +357,7 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
                     {myAttempt.isCorrect === true ? "✅" : "❌"}
                   </div>
                   <div style={{ fontSize: "14px", fontWeight: 700, color: myAttempt.isCorrect === true ? "var(--success, #22c55e)" : "var(--error, #ef4444)" }}>
-                    {myAttempt.isCorrect === true ? "To'g'ri javob!" : "Noto'g'ri"}
+                    {myAttempt.isCorrect === true ? `To'g'ri! +${currentQuestionPoints} ball` : "Noto'g'ri"}
                   </div>
                   <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "4px" }}>
                     Boshqalarni kuting...

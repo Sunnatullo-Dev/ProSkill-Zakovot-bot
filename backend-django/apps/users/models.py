@@ -112,8 +112,18 @@ class PremiumSettings(models.Model):
         from django.core.cache import cache
         cache.delete(PREMIUM_SETTINGS_CACHE_KEY)
 
+    # Bepul foydalanuvchilar uchun standart kunlik limitlar.
+    # Svoyak cheksiz — bu yerda yo'q.
+    # Admin sozlamalarda bekor qilishi mumkin, lekin kalit bo'lmasa shu qiymatlar ishlaydi.
+    _DEFAULT_SECTION_LIMITS: dict = {
+        "round":    {"limited": True, "free_limit": 5},
+        "daily":    {"limited": True, "free_limit": 5},
+        "battle":   {"limited": True, "free_limit": 3},
+        "gameroom": {"limited": True, "free_limit": 5},
+    }
+
     def get_section(self, section: str) -> dict:
-        """Bo'lim konfigini qaytaradi. Topilmasa yoki xato bo'lsa safe default."""
+        """Bo'lim konfigini qaytaradi. Topilmasa — standart limitlarga qaytadi."""
         try:
             raw = self.section_limits
             if isinstance(raw, dict) and section in raw:
@@ -125,6 +135,10 @@ class PremiumSettings(models.Model):
                     }
         except Exception:
             pass
+        # Admin sozlamasida kalit yo'q — standart limitni ishlatamiz
+        default = self._DEFAULT_SECTION_LIMITS.get(section)
+        if default:
+            return dict(default)
         return {"limited": False, "free_limit": 0}
 
     def to_dict(self) -> dict:

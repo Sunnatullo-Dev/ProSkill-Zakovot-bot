@@ -8,7 +8,6 @@ from rest_framework.response import Response
 
 from apps.core.decorators import require_auth
 from apps.core.exceptions import AppError
-from apps.premium.limits import check_and_consume
 
 from . import repositories
 from .models import SvoyakCategory
@@ -56,7 +55,6 @@ def _rate_key(group: str, request) -> str:
 @require_auth
 def create_room(request):
     user = request.current_user
-    check_and_consume(user, "svoyak")
 
     body = request.data if isinstance(request.data, dict) else {}
 

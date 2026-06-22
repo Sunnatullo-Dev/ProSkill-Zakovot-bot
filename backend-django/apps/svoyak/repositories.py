@@ -699,25 +699,29 @@ def start_game(*, code: str, telegram_id: int) -> dict[str, Any]:
 
 
 def _setup_auto_questions(room: SvoyakRoom, player_count: int) -> None:
-    """Auto rejim uchun savol IDlarini tanlab settings'ga yozadi."""
+    """Auto rejim uchun savol IDlarini tanlab settings'ga yozadi.
+
+    Tartib: kategoriyalar SvoyakCategory.order bo'yicha, har kategoriya ichida
+    value_tier o'sish tartibida (10, 20, 30, 40, 50). Mavzular aralashib ketmaydi.
+    """
     from apps.users.models import User
     host_user = User.objects.filter(telegram_id=room.host_telegram_id).only("score").first()
     host_score = host_user.score if host_user else 0
 
     q_count = _get_question_count(host_score, player_count)
 
-    # SvoyakQuestion'lardan random tanlaymiz (barcha aktiv, type='text')
-    qs = list(
-        SvoyakQuestion.objects.filter(is_active=True)
-        .values_list("id", flat=True)
+    # Aktiv kategoriyalarni tartib bilan olamiz
+    categories = list(
+        SvoyakCategory.objects.filter(is_active=True).order_by("order", "name")
     )
-    if not qs:
+
+    if not categories:
         # Zahira: agar svoyak savollar bo'lmasa — umumiy question pool ishlatamiz
         from apps.questions.models import Question as GenQuestion
+        import random as _rnd
         gen_ids = list(GenQuestion.objects.values_list("id", flat=True))
         if not gen_ids:
             raise AppError(500, "Savol bazasi bo'sh")
-        import random as _rnd
         selected = _rnd.sample(gen_ids, min(q_count, len(gen_ids)))
         settings = dict(room.settings)
         settings.update({
@@ -731,19 +735,24 @@ def _setup_auto_questions(room: SvoyakRoom, player_count: int) -> None:
         room.save(update_fields=["settings"])
         return
 
-    selected = [secrets.choice(qs) for _ in range(min(q_count, len(qs)))]
-    # Takrorlanmaslik: set orqali
-    seen: set[int] = set()
-    unique: list[int] = []
-    for qid in selected:
-        if qid not in seen:
-            seen.add(qid)
-            unique.append(qid)
-    if len(unique) < q_count:
-        extras = [q for q in qs if q not in seen]
-        import random as _rnd
-        _rnd.shuffle(extras)
-        unique.extend(extras[:q_count - len(unique)])
+    # Har kategoriya uchun, har value_tier uchun bitta random savol tanlaymiz,
+    # tartib saqlanadi: category.order asc, value_tier asc (10→20→30→40→50).
+    ordered_ids: list[int] = []
+    for cat in categories:
+        for value in (10, 20, 30, 40, 50):
+            ids = list(
+                SvoyakQuestion.objects.filter(
+                    category=cat, value_tier=value, is_active=True
+                ).values_list("id", flat=True)
+            )
+            if ids:
+                ordered_ids.append(secrets.choice(ids))
+
+    if not ordered_ids:
+        raise AppError(500, "Svoyak savol bazasi bo'sh")
+
+    # Kerakli savollar soniga qisqartirish — tartib saqlanadi (slicing)
+    unique = ordered_ids[:q_count]
 
     settings = dict(room.settings)
     settings.update({
@@ -793,11 +802,12 @@ def _start_auto_question(room: SvoyakRoom) -> None:
             _advance_auto_question(room)
             return
 
-    # SvoyakRound yaratish
+    # SvoyakRound yaratish — progressiv ball: 1-savol=10, 2-savol=20, ... (idx+1)*10
+    round_value = (idx + 1) * 10
     new_round = SvoyakRound.objects.create(
         room=room,
         question=question,
-        value=1,
+        value=round_value,
         status="reading",
         buzz_attempts=[],
     )
@@ -861,7 +871,9 @@ def submit_auto_answer(*, code: str, telegram_id: int, answer_text: str) -> dict
         is_correct = result.status == "correct"
 
         if is_correct:
-            player.score += 1
+            # Progressiv ball — round.value orqali (1-savol=10, 2-savol=20, ...)
+            round_value = round_row.value if (room.current_round_id and round_row) else (int(settings.get("question_index", 0)) + 1) * 10
+            player.score += round_value
             player.save(update_fields=["score"])
 
         new_attempt = {
