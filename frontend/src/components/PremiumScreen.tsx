@@ -23,6 +23,18 @@ const SECTION_EMOJIS: Record<string, string> = {
   gameroom: "🏟️",
 };
 
+// Per-section accent palette — 5 distinct hues that harmonize with gold premium theme
+const SECTION_ACCENTS: Record<string, { color: string; bg: string; border: string }> = {
+  round:    { color: "#6366F1", bg: "rgba(99,102,241,0.10)",  border: "rgba(99,102,241,0.28)" },
+  daily:    { color: "#0EA5E9", bg: "rgba(14,165,233,0.10)",  border: "rgba(14,165,233,0.28)" },
+  battle:   { color: "#F43F5E", bg: "rgba(244,63,94,0.10)",   border: "rgba(244,63,94,0.28)"  },
+  svoyak:   { color: "#DAA520", bg: "rgba(218,165,32,0.12)",  border: "rgba(218,165,32,0.35)" },
+  gameroom: { color: "#10B981", bg: "rgba(16,185,129,0.10)",  border: "rgba(16,185,129,0.28)" },
+};
+
+// Fallback for unknown keys
+const DEFAULT_ACCENT = { color: "#6366F1", bg: "rgba(99,102,241,0.10)", border: "rgba(99,102,241,0.28)" };
+
 function remainingDays(until: string): number {
   const diff = new Date(until).getTime() - Date.now();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
@@ -646,46 +658,105 @@ function SectionList({ info, isPremium }: { info: PremiumInfo; isPremium: boolea
   return (
     <div style={{ padding: "0 18px" }}>
       <SectionHeader icon="🎯" title="Bo'limlar kirish huquqi" />
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
         {sections.map(([key, cfg]) => {
           const isUnlimited = isPremium || !cfg.limited;
+          const isClosed = !isUnlimited && cfg.free_limit === 0;
+          const accent = SECTION_ACCENTS[key] ?? DEFAULT_ACCENT;
+
+          // Badge appearance
+          const badgeText = isUnlimited ? "Cheksiz" : isClosed ? "Yopiq" : `${cfg.free_limit}/kun`;
+          const badgeBg   = isUnlimited ? "rgba(34,197,94,0.13)"  : isClosed ? "rgba(239,68,68,0.13)"  : "rgba(218,165,32,0.14)";
+          const badgeBorder= isUnlimited ? "rgba(34,197,94,0.35)" : isClosed ? "rgba(239,68,68,0.35)"  : "rgba(218,165,32,0.4)";
+          const badgeColor= isUnlimited ? "#22C55E"               : isClosed ? "#EF4444"               : "#DAA520";
+
+          // Subtitle
+          const subtitle = cfg.limited && !isPremium
+            ? isClosed
+              ? "Bepul foydalanuvchilarga yopiq"
+              : `Kunlik bepul: ${cfg.free_limit} ta urinish`
+            : null;
+
           return (
             <div
               key={key}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "12px",
+                gap: "0",
                 background: "var(--card)",
-                border: `1px solid ${isUnlimited ? "rgba(34,197,94,0.3)" : "var(--border)"}`,
-                borderRadius: "14px",
-                padding: "12px 14px",
+                border: "1px solid var(--border)",
+                borderRadius: "16px",
+                overflow: "hidden",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
               }}
             >
-              <span style={{ fontSize: "20px", flex: "0 0 auto" }}>
-                {SECTION_EMOJIS[key] ?? "🎮"}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
-                  {SECTION_LABELS[key] ?? key}
-                </div>
-                {cfg.limited && !isPremium ? (
-                  <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
-                    {cfg.free_limit === 0
-                      ? "Bepul foydalanuvchilarga yopiq"
-                      : `Kunlik bepul: ${cfg.free_limit} ta`}
-                  </div>
-                ) : null}
-              </div>
+              {/* Left accent bar */}
               <div
                 style={{
-                  fontSize: "12px",
-                  fontWeight: 800,
-                  color: isUnlimited ? "#22C55E" : cfg.free_limit === 0 ? "#EF4444" : "var(--gold)",
+                  width: "4px",
+                  alignSelf: "stretch",
+                  background: isUnlimited
+                    ? "linear-gradient(180deg, #22C55E, #16A34A)"
+                    : isClosed
+                    ? "linear-gradient(180deg, #EF4444, #DC2626)"
+                    : `linear-gradient(180deg, ${accent.color}, ${accent.color}aa)`,
+                  flex: "0 0 auto",
+                  borderRadius: "0",
+                }}
+              />
+
+              {/* Icon chip */}
+              <div
+                style={{
+                  margin: "12px 12px 12px 14px",
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "12px",
+                  background: accent.bg,
+                  border: `1.5px solid ${accent.border}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "20px",
                   flex: "0 0 auto",
                 }}
               >
-                {isUnlimited ? "Cheksiz" : cfg.free_limit === 0 ? "Yopiq" : `${cfg.free_limit}/kun`}
+                {SECTION_EMOJIS[key] ?? "🎮"}
+              </div>
+
+              {/* Text */}
+              <div style={{ flex: 1, minWidth: 0, padding: "12px 0" }}>
+                <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)", lineHeight: 1.2 }}>
+                  {SECTION_LABELS[key] ?? key}
+                </div>
+                {subtitle ? (
+                  <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "3px", fontWeight: 500 }}>
+                    {subtitle}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Badge pill */}
+              <div style={{ padding: "12px 14px 12px 8px", flex: "0 0 auto" }}>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    background: badgeBg,
+                    border: `1px solid ${badgeBorder}`,
+                    borderRadius: "999px",
+                    padding: "4px 10px",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    color: badgeColor,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {isUnlimited ? "∞" : isClosed ? "✕" : "◑"}{" "}
+                  {badgeText}
+                </div>
               </div>
             </div>
           );
@@ -748,85 +819,142 @@ function UsageBlock({ info }: { info: PremiumInfo }) {
   return (
     <div style={{ padding: "0 18px" }}>
       <SectionHeader icon="📊" title="Bugungi foydalanish" />
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
         {entries
           .filter(([, u]) => u.limited && u.limit !== null)
           .map(([key, u]) => {
-            const pct = u.limit && u.limit > 0 ? Math.min(1, (u.used) / u.limit) : 0;
+            const limit = u.limit ?? 1;
+            const pct = limit > 0 ? Math.min(1, u.used / limit) : 0;
             const isFull = u.remaining === 0;
+            const isNear = !isFull && pct >= 0.7;   // 70%+ used = warning
+            const accent = SECTION_ACCENTS[key] ?? DEFAULT_ACCENT;
+
+            // Bar gradient color by state
+            const barGradient = isFull
+              ? "linear-gradient(90deg, #EF4444, #DC2626)"
+              : isNear
+              ? "linear-gradient(90deg, #F59E0B, #FBBF24)"
+              : `linear-gradient(90deg, ${accent.color}, ${accent.color}cc)`;
+
+            // Border tint by state
+            const borderColor = isFull
+              ? "rgba(239,68,68,0.35)"
+              : isNear
+              ? "rgba(245,158,11,0.35)"
+              : "var(--border)";
+
+            // Count label color
+            const countColor = isFull ? "#EF4444" : isNear ? "#F59E0B" : "var(--text)";
+
             return (
               <div
                 key={key}
                 style={{
                   background: "var(--card)",
-                  border: `1px solid ${isFull ? "rgba(239,68,68,0.3)" : "var(--border)"}`,
-                  borderRadius: "14px",
-                  padding: "12px 14px",
+                  border: `1px solid ${borderColor}`,
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
                 }}
               >
+                {/* Top row: icon chip + label + count */}
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: "8px",
+                    gap: "12px",
+                    padding: "13px 14px 10px",
                   }}
                 >
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)" }}>
-                    {SECTION_EMOJIS[key] ?? "🎮"} {SECTION_LABELS[key] ?? key}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 800,
-                      color: isFull ? "#EF4444" : "var(--text)",
-                    }}
-                  >
-                    {u.used} / {u.limit}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    height: "5px",
-                    background: "var(--border)",
-                    borderRadius: "999px",
-                    overflow: "hidden",
-                  }}
-                >
+                  {/* Icon chip with section accent */}
                   <div
                     style={{
-                      width: `${pct * 100}%`,
-                      height: "100%",
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "11px",
+                      background: accent.bg,
+                      border: `1.5px solid ${accent.border}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "18px",
+                      flex: "0 0 auto",
+                    }}
+                  >
+                    {SECTION_EMOJIS[key] ?? "🎮"}
+                  </div>
+
+                  {/* Label */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)", lineHeight: 1.2 }}>
+                      {SECTION_LABELS[key] ?? key}
+                    </div>
+                    {/* State subtitle */}
+                    {isFull ? (
+                      <div style={{ fontSize: "11px", color: "#EF4444", fontWeight: 700, marginTop: "2px", display: "flex", alignItems: "center", gap: "3px" }}>
+                        <span style={{ fontSize: "10px" }}>🔴</span> Bugungi limit tugadi
+                      </div>
+                    ) : isNear ? (
+                      <div style={{ fontSize: "11px", color: "#F59E0B", fontWeight: 700, marginTop: "2px", display: "flex", alignItems: "center", gap: "3px" }}>
+                        <span style={{ fontSize: "10px" }}>🟡</span> {u.remaining} ta qoldi
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                        {u.remaining} ta qoldi
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Count badge */}
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "baseline",
+                      gap: "2px",
+                      flex: "0 0 auto",
+                    }}
+                  >
+                    <span style={{ fontSize: "18px", fontWeight: 900, color: countColor, lineHeight: 1 }}>
+                      {u.used}
+                    </span>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--muted)" }}>
+                      /{limit}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Progress bar area */}
+                <div style={{ padding: "0 14px 13px" }}>
+                  {/* Track */}
+                  <div
+                    style={{
+                      height: "7px",
                       background: isFull
-                        ? "linear-gradient(90deg, #EF4444, #DC2626)"
-                        : "linear-gradient(90deg, var(--gold), #F59E0B)",
+                        ? "rgba(239,68,68,0.12)"
+                        : isNear
+                        ? "rgba(245,158,11,0.12)"
+                        : "var(--border)",
                       borderRadius: "999px",
-                      transition: "width 0.4s ease",
+                      overflow: "hidden",
                     }}
-                  />
+                  >
+                    {/* Fill */}
+                    <div
+                      style={{
+                        width: `${pct * 100}%`,
+                        height: "100%",
+                        background: barGradient,
+                        borderRadius: "999px",
+                        transition: "width 0.5s cubic-bezier(0.4,0,0.2,1)",
+                        boxShadow: isFull
+                          ? "0 0 6px rgba(239,68,68,0.4)"
+                          : isNear
+                          ? "0 0 6px rgba(245,158,11,0.35)"
+                          : `0 0 6px ${accent.color}44`,
+                      }}
+                    />
+                  </div>
                 </div>
-                {isFull ? (
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "#EF4444",
-                      fontWeight: 700,
-                      marginTop: "5px",
-                    }}
-                  >
-                    Bugungi limit tugadi
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "var(--muted)",
-                      marginTop: "5px",
-                    }}
-                  >
-                    {u.remaining} ta qoldi
-                  </div>
-                )}
               </div>
             );
           })}
@@ -841,19 +969,50 @@ function SectionHeader({ icon, title }: { icon: string; title: string }) {
   return (
     <div
       style={{
-        fontSize: "12px",
-        fontWeight: 800,
-        color: "var(--muted)",
-        letterSpacing: "1.2px",
-        textTransform: "uppercase",
-        marginBottom: "10px",
         display: "flex",
         alignItems: "center",
-        gap: "6px",
+        gap: "10px",
+        marginBottom: "12px",
       }}
     >
-      <span>{icon}</span>
-      {title}
+      {/* Icon chip with gold tint */}
+      <div
+        style={{
+          width: "30px",
+          height: "30px",
+          borderRadius: "9px",
+          background: "linear-gradient(135deg, rgba(218,165,32,0.22), rgba(255,200,50,0.12))",
+          border: "1.5px solid rgba(218,165,32,0.38)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "15px",
+          flex: "0 0 auto",
+        }}
+      >
+        {icon}
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1px" }}>
+        <div
+          style={{
+            fontSize: "13px",
+            fontWeight: 800,
+            color: "var(--text)",
+            letterSpacing: "0.2px",
+          }}
+        >
+          {title}
+        </div>
+        {/* Subtle gold underline accent */}
+        <div
+          style={{
+            width: "32px",
+            height: "2px",
+            borderRadius: "999px",
+            background: "linear-gradient(90deg, #DAA520, rgba(218,165,32,0))",
+          }}
+        />
+      </div>
     </div>
   );
 }
