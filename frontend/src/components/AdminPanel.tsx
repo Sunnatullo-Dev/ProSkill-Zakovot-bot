@@ -3472,6 +3472,11 @@ function fmtDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString("uz-UZ", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function fmtDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("uz-UZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
 function PremiumAdminSection() {
   const [tab, setTab] = useState<PremiumTab>("pending");
 
@@ -3555,7 +3560,7 @@ function PremiumHoldersTab() {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         {[1, 2, 3].map((id) => (
-          <div key={id} style={{ height: "72px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }} />
+          <div key={id} style={{ height: "82px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }} />
         ))}
       </div>
     );
@@ -3591,20 +3596,20 @@ function PremiumHoldersTab() {
                   padding: "12px 14px",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span style={{ fontSize: "20px" }}>👑</span>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                  <span style={{ fontSize: "20px", flexShrink: 0, marginTop: "1px" }}>👑</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {name}
                     </div>
                     <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "3px" }}>
-                      Olingan: {fmtDate(h.grantedAt)} · Tugashi: {fmtDate(h.premiumUntil)}
+                      Berilgan: {fmtDate(h.grantedAt)} · Tugashi: {fmtDate(h.premiumUntil)}
                     </div>
-                    {h.grantedByName ? (
-                      <div style={{ fontSize: "10.5px", color: "var(--gold)", marginTop: "2px" }}>
-                        Tasdiqlagan: {h.grantedByName}
-                      </div>
-                    ) : null}
+                    <div style={{ fontSize: "11px", color: "#DAA520", marginTop: "3px", fontWeight: 700 }}>
+                      {h.grantedByName
+                        ? `Bergan: ${h.grantedByName}${h.grantedAt ? ` · ${fmtDateTime(h.grantedAt)}` : ""}`
+                        : "Bergan: —"}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -4154,10 +4159,13 @@ function PremiumAnalyticsTab() {
 
   if (loading) {
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-        {[1, 2, 3, 4, 5].map((id) => (
-          <div key={id} style={{ height: "80px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }} />
-        ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ height: "120px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "16px", opacity: 0.5 }} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+          {[1, 2, 3, 4].map((id) => (
+            <div key={id} style={{ height: "80px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "14px", opacity: 0.5 }} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -4166,12 +4174,11 @@ function PremiumAnalyticsTab() {
     return <EmptyState icon={<StarIcon size={28} />} text="Tahlil ma'lumotlari yuklanmadi" />;
   }
 
-  const stats: Array<{ label: string; value: string | number; color: string }> = [
+  const statusStats: Array<{ label: string; value: number; color: string }> = [
     { label: "Aktiv premium", value: data.activePremiumCount, color: "#DAA520" },
     { label: "Kutilmoqda", value: data.pendingCount, color: "#F59E0B" },
     { label: "Tasdiqlangan", value: data.approvedCount, color: "#22C55E" },
     { label: "Rad etilgan", value: data.rejectedCount, color: "#EF4444" },
-    { label: "Umumiy daromad", value: `${data.totalRevenue.toLocaleString()} so'm`, color: "#A78BFA" },
   ];
 
   return (
@@ -4182,8 +4189,56 @@ function PremiumAnalyticsTab() {
         </button>
       </div>
 
+      {/* ── Jami tushum — prominent card ── */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, rgba(218,165,32,0.18), rgba(184,134,11,0.12))",
+          border: "1.5px solid rgba(218,165,32,0.45)",
+          borderRadius: "18px",
+          padding: "18px",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: -30,
+            right: -30,
+            width: 120,
+            height: 120,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(218,165,32,0.3), transparent 70%)",
+          }}
+        />
+        <div style={{ fontSize: "10.5px", fontWeight: 700, color: "rgba(218,165,32,0.8)", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "6px" }}>
+          Jami tushum
+        </div>
+        <div style={{ fontSize: "32px", fontWeight: 900, color: "#DAA520", lineHeight: 1, marginBottom: "10px" }}>
+          {(data.revenueAllTime ?? data.totalRevenue).toLocaleString()}
+          <span style={{ fontSize: "16px", fontWeight: 700, marginLeft: "6px", color: "rgba(218,165,32,0.75)" }}>so'm</span>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", fontSize: "12px" }}>
+          <div style={{ background: "rgba(218,165,32,0.12)", border: "1px solid rgba(218,165,32,0.25)", borderRadius: "8px", padding: "5px 10px" }}>
+            <span style={{ color: "var(--muted)" }}>Bugun: </span>
+            <strong style={{ color: "#DAA520" }}>{(data.revenueToday ?? 0).toLocaleString()} so'm</strong>
+            {(data.approvedToday ?? 0) > 0 ? (
+              <span style={{ color: "var(--muted)", marginLeft: "4px" }}>({data.approvedToday} ta)</span>
+            ) : null}
+          </div>
+          <div style={{ background: "rgba(218,165,32,0.12)", border: "1px solid rgba(218,165,32,0.25)", borderRadius: "8px", padding: "5px 10px" }}>
+            <span style={{ color: "var(--muted)" }}>Bu oy: </span>
+            <strong style={{ color: "#DAA520" }}>{(data.revenueThisMonth ?? 0).toLocaleString()} so'm</strong>
+            {(data.approvedThisMonth ?? 0) > 0 ? (
+              <span style={{ color: "var(--muted)", marginLeft: "4px" }}>({data.approvedThisMonth} ta)</span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Status kartalar ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-        {stats.map((s) => (
+        {statusStats.map((s) => (
           <div
             key={s.label}
             style={{
@@ -4193,7 +4248,7 @@ function PremiumAnalyticsTab() {
               padding: "14px",
             }}
           >
-            <div style={{ fontSize: "22px", fontWeight: 900, color: s.color, lineHeight: 1 }}>
+            <div style={{ fontSize: "26px", fontWeight: 900, color: s.color, lineHeight: 1 }}>
               {s.value}
             </div>
             <div style={{ fontSize: "10.5px", fontWeight: 700, color: "var(--muted)", letterSpacing: "1.2px", textTransform: "uppercase", marginTop: "6px" }}>
@@ -4203,39 +4258,61 @@ function PremiumAnalyticsTab() {
         ))}
       </div>
 
+      {/* ── So'nggi so'rovlar (attribution bilan) ── */}
       {data.recentRequests.length > 0 ? (
         <div>
           <div style={{ ...sectionHeaderStyle, marginBottom: "10px" }}>
             So'nggi so'rovlar
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {data.recentRequests.slice(0, 5).map((r) => {
+            {data.recentRequests.map((r) => {
               const statusColor = r.status === "approved" ? "#22C55E" : r.status === "rejected" ? "#EF4444" : "#F59E0B";
               const statusLabel = r.status === "approved" ? "Tasdiqlandi" : r.status === "rejected" ? "Rad etildi" : "Kutilmoqda";
+              const statusEmoji = r.status === "approved" ? "✓" : r.status === "rejected" ? "✕" : "·";
+              const reviewerLine = r.reviewedByName && r.reviewedAt
+                ? `${statusEmoji} ${r.status === "approved" ? "Tasdiqlagan" : "Rad etgan"}: ${r.reviewedByName} · ${fmtDateTime(r.reviewedAt)}`
+                : null;
               return (
                 <div
                   key={r.id}
                   style={{
                     background: "var(--card)",
-                    border: "1px solid var(--border)",
+                    border: `1px solid ${statusColor}25`,
                     borderRadius: "12px",
                     padding: "10px 14px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
                   }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.displayName}{r.username ? ` @${r.username}` : ""}
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.displayName}{r.username ? ` @${r.username}` : ""}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                        {fmtDate(r.createdAt)} · <strong style={{ color: "var(--text)" }}>{r.amount.toLocaleString()} {r.currency}</strong>
+                      </div>
+                      {reviewerLine ? (
+                        <div style={{ fontSize: "10.5px", color: statusColor, marginTop: "3px", fontWeight: 600 }}>
+                          {reviewerLine}
+                        </div>
+                      ) : null}
                     </div>
-                    <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
-                      {fmtDate(r.createdAt)} · {r.amount.toLocaleString()} {r.currency}
-                    </div>
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: 800,
+                        color: statusColor,
+                        background: `${statusColor}15`,
+                        border: `1px solid ${statusColor}30`,
+                        borderRadius: "999px",
+                        padding: "3px 8px",
+                        whiteSpace: "nowrap",
+                        letterSpacing: "0.3px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {statusLabel}
+                    </span>
                   </div>
-                  <span style={{ fontSize: "11px", fontWeight: 800, color: statusColor, whiteSpace: "nowrap" }}>
-                    {statusLabel}
-                  </span>
                 </div>
               );
             })}

@@ -657,24 +657,57 @@ def admin_premium_analytics(request):
     """Premium tizimi tahlili.
 
     GET /api/admin/premium/analytics
-    Response: { activePremiumCount, pendingCount, approvedCount, rejectedCount,
-                totalRevenue, recentRequests }
+    Response:
+      activePremiumCount, pendingCount, approvedCount, rejectedCount,
+      revenueAllTime, revenueToday, revenueThisMonth,
+      approvedToday, approvedThisMonth,
+      recentRequests (so'nggi 10, barcha statuslar, attribution bilan)
     """
+    from datetime import date
     from django.db.models import Sum
+    from django.db.models.functions import Coalesce
 
-    active_count = User.objects.filter(premium_until__gt=timezone.now()).count()
+    now = timezone.now()
+
+    # Bugungi kun boshlanishi (UTC)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Bu oy boshlanishi (UTC)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # ── Sonlar ────────────────────────────────────────────────────────────────
+    active_count = User.objects.filter(premium_until__gt=now).count()
     pending_count = PremiumRequest.objects.filter(status=PremiumRequest.STATUS_PENDING).count()
     approved_count = PremiumRequest.objects.filter(status=PremiumRequest.STATUS_APPROVED).count()
     rejected_count = PremiumRequest.objects.filter(status=PremiumRequest.STATUS_REJECTED).count()
 
-    revenue_agg = PremiumRequest.objects.filter(
-        status=PremiumRequest.STATUS_APPROVED
-    ).aggregate(total=Sum("amount"))
-    total_revenue = revenue_agg["total"] or 0
+    # ── Daromad (faqat to'langan, tasdiqlangan so'rovlar) ─────────────────────
+    approved_qs = PremiumRequest.objects.filter(status=PremiumRequest.STATUS_APPROVED)
 
+    revenue_all = approved_qs.aggregate(
+        total=Coalesce(Sum("amount"), 0)
+    )["total"]
+
+    revenue_today = approved_qs.filter(
+        reviewed_at__gte=today_start
+    ).aggregate(
+        total=Coalesce(Sum("amount"), 0)
+    )["total"]
+
+    revenue_month = approved_qs.filter(
+        reviewed_at__gte=month_start
+    ).aggregate(
+        total=Coalesce(Sum("amount"), 0)
+    )["total"]
+
+    # ── Bugun / bu oy tasdiqlangan sonlar ────────────────────────────────────
+    approved_today = approved_qs.filter(reviewed_at__gte=today_start).count()
+    approved_month = approved_qs.filter(reviewed_at__gte=month_start).count()
+
+    # ── So'nggi 10 ta so'rov (yangi → eski), barcha statuslar ─────────────────
     recent = [
         req.to_dict()
-        for req in PremiumRequest.objects.all()[:10]
+        for req in PremiumRequest.objects.order_by("-created_at")[:10]
     ]
 
     return Response({
@@ -682,7 +715,15 @@ def admin_premium_analytics(request):
         "pendingCount": pending_count,
         "approvedCount": approved_count,
         "rejectedCount": rejected_count,
-        "totalRevenue": total_revenue,
+        # Eski nom saqlanadi (orqaga mos kelish uchun)
+        "totalRevenue": revenue_all,
+        # Yangi daromad breakdown
+        "revenueAllTime": revenue_all,
+        "revenueToday": revenue_today,
+        "revenueThisMonth": revenue_month,
+        # Tasdiqlangan sonlar breakdown
+        "approvedToday": approved_today,
+        "approvedThisMonth": approved_month,
         "recentRequests": recent,
     })
 

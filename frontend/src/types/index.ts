@@ -288,7 +288,13 @@ export type AdminPremiumAnalytics = {
   pendingCount: number;
   approvedCount: number;
   rejectedCount: number;
+  /** @deprecated totalRevenue = revenueAllTime (orqaga mos kelish uchun saqlanadi) */
   totalRevenue: number;
+  revenueAllTime: number;
+  revenueToday: number;
+  revenueThisMonth: number;
+  approvedToday: number;
+  approvedThisMonth: number;
   recentRequests: AdminPremiumRequest[];
 };
 
