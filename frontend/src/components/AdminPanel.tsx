@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ChangeEvent, CSSProperties, ComponentType, ReactNode } from "react";
 import {
   approveAdminPremiumRequest,
@@ -4049,7 +4050,7 @@ function RejectConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  return (
+  return createPortal(
     <div
       role="alertdialog"
       aria-modal="true"
@@ -4057,7 +4058,7 @@ function RejectConfirmDialog({
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,0.65)",
-        zIndex: 1100,
+        zIndex: 1300,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -4073,6 +4074,8 @@ function RejectConfirmDialog({
           border: "1px solid var(--border)",
           borderRadius: "20px",
           padding: "22px",
+          maxHeight: "85dvh",
+          overflowY: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -4129,7 +4132,8 @@ function RejectConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
