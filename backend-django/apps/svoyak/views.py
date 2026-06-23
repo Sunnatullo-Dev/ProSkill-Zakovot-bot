@@ -59,7 +59,10 @@ def create_room(request):
     body = request.data if isinstance(request.data, dict) else {}
 
     display_name = (body.get("displayName") or "").strip() or f"Host #{user.telegram_id}"
-    category_ids = body.get("categoryIds")  # ixtiyoriy — bo'sh bo'lsa auto rejim
+    # Klassik doska rejimi uchun: bir nechta kategoriya IDlari
+    category_ids = body.get("categoryIds")
+    # Auto rejimda tanlangan bitta mavzu IDsi (ixtiyoriy)
+    raw_cat_id = body.get("categoryId")
     settings_obj = body.get("settings") if isinstance(body.get("settings"), dict) else {}
 
     cleaned_ids: list[int] = []
@@ -69,10 +72,18 @@ def create_room(request):
         except (TypeError, ValueError):
             raise AppError(400, "categoryIds raqamlar ro'yxati bo'lishi kerak")
 
+    auto_category_id: int | None = None
+    if raw_cat_id is not None and not cleaned_ids:
+        try:
+            auto_category_id = int(raw_cat_id)
+        except (TypeError, ValueError):
+            raise AppError(400, "categoryId raqam bo'lishi kerak")
+
     room = repositories.create_room(
         host_telegram_id=user.telegram_id,
         host_display_name=display_name,
         category_ids=cleaned_ids or None,
+        auto_category_id=auto_category_id,
         settings=settings_obj,
     )
     return Response(room, status=201)

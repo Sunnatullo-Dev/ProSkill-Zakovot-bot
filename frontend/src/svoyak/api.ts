@@ -121,10 +121,17 @@ export async function listCategories(): Promise<SvoyakCategoryListItem[]> {
   throw makeDiagnosticError(lastErr, "Server ulanib bo'lmadi");
 }
 
-/** Host yangi xona yaratadi. categoryIds yo'q bo'lsa — auto rejim. */
+/** Host yangi xona yaratadi.
+ *
+ * categoryIds yo'q bo'lsa — auto rejim.
+ * categoryId berilsa — auto rejimda faqat shu mavzudan savollar.
+ * categoryId null bo'lsa yoki ko'rsatilmasa — barcha mavzulardan aralash.
+ */
 export async function createRoom(input: {
   displayName: string;
   categoryIds?: number[];
+  /** Auto rejim uchun bitta mavzu IDsi. null = aralash. */
+  categoryId?: number | null;
   settings?: Record<string, unknown>;
 }): Promise<SvoyakRoomState> {
   return request<SvoyakRoomState>("/svoyak/rooms", {

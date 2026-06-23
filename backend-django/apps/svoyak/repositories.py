@@ -100,21 +100,24 @@ def create_room(
     host_telegram_id: int,
     host_display_name: str,
     category_ids: list[int] | None = None,
+    auto_category_id: int | None = None,
     settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Yangi xona yaratadi va hostni birinchi o'yinchi sifatida qo'shadi.
 
     category_ids bo'sh yoki yo'q bo'lsa — auto rejim (savolar avtomatik).
+    auto_category_id berilsa — auto rejimda faqat shu mavzudan savollar olinadi.
     category_ids berilsa — klassik doska rejimi.
     """
     if host_telegram_id <= 0:
         raise AppError(401, "Mehmon Svoyak xonasi yaratolmaydi — Telegram orqali kiring")
 
-    # Auto rejim: kategoriya tanlanmaydi
+    # Auto rejim: kategoriya tanlanmaydi yoki faqat bitta mavzu tanlanadi
     if not category_ids:
         return _create_auto_room(
             host_telegram_id=host_telegram_id,
             host_display_name=host_display_name,
+            auto_category_id=auto_category_id,
             settings=settings,
         )
 
@@ -624,9 +627,24 @@ def _create_auto_room(
     *,
     host_telegram_id: int,
     host_display_name: str,
+    auto_category_id: int | None = None,
     settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Auto rejim xona — kategoriya yo'q, savollar keyinchalik tanlanadi."""
+    """Auto rejim xona — ixtiyoriy bitta mavzu, savollar keyinchalik tanlanadi.
+
+    auto_category_id berilsa — faqat shu mavzudan savollar olinadi.
+    None bo'lsa — barcha mavzulardan aralash (oldingi xatti-harakat).
+    """
+    # Mavzu validatsiya — avval tekshiramiz
+    if auto_category_id is not None:
+        cat = SvoyakCategory.objects.filter(id=auto_category_id, is_active=True).first()
+        if not cat:
+            raise AppError(400, "Tanlangan mavzu topilmadi yoki faol emas")
+        # Eng kamida bir qiymat uchun savol bormi?
+        has_q = SvoyakQuestion.objects.filter(category=cat, is_active=True).exists()
+        if not has_q:
+            raise AppError(400, f"\"{cat.name}\" mavzusida hech qanday savol yo'q")
+
     code = ""
     for _ in range(CODE_GEN_ATTEMPTS):
         candidate = _generate_code()
@@ -638,6 +656,8 @@ def _create_auto_room(
 
     init_settings = dict(settings or {})
     init_settings["auto_mode"] = True
+    if auto_category_id is not None:
+        init_settings["selected_category_id"] = auto_category_id
 
     with transaction.atomic():
         room = SvoyakRoom.objects.create(
@@ -701,6 +721,10 @@ def start_game(*, code: str, telegram_id: int) -> dict[str, Any]:
 def _setup_auto_questions(room: SvoyakRoom, player_count: int) -> None:
     """Auto rejim uchun savol IDlarini tanlab settings'ga yozadi.
 
+    Agar settings["selected_category_id"] belgilangan bo'lsa — faqat shu
+    mavzudan savollar tanlanadi (har value_tier uchun bittadan, tartibda).
+    Aks holda — barcha aktiv kategoriyalardan aralash (oldingi xatti-harakat).
+
     Tartib: kategoriyalar SvoyakCategory.order bo'yicha, har kategoriya ichida
     value_tier o'sish tartibida (10, 20, 30, 40, 50). Mavzular aralashib ketmaydi.
     """
@@ -710,7 +734,45 @@ def _setup_auto_questions(room: SvoyakRoom, player_count: int) -> None:
 
     q_count = _get_question_count(host_score, player_count)
 
-    # Aktiv kategoriyalarni tartib bilan olamiz
+    selected_cat_id: int | None = room.settings.get("selected_category_id")
+
+    if selected_cat_id is not None:
+        # ── Tanlangan mavzu bo'yicha savollar ───────────────────────────────
+        cat = SvoyakCategory.objects.filter(id=selected_cat_id, is_active=True).first()
+        if not cat:
+            raise AppError(400, "Tanlangan mavzu topilmadi yoki faol emas")
+
+        ordered_ids: list[int] = []
+        for value in (10, 20, 30, 40, 50):
+            ids = list(
+                SvoyakQuestion.objects.filter(
+                    category=cat, value_tier=value, is_active=True
+                ).values_list("id", flat=True)
+            )
+            if ids:
+                ordered_ids.append(secrets.choice(ids))
+
+        if not ordered_ids:
+            raise AppError(400, f"\"{cat.name}\" mavzusida yetarli savol yo'q")
+
+        # Kategoriyadan chiqqan savollar soni q_count dan kam bo'lishi mumkin
+        unique = ordered_ids[:q_count]
+
+        settings = dict(room.settings)
+        settings.update({
+            "question_ids": [str(i) for i in unique],
+            "question_index": 0,
+            "total_questions": len(unique),
+            "use_general_pool": False,
+            "selected_category_name": cat.name,
+            "selected_category_icon": cat.icon_emoji,
+            "question_started_at_ms": 0,
+        })
+        room.settings = settings
+        room.save(update_fields=["settings"])
+        return
+
+    # ── Aralash rejim: barcha aktiv kategoriyalardan ─────────────────────────
     categories = list(
         SvoyakCategory.objects.filter(is_active=True).order_by("order", "name")
     )
@@ -737,7 +799,7 @@ def _setup_auto_questions(room: SvoyakRoom, player_count: int) -> None:
 
     # Har kategoriya uchun, har value_tier uchun bitta random savol tanlaymiz,
     # tartib saqlanadi: category.order asc, value_tier asc (10→20→30→40→50).
-    ordered_ids: list[int] = []
+    ordered_ids = []
     for cat in categories:
         for value in (10, 20, 30, 40, 50):
             ids = list(
@@ -1126,6 +1188,27 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
             "isPlaying": room.status == "playing" and started_ms > 0 and q_idx < total,
         }
 
+    # Tanlangan mavzu ma'lumotini chiqaramiz (lobby ekranda ko'rsatish uchun)
+    selected_category: dict[str, Any] | None = None
+    if is_auto:
+        cat_id = room.settings.get("selected_category_id")
+        if cat_id:
+            # Avval settings'dan keshdan olamiz (o'yin boshlanganda yozilgan)
+            cat_name = room.settings.get("selected_category_name")
+            cat_icon = room.settings.get("selected_category_icon", "")
+            if not cat_name:
+                # Lobby bosqichida kesh yo'q — DB'dan bir marta olamiz
+                _cat = SvoyakCategory.objects.filter(id=cat_id).only("name", "icon_emoji").first()
+                if _cat:
+                    cat_name = _cat.name
+                    cat_icon = _cat.icon_emoji
+            if cat_name:
+                selected_category = {
+                    "id": cat_id,
+                    "name": cat_name,
+                    "iconEmoji": cat_icon or "",
+                }
+
     return {
         "code": room.code,
         "status": room.status,
@@ -1134,6 +1217,7 @@ def _serialize_room(room: SvoyakRoom, *, viewer_telegram_id: int | None = None) 
         "startedAt": room.started_at.isoformat() if room.started_at else None,
         "settings": room.settings,
         "isAutoMode": is_auto,
+        "selectedCategory": selected_category,
         "autoState": auto_state,
         "players": [_serialize_player(p) for p in players],
         "board": [

@@ -79,6 +79,12 @@ export type SvoyakAutoState = {
   isPlaying: boolean;
 };
 
+export type SvoyakSelectedCategory = {
+  id: number;
+  name: string;
+  iconEmoji: string;
+};
+
 export type SvoyakRoomState = {
   code: string;
   status: SvoyakRoomStatus;
@@ -87,6 +93,8 @@ export type SvoyakRoomState = {
   startedAt: string | null;
   settings: Record<string, unknown>;
   isAutoMode: boolean;
+  /** Auto rejimda tanlangan mavzu (null = aralash). */
+  selectedCategory: SvoyakSelectedCategory | null;
   autoState: SvoyakAutoState | null;
   players: SvoyakPlayer[];
   board: SvoyakBoardCell[];

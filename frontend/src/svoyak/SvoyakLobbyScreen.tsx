@@ -10,7 +10,7 @@
  *   - Ishtirokchilar ro'yxati
  *   - Boshlash tugma (faqat host'da, kamida 2 o'yinchi)
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   createRoom,
@@ -138,6 +138,8 @@ export default function SvoyakLobbyScreen({
   const [categories, setCategories] = useState<SvoyakCategoryListItem[]>([]);
   const [selectedCatIds, setSelectedCatIds] = useState<Set<number>>(new Set());
   const [catsLoading, setCatsLoading] = useState(false);
+  // Auto rejim uchun tanlangan bitta mavzu IDsi. null = aralash (barchasi).
+  const [selectedTopicId, setSelectedTopicId] = useState<number | null>(null);
 
   // Join ekrani:
   const [joinCodeInput, setJoinCodeInput] = useState(initialJoinCode ?? "");
@@ -196,8 +198,11 @@ export default function SvoyakLobbyScreen({
     setError("");
     setBusy(true);
     try {
-      // Auto rejim: kategoriya tanlanmaydi — savollar avtomatik beriladi
-      const state = await createRoom({ displayName: playerName });
+      // Auto rejim: selectedTopicId null bo'lsa aralash, aks holda bitta mavzu
+      const state = await createRoom({
+        displayName: playerName,
+        categoryId: selectedTopicId ?? undefined,
+      });
       setActiveCode(state.code);
       setMode("in_lobby");
     } catch (err) {
@@ -362,21 +367,108 @@ export default function SvoyakLobbyScreen({
   }
 
   if (mode === "host_setup") {
-    // Xona yaratish — auto rejim, kategoriya tanlanmaydi
+    const selectedCat = categories.find((c) => c.id === selectedTopicId) ?? null;
+
     return (
       <div style={PAGE}>
         <div style={TITLE}>🎯 Yangi o'yin</div>
-        <div style={SUBTITLE}>Savollar avtomatik ketma-ket beriladi</div>
+        <div style={SUBTITLE}>Mavzu tanlang yoki aralash rejimda o'ynang</div>
 
-        <div style={{ ...CARD, textAlign: "center", padding: "24px" }}>
-          <div style={{ fontSize: "48px", marginBottom: "12px" }}>🚀</div>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text)", marginBottom: "8px" }}>
-            Auto rejim
+        {/* Mavzu tanlash */}
+        <div style={CARD}>
+          <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "0.18em", marginBottom: "10px" }}>
+            MAVZU
           </div>
-          <div style={{ fontSize: "13px", color: "var(--muted)", lineHeight: 1.6, marginBottom: "16px" }}>
-            Solo: 3 ta savol • Jamoa: 7 ta savol<br />
-            Daraja oshsa — savol soni ham ko'payadi<br />
-            Faqat matn javob, vaqt: 15 soniya
+
+          {catsLoading ? (
+            <div style={{ textAlign: "center", padding: "18px 0", color: "var(--muted)", fontSize: "13px" }}>
+              Mavzular yuklanmoqda...
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {/* "Aralash" pill */}
+              <button
+                type="button"
+                onClick={() => { hapticSelect(); setSelectedTopicId(null); }}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: "999px",
+                  border: selectedTopicId === null
+                    ? "1.5px solid var(--svoyak-gold, #f5c842)"
+                    : "1.5px solid var(--svoyak-border, #1f3a6e)",
+                  background: selectedTopicId === null
+                    ? "rgba(245,200,66,0.18)"
+                    : "var(--svoyak-surface, #0f1f3a)",
+                  color: selectedTopicId === null ? "var(--svoyak-gold, #f5c842)" : "var(--text)",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "border-color 0.2s, background 0.2s",
+                }}
+              >
+                🎲 Aralash
+              </button>
+
+              {categories.filter((c) => c.ready).map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => { hapticSelect(); setSelectedTopicId(cat.id); }}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "999px",
+                    border: selectedTopicId === cat.id
+                      ? "1.5px solid var(--svoyak-gold, #f5c842)"
+                      : "1.5px solid var(--svoyak-border, #1f3a6e)",
+                    background: selectedTopicId === cat.id
+                      ? "rgba(245,200,66,0.18)"
+                      : "var(--svoyak-surface, #0f1f3a)",
+                    color: selectedTopicId === cat.id ? "var(--svoyak-gold, #f5c842)" : "var(--text)",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    transition: "border-color 0.2s, background 0.2s",
+                  }}
+                >
+                  {cat.iconEmoji ? `${cat.iconEmoji} ` : ""}{cat.name}
+                </button>
+              ))}
+
+              {/* Savolsiz kategoriyalar — kulrang, bosilmaydi */}
+              {categories.filter((c) => !c.ready).map((cat) => (
+                <span
+                  key={cat.id}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "999px",
+                    border: "1.5px solid rgba(255,255,255,0.06)",
+                    background: "rgba(0,0,0,0.15)",
+                    color: "rgba(136,146,164,0.45)",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "not-allowed",
+                    userSelect: "none",
+                  }}
+                  title="Bu mavzuda yetarli savol yo'q"
+                >
+                  {cat.iconEmoji ? `${cat.iconEmoji} ` : ""}{cat.name}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Tanlangan mavzu haqida qisqa ma'lumot */}
+          <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--muted)", lineHeight: 1.6 }}>
+            {selectedTopicId === null ? (
+              <>Barcha mavzulardan aralash — solo: 3 ta, jamoa: 7 ta savol</>
+            ) : selectedCat ? (
+              <>
+                <span style={{ color: "var(--svoyak-gold, #f5c842)", fontWeight: 700 }}>
+                  {selectedCat.iconEmoji ? `${selectedCat.iconEmoji} ` : ""}{selectedCat.name}
+                </span>
+                {" "}mavzusidan — ball oshganda 50 bacha savol ({selectedCat.questionCount} ta variant)
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -522,6 +614,7 @@ export default function SvoyakLobbyScreen({
   const isAutoMode = Boolean(roomState?.isAutoMode);
   const minPlayers = isAutoMode ? 1 : 2;
   const canStart = isHost && players.filter((p) => p.status === "connected").length >= minPlayers;
+  const lobbySelectedCat = roomState?.selectedCategory ?? null;
 
   return (
     <div style={PAGE}>
@@ -591,6 +684,29 @@ export default function SvoyakLobbyScreen({
           </button>
         </div>
       </div>
+
+      {/* Tanlangan mavzu badge (auto rejim uchun) */}
+      {isAutoMode && (
+        <div style={{
+          ...CARD,
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "12px 16px",
+        }}>
+          <span style={{ fontSize: "18px" }}>
+            {lobbySelectedCat ? (lobbySelectedCat.iconEmoji || "📚") : "🎲"}
+          </span>
+          <div>
+            <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "0.15em", marginBottom: "2px" }}>
+              MAVZU
+            </div>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--svoyak-gold, #f5c842)" }}>
+              {lobbySelectedCat ? `${lobbySelectedCat.iconEmoji ? lobbySelectedCat.iconEmoji + " " : ""}${lobbySelectedCat.name}` : "Aralash (barcha mavzular)"}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* O'yinchilar */}
       <div style={CARD}>
