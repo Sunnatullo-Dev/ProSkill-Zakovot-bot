@@ -369,107 +369,256 @@ export default function SvoyakLobbyScreen({
   if (mode === "host_setup") {
     const selectedCat = categories.find((c) => c.id === selectedTopicId) ?? null;
 
+    // Gold topic list row shared styles
+    const topicRowBase: CSSProperties = {
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      width: "100%",
+      padding: "13px 14px",
+      borderRadius: "12px",
+      border: "1.5px solid var(--svoyak-border, #1f3a6e)",
+      background: "var(--svoyak-surface, #0f1f3a)",
+      textAlign: "left",
+      cursor: "pointer",
+      transition: "border-color 0.18s, background 0.18s",
+      marginBottom: "6px",
+    };
+    const topicRowSelected: CSSProperties = {
+      ...topicRowBase,
+      border: "1.5px solid var(--svoyak-gold, #f5c842)",
+      background: "rgba(245,200,66,0.10)",
+    };
+    const topicRowDisabled: CSSProperties = {
+      ...topicRowBase,
+      border: "1.5px solid rgba(255,255,255,0.05)",
+      background: "rgba(0,0,0,0.12)",
+      cursor: "not-allowed",
+      opacity: 0.45,
+    };
+    const emojiChip: CSSProperties = {
+      width: "36px",
+      height: "36px",
+      borderRadius: "10px",
+      background: "rgba(245,200,66,0.12)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "18px",
+      flexShrink: 0,
+    };
+    const emojiChipDisabled: CSSProperties = {
+      ...emojiChip,
+      background: "rgba(255,255,255,0.05)",
+    };
+
     return (
       <div style={PAGE}>
-        <div style={TITLE}>🎯 Yangi o'yin</div>
-        <div style={SUBTITLE}>Mavzu tanlang yoki aralash rejimda o'ynang</div>
-
-        {/* Mavzu tanlash */}
-        <div style={CARD}>
-          <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "0.18em", marginBottom: "10px" }}>
-            MAVZU
+        {/* Header */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          marginBottom: "4px",
+        }}>
+          <span style={{
+            fontSize: "28px",
+            filter: "drop-shadow(0 0 8px rgba(245,200,66,0.6))",
+          }}>🎯</span>
+          <div style={{
+            fontFamily: "var(--svoyak-font-heading)",
+            fontSize: "24px",
+            fontWeight: 900,
+            letterSpacing: "0.02em",
+            background:
+              "linear-gradient(120deg, var(--svoyak-gold, #f5c842) 0%, #FFD580 55%, #FF8A4C 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+          }}>
+            Yangi o'yin
           </div>
+        </div>
+        <div style={{ ...SUBTITLE, marginBottom: "16px" }}>
+          Mavzu tanlang yoki aralash rejimda o'ynang
+        </div>
 
+        {/* Section label */}
+        <div style={{
+          fontSize: "10px",
+          fontWeight: 800,
+          color: "var(--svoyak-gold, #f5c842)",
+          letterSpacing: "0.22em",
+          marginBottom: "8px",
+          paddingLeft: "2px",
+          opacity: 0.85,
+        }}>
+          MAVZU TANLANG
+        </div>
+
+        {/* Topic list card */}
+        <div style={{
+          ...CARD,
+          padding: "10px 10px 4px",
+          background: "rgba(10,20,40,0.75)",
+          border: "1px solid rgba(245,200,66,0.18)",
+          maxHeight: "58dvh",
+          overflowY: "auto",
+        }}>
           {catsLoading ? (
-            <div style={{ textAlign: "center", padding: "18px 0", color: "var(--muted)", fontSize: "13px" }}>
+            <div style={{
+              textAlign: "center",
+              padding: "24px 0",
+              color: "var(--muted)",
+              fontSize: "13px",
+            }}>
               Mavzular yuklanmoqda...
             </div>
           ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {/* "Aralash" pill */}
+            <>
+              {/* "Aralash" — always first */}
               <button
                 type="button"
                 onClick={() => { hapticSelect(); setSelectedTopicId(null); }}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: "999px",
-                  border: selectedTopicId === null
-                    ? "1.5px solid var(--svoyak-gold, #f5c842)"
-                    : "1.5px solid var(--svoyak-border, #1f3a6e)",
-                  background: selectedTopicId === null
-                    ? "rgba(245,200,66,0.18)"
-                    : "var(--svoyak-surface, #0f1f3a)",
-                  color: selectedTopicId === null ? "var(--svoyak-gold, #f5c842)" : "var(--text)",
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  transition: "border-color 0.2s, background 0.2s",
-                }}
+                style={selectedTopicId === null ? topicRowSelected : topicRowBase}
               >
-                🎲 Aralash
+                <span style={selectedTopicId === null
+                  ? { ...emojiChip, background: "rgba(245,200,66,0.22)" }
+                  : emojiChip}>
+                  🎲
+                </span>
+                <span style={{
+                  flex: 1,
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  color: selectedTopicId === null
+                    ? "var(--svoyak-gold, #f5c842)"
+                    : "var(--text)",
+                }}>
+                  Aralash
+                  <span style={{
+                    display: "block",
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    color: "var(--muted)",
+                    marginTop: "1px",
+                  }}>
+                    Barcha mavzulardan
+                  </span>
+                </span>
+                {selectedTopicId === null && (
+                  <span style={{
+                    fontSize: "16px",
+                    color: "var(--svoyak-gold, #f5c842)",
+                    fontWeight: 900,
+                    flexShrink: 0,
+                  }}>✓</span>
+                )}
               </button>
 
-              {categories.filter((c) => c.ready).map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => { hapticSelect(); setSelectedTopicId(cat.id); }}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: "999px",
-                    border: selectedTopicId === cat.id
-                      ? "1.5px solid var(--svoyak-gold, #f5c842)"
-                      : "1.5px solid var(--svoyak-border, #1f3a6e)",
-                    background: selectedTopicId === cat.id
-                      ? "rgba(245,200,66,0.18)"
-                      : "var(--svoyak-surface, #0f1f3a)",
-                    color: selectedTopicId === cat.id ? "var(--svoyak-gold, #f5c842)" : "var(--text)",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    transition: "border-color 0.2s, background 0.2s",
-                  }}
-                >
-                  {cat.iconEmoji ? `${cat.iconEmoji} ` : ""}{cat.name}
-                </button>
-              ))}
+              {/* Divider */}
+              <div style={{
+                height: "1px",
+                background: "rgba(245,200,66,0.12)",
+                margin: "6px 2px 8px",
+              }} />
 
-              {/* Savolsiz kategoriyalar — kulrang, bosilmaydi */}
+              {/* Ready categories */}
+              {categories.filter((c) => c.ready).map((cat) => {
+                const isSel = selectedTopicId === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => { hapticSelect(); setSelectedTopicId(cat.id); }}
+                    style={isSel ? topicRowSelected : topicRowBase}
+                  >
+                    <span style={isSel
+                      ? { ...emojiChip, background: "rgba(245,200,66,0.22)" }
+                      : emojiChip}>
+                      {cat.iconEmoji || "📚"}
+                    </span>
+                    <span style={{
+                      flex: 1,
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      color: isSel ? "var(--svoyak-gold, #f5c842)" : "var(--text)",
+                    }}>
+                      {cat.name}
+                      {cat.questionCount != null && (
+                        <span style={{
+                          display: "block",
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          color: "var(--muted)",
+                          marginTop: "1px",
+                        }}>
+                          {cat.questionCount} ta savol
+                        </span>
+                      )}
+                    </span>
+                    {isSel && (
+                      <span style={{
+                        fontSize: "16px",
+                        color: "var(--svoyak-gold, #f5c842)",
+                        fontWeight: 900,
+                        flexShrink: 0,
+                      }}>✓</span>
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Disabled / no-questions categories */}
               {categories.filter((c) => !c.ready).map((cat) => (
-                <span
+                <div
                   key={cat.id}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: "999px",
-                    border: "1.5px solid rgba(255,255,255,0.06)",
-                    background: "rgba(0,0,0,0.15)",
-                    color: "rgba(136,146,164,0.45)",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    cursor: "not-allowed",
-                    userSelect: "none",
-                  }}
+                  style={topicRowDisabled}
                   title="Bu mavzuda yetarli savol yo'q"
                 >
-                  {cat.iconEmoji ? `${cat.iconEmoji} ` : ""}{cat.name}
-                </span>
+                  <span style={emojiChipDisabled}>
+                    {cat.iconEmoji || "📚"}
+                  </span>
+                  <span style={{
+                    flex: 1,
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    color: "var(--muted)",
+                  }}>
+                    {cat.name}
+                    <span style={{
+                      display: "block",
+                      fontSize: "11px",
+                      fontWeight: 400,
+                      marginTop: "1px",
+                    }}>
+                      Yetarli savol yo'q
+                    </span>
+                  </span>
+                </div>
               ))}
-            </div>
+            </>
           )}
+        </div>
 
-          {/* Tanlangan mavzu haqida qisqa ma'lumot */}
-          <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--muted)", lineHeight: 1.6 }}>
-            {selectedTopicId === null ? (
-              <>Barcha mavzulardan aralash — solo: 3 ta, jamoa: 7 ta savol</>
-            ) : selectedCat ? (
-              <>
-                <span style={{ color: "var(--svoyak-gold, #f5c842)", fontWeight: 700 }}>
-                  {selectedCat.iconEmoji ? `${selectedCat.iconEmoji} ` : ""}{selectedCat.name}
-                </span>
-                {" "}mavzusidan — ball oshganda 50 bacha savol ({selectedCat.questionCount} ta variant)
-              </>
-            ) : null}
-          </div>
+        {/* Helper line under list */}
+        <div style={{
+          fontSize: "12px",
+          color: "var(--muted)",
+          lineHeight: 1.6,
+          margin: "8px 2px 14px",
+          paddingLeft: "2px",
+        }}>
+          {selectedTopicId === null ? (
+            <>Barcha mavzulardan aralash — solo: <span style={{ color: "var(--svoyak-gold, #f5c842)", fontWeight: 700 }}>3 ta</span>, jamoa: <span style={{ color: "var(--svoyak-gold, #f5c842)", fontWeight: 700 }}>7 ta</span> savol</>
+          ) : selectedCat ? (
+            <>
+              <span style={{ color: "var(--svoyak-gold, #f5c842)", fontWeight: 700 }}>
+                {selectedCat.iconEmoji ? `${selectedCat.iconEmoji} ` : ""}{selectedCat.name}
+              </span>
+              {" "}mavzusidan — ball oshganda 50 bacha savol ({selectedCat.questionCount} ta variant)
+            </>
+          ) : null}
         </div>
 
         {error ? (
