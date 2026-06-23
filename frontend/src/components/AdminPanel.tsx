@@ -3721,6 +3721,7 @@ function PendingRequestDetail({
   const [rejectReason, setRejectReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [zoomedReceipt, setZoomedReceipt] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   async function handleApprove() {
@@ -3836,8 +3837,8 @@ function PendingRequestDetail({
                 border: "1px solid var(--border)",
                 borderRadius: "16px",
                 overflow: "hidden",
-                marginBottom: "8px",
-                minHeight: "160px",
+                marginBottom: "4px",
+                minHeight: "100px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -3855,10 +3856,59 @@ function PendingRequestDetail({
                 <img
                   src={media.url}
                   alt="To'lov cheki"
-                  style={{ maxWidth: "100%", maxHeight: "60vh", display: "block", objectFit: "contain", borderRadius: "16px" }}
+                  onClick={() => setZoomedReceipt(true)}
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "240px",
+                    display: "block",
+                    objectFit: "contain",
+                    borderRadius: "16px",
+                    cursor: "zoom-in",
+                  }}
                 />
               ) : null}
             </div>
+            {media.status === "ready" ? (
+              <div style={{ fontSize: "11px", color: "var(--muted)", textAlign: "center", marginBottom: "12px" }}>
+                Kattalashtirish uchun bosing
+              </div>
+            ) : (
+              <div style={{ marginBottom: "12px" }} />
+            )}
+
+            {/* Fullscreen receipt zoom overlay */}
+            {zoomedReceipt && media.status === "ready" ? (
+              <div
+                onClick={() => setZoomedReceipt(false)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 1100,
+                  background: "rgba(0,0,0,0.92)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "column",
+                  gap: "16px",
+                  backdropFilter: "blur(6px)",
+                }}
+              >
+                <img
+                  src={media.url}
+                  alt="To'lov cheki (to'liq)"
+                  style={{
+                    maxWidth: "96vw",
+                    maxHeight: "88dvh",
+                    objectFit: "contain",
+                    borderRadius: "12px",
+                    boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+                  }}
+                />
+                <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}>
+                  Yopish uchun bosing
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Pinned footer — har doim ko'rinib turadi */}
