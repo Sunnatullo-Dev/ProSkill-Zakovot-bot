@@ -3,6 +3,42 @@ import type { CSSProperties } from "react";
 import { getPremiumInfo, requestPremium } from "../api/client";
 import type { PremiumInfo, PremiumUsageEntry } from "../types";
 
+// ─── Countdown hook ───────────────────────────────────────────────────────────
+// Bir intervalda barcha resetsAt sanalgichlarni yangilaymiz.
+// Qaytaradi: { [resetsAt ISO]: "HH:MM:SS" | "Yangilandi" }
+
+function useCountdowns(resetsAtList: (string | null | undefined)[]): Record<string, string> {
+  const [ticks, setTicks] = useState(0);
+
+  useEffect(() => {
+    // Hech qanday aktiv resetsAt bo'lmasa interval keraksiz
+    const hasAny = resetsAtList.some((r) => r != null);
+    if (!hasAny) return;
+
+    const id = window.setInterval(() => setTicks((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [resetsAtList.filter(Boolean).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const result: Record<string, string> = {};
+  for (const iso of resetsAtList) {
+    if (!iso) continue;
+    if (result[iso] !== undefined) continue; // deduplicate
+    const diff = new Date(iso).getTime() - Date.now();
+    if (diff <= 0) {
+      result[iso] = "Yangilandi — qayta urinib ko'ring";
+    } else {
+      const totalSec = Math.ceil(diff / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      result[iso] = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+  }
+  // ticks used only to trigger re-render
+  void ticks;
+  return result;
+}
+
 type PremiumScreenProps = {
   onBack: () => void;
 };
@@ -812,6 +848,14 @@ function BenefitsBlock({ text }: { text: string }) {
 function UsageBlock({ info }: { info: PremiumInfo }) {
   const entries = Object.entries(info.usage) as [string, PremiumUsageEntry][];
   const hasLimitedEntries = entries.some(([, u]) => u.limited);
+
+  // Barcha cheklangan bo'limlarning resetsAt qiymatlarini yig'amiz
+  const resetsAtList = entries
+    .filter(([, u]) => u.limited && u.remaining === 0)
+    .map(([, u]) => u.resetsAt ?? null);
+
+  const countdowns = useCountdowns(resetsAtList);
+
   if (!hasLimitedEntries) return null;
 
   return (
@@ -843,6 +887,10 @@ function UsageBlock({ info }: { info: PremiumInfo }) {
 
             // Count label color
             const countColor = isFull ? "#EF4444" : isNear ? "#F59E0B" : "var(--text)";
+
+            // Countdown label — faqat limit to'lib turganida ko'rsatiladi
+            const countdownText = isFull && u.resetsAt ? countdowns[u.resetsAt] : null;
+            const countdownDone = countdownText === "Yangilandi — qayta urinib ko'ring";
 
             return (
               <div
@@ -952,6 +1000,26 @@ function UsageBlock({ info }: { info: PremiumInfo }) {
                       }}
                     />
                   </div>
+
+                  {/* Live countdown — faqat limit to'lib turganida */}
+                  {countdownText ? (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        fontSize: "11.5px",
+                        fontWeight: 700,
+                        color: countdownDone ? "#22C55E" : "#F59E0B",
+                      }}
+                    >
+                      <span style={{ fontSize: "12px" }}>{countdownDone ? "✅" : "⏳"}</span>
+                      {countdownDone
+                        ? countdownText
+                        : `${countdownText} dan keyin yangilanadi`}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );

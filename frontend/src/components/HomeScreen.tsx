@@ -306,37 +306,55 @@ export default function HomeScreen({
             borderRadius: "16px",
             padding: "14px 16px",
             display: "flex",
-            alignItems: "center",
-            gap: "12px",
+            flexDirection: "column",
+            gap: "10px",
           }}
         >
-          <span style={{ fontSize: "22px", flex: "0 0 auto" }}>⭐</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)" }}>
-              Limit tugadi
+          {/* Top row: icon + text + button */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ fontSize: "22px", flex: "0 0 auto" }}>⛔</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)" }}>
+                Bugungi bepul limit tugadi!
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                Premium oling — cheksiz o'ynang!
+              </div>
             </div>
-            <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-              {error || "Bugungi bepul limit tugadi."}
-            </div>
+            <button
+              type="button"
+              onClick={onPremiumOpen}
+              style={{
+                padding: "9px 14px",
+                background: "linear-gradient(135deg, #B8860B, #DAA520)",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "12px",
+                fontWeight: 800,
+                color: "#1a0a00",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flex: "0 0 auto",
+              }}
+            >
+              ⭐ Premium
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onPremiumOpen}
+          {/* Reset hint */}
+          <div
             style={{
-              padding: "9px 14px",
-              background: "linear-gradient(135deg, #B8860B, #DAA520)",
-              border: "none",
-              borderRadius: "10px",
-              fontSize: "12px",
-              fontWeight: 800,
-              color: "#1a0a00",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              flex: "0 0 auto",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              fontSize: "11.5px",
+              fontWeight: 600,
+              color: "#F59E0B",
+              paddingLeft: "2px",
             }}
           >
-            Premium
-          </button>
+            <span>⏳</span>
+            <span>Limit ertaga yangilanadi</span>
+          </div>
         </div>
       ) : error ? (
         <div

@@ -191,6 +191,8 @@ export type PremiumUsageEntry = {
   limit: number | null;
   remaining: number | null;
   limited: boolean;
+  /** Limit yangilanish vaqti — ISO 8601, mahalliy yarim tun. Faqat limited=true bo'lganda null emas. */
+  resetsAt?: string | null;
 };
 
 export type PremiumUsage = {

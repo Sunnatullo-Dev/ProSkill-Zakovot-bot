@@ -8,12 +8,12 @@ Xavfsizlik printsipi:
 
 Chaqirish tartibi:
   check_and_consume(user, section)  → None yoki AppError(403, ...)
-  get_usage(user)                   → dict: har bo'lim uchun used/limit/remaining
+  get_usage(user)                   → dict: har bo'lim uchun used/limit/remaining/resetsAt
 """
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from django.core.cache import cache
 
@@ -39,11 +39,23 @@ _COUNTER_TTL = 26 * 60 * 60  # soniya
 
 
 def _today_str() -> str:
-    return date.today().isoformat()  # YYYY-MM-DD
+    return date.today().isoformat()  # YYYY-MM-DD (mahalliy vaqtga asoslangan)
 
 
 def _cache_key(telegram_id: int, section: str) -> str:
     return f"premlimit:{telegram_id}:{section}:{_today_str()}"
+
+
+def _resets_at_iso() -> str:
+    """Limitni qayta tiklash vaqti — ertangi kun boshlanishi (mahalliy vaqt, yarim tun).
+
+    Cache kalit `date.today()` (mahalliy) sana qatoridan foydalanadi, shuning uchun
+    reset vaqti ham xuddi shu asos bilan mos kelishi zarur.
+    Qaytariladi: ISO 8601 string, masalan "2025-06-24T00:00:00".
+    """
+    tomorrow = date.today() + timedelta(days=1)
+    reset_dt = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, 0)
+    return reset_dt.isoformat()
 
 
 def _get_settings():
@@ -125,26 +137,29 @@ def check_and_consume(user, section: str) -> None:
 def get_usage(user) -> dict:
     """Har bo'lim uchun bugungi foydalanish hisobotini qaytaradi.
 
-    Qaytaradi: { section: { used, limit, remaining, limited } }
-    Premium aktiv bo'lsa used=0, limit=null, remaining=null, limited=False.
+    Qaytaradi: { section: { used, limit, remaining, limited, resetsAt } }
+    Premium aktiv bo'lsa used=0, limit=null, remaining=null, limited=False, resetsAt=null.
+    Cheklangan bo'lim uchun resetsAt = ertangi kun yarim tun (mahalliy vaqt, ISO 8601).
     """
     try:
         settings = _get_settings()
     except Exception:
         logger.warning("premium.get_usage: settings yuklanmadi", exc_info=True)
-        return {sec: {"used": 0, "limit": None, "remaining": None, "limited": False} for sec in VALID_SECTIONS}
+        return {sec: {"used": 0, "limit": None, "remaining": None, "limited": False, "resetsAt": None} for sec in VALID_SECTIONS}
 
     is_premium = getattr(user, "is_premium_active", lambda: False)()
     result = {}
+    # Bir martagina hisoblaymiz — barcha bo'limlar uchun bir xil
+    resets_at = _resets_at_iso()
 
     for section in VALID_SECTIONS:
         if not settings.enabled:
-            result[section] = {"used": 0, "limit": None, "remaining": None, "limited": False}
+            result[section] = {"used": 0, "limit": None, "remaining": None, "limited": False, "resetsAt": None}
             continue
 
         section_cfg = settings.get_section(section)
         if not section_cfg["limited"] or is_premium:
-            result[section] = {"used": 0, "limit": None, "remaining": None, "limited": False}
+            result[section] = {"used": 0, "limit": None, "remaining": None, "limited": False, "resetsAt": None}
             continue
 
         free_limit = section_cfg["free_limit"]
@@ -160,6 +175,7 @@ def get_usage(user) -> dict:
             "limit": free_limit,
             "remaining": remaining,
             "limited": True,
+            "resetsAt": resets_at,
         }
 
     return result
