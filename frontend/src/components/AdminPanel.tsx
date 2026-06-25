@@ -56,14 +56,17 @@ import BoardSection from "./admin/BoardSection";
 import {
   AlertIcon,
   BroadcastIcon,
+  CalendarIcon,
   CheckCircleIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ClockIcon,
   ControllerIcon,
   DashboardIcon,
   EditIcon,
   FileIcon,
   type IconProps,
+  PencilPlusIcon,
   QuestionIcon,
   RefreshIcon,
   SearchIcon,
@@ -3486,10 +3489,11 @@ type AuthorQuestionsTab = "pending" | "approved" | "rejected";
 function AuthorQuestionsAdminSection() {
   const [tab, setTab] = useState<AuthorQuestionsTab>("pending");
 
-  const TABS: Array<{ id: AuthorQuestionsTab; label: string; emoji: string }> = [
-    { id: "pending", label: "Kutilmoqda", emoji: "⏳" },
-    { id: "approved", label: "Tasdiqlangan", emoji: "✅" },
-    { id: "rejected", label: "Rad etilgan", emoji: "❌" },
+  type TabMeta = { id: AuthorQuestionsTab; label: string; Icon: ComponentType<IconProps>; color: string };
+  const TABS: TabMeta[] = [
+    { id: "pending", label: "Kutilmoqda", Icon: ClockIcon, color: "#F59E0B" },
+    { id: "approved", label: "Tasdiqlangan", Icon: CheckCircleIcon, color: "#22C55E" },
+    { id: "rejected", label: "Rad etilgan", Icon: XCircleIcon, color: "#EF4444" },
   ];
 
   return (
@@ -3507,6 +3511,7 @@ function AuthorQuestionsAdminSection() {
       >
         {TABS.map((t) => {
           const active = tab === t.id;
+          const Icon = t.Icon;
           return (
             <button
               key={t.id}
@@ -3516,22 +3521,22 @@ function AuthorQuestionsAdminSection() {
                 flex: "0 0 auto",
                 padding: "8px 14px",
                 borderRadius: "999px",
-                border: active ? "1.5px solid #A78BFA" : "1.5px solid var(--border)",
+                border: active ? `1.5px solid ${t.color}` : "1.5px solid var(--border)",
                 background: active
-                  ? "linear-gradient(135deg, rgba(167,139,250,0.22), rgba(124,58,237,0.12))"
+                  ? `${t.color}18`
                   : "var(--card)",
-                color: active ? "#A78BFA" : "var(--muted)",
+                color: active ? t.color : "var(--muted)",
                 fontSize: "12.5px",
                 fontWeight: active ? 800 : 600,
                 cursor: "pointer",
                 whiteSpace: "nowrap",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
+                gap: "6px",
                 transition: "all 0.15s",
               }}
             >
-              <span>{t.emoji}</span>
+              <Icon size={14} />
               {t.label}
             </button>
           );
@@ -3653,20 +3658,58 @@ function AuthorQuestionsTabContent({ status }: { status: AuthorQuestionsTab }) {
             key={item.id}
             style={{
               background: "var(--card)",
-              border: `1px solid ${statusColor}25`,
-              borderRadius: "14px",
+              border: `1px solid ${statusColor}28`,
+              borderRadius: "16px",
               padding: "14px",
             }}
           >
+            {/* Card header: icon chip + status badge */}
             <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-              <span style={{ fontSize: "18px", flexShrink: 0, marginTop: "1px" }}>✍️</span>
+              <div
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "10px",
+                  background: "rgba(167,139,250,0.14)",
+                  color: "#A78BFA",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flex: "0 0 auto",
+                }}
+              >
+                <PencilPlusIcon size={18} />
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Status badge */}
+                <div style={{ marginBottom: "6px" }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "3px 8px",
+                      borderRadius: "999px",
+                      background: `${statusColor}18`,
+                      color: statusColor,
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      letterSpacing: "0.5px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {status === "pending" ? <ClockIcon size={10} /> : status === "approved" ? <CheckCircleIcon size={10} /> : <XCircleIcon size={10} />}
+                    {status === "pending" ? "Kutilmoqda" : status === "approved" ? "Tasdiqlangan" : "Rad etilgan"}
+                  </span>
+                </div>
+                {/* Question text */}
                 <div
                   style={{
                     fontSize: "13px",
                     fontWeight: 800,
                     color: "var(--text)",
-                    marginBottom: "4px",
+                    marginBottom: "6px",
+                    lineHeight: 1.5,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     display: "-webkit-box",
@@ -3676,19 +3719,78 @@ function AuthorQuestionsTabContent({ status }: { status: AuthorQuestionsTab }) {
                 >
                   {item.questionText}
                 </div>
-                <div style={{ fontSize: "12px", color: "#22C55E", fontWeight: 700, marginBottom: "3px" }}>
-                  Javob: {item.answer}
+                {/* Answer row */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    fontSize: "12px",
+                    color: "#22C55E",
+                    fontWeight: 700,
+                    marginBottom: "6px",
+                  }}
+                >
+                  <CheckCircleIcon size={13} />
+                  {item.answer}
                 </div>
-                <div style={{ fontSize: "11px", color: statusColor, fontWeight: 700, marginBottom: "3px" }}>
-                  Muallif: {item.authorName}
+                {/* Author row */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    fontSize: "11px",
+                    color: "var(--muted)",
+                    fontWeight: 600,
+                    marginBottom: "4px",
+                  }}
+                >
+                  <UserIcon size={12} />
+                  <span style={{ fontWeight: 700, color: "var(--text)" }}>{item.authorName}</span>
                 </div>
-                <div style={{ fontSize: "10px", color: "var(--muted)" }}>
-                  {item.createdAt ? new Date(item.createdAt).toLocaleString("uz-UZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
-                  {item.reviewedByName ? ` · ${item.reviewedByName}` : ""}
+                {/* Timestamp row */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "10px",
+                    color: "var(--muted)",
+                  }}
+                >
+                  <CalendarIcon size={10} />
+                  {item.createdAt
+                    ? new Date(item.createdAt).toLocaleString("uz-UZ", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "—"}
+                  {item.reviewedByName ? (
+                    <>
+                      <span style={{ opacity: 0.4, margin: "0 2px" }}>·</span>
+                      <span>{item.reviewedByName}</span>
+                    </>
+                  ) : null}
                 </div>
                 {item.rejectReason ? (
-                  <div style={{ fontSize: "11px", color: "#EF4444", marginTop: "4px" }}>
-                    Sabab: {item.rejectReason}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "5px",
+                      fontSize: "11px",
+                      color: "#EF4444",
+                      marginTop: "6px",
+                      padding: "6px 10px",
+                      background: "rgba(239,68,68,0.08)",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <XCircleIcon size={12} />
+                    <span>{item.rejectReason}</span>
                   </div>
                 ) : null}
               </div>
@@ -3701,7 +3803,7 @@ function AuthorQuestionsTabContent({ status }: { status: AuthorQuestionsTab }) {
                   disabled={acting}
                   style={{
                     flex: 1,
-                    padding: "9px 12px",
+                    padding: "10px 12px",
                     background: "rgba(34,197,94,0.12)",
                     border: "1px solid rgba(34,197,94,0.3)",
                     borderRadius: "10px",
@@ -3710,9 +3812,14 @@ function AuthorQuestionsTabContent({ status }: { status: AuthorQuestionsTab }) {
                     color: "#22C55E",
                     cursor: acting ? "not-allowed" : "pointer",
                     opacity: acting ? 0.6 : 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
                   }}
                   onClick={() => void handleApprove(item)}
                 >
+                  <CheckCircleIcon size={14} />
                   Tasdiqlash
                 </button>
                 <button
@@ -3720,7 +3827,7 @@ function AuthorQuestionsTabContent({ status }: { status: AuthorQuestionsTab }) {
                   disabled={acting}
                   style={{
                     flex: 1,
-                    padding: "9px 12px",
+                    padding: "10px 12px",
                     background: "rgba(239,68,68,0.12)",
                     border: "1px solid rgba(239,68,68,0.3)",
                     borderRadius: "10px",
@@ -3729,6 +3836,10 @@ function AuthorQuestionsTabContent({ status }: { status: AuthorQuestionsTab }) {
                     color: "#EF4444",
                     cursor: acting ? "not-allowed" : "pointer",
                     opacity: acting ? 0.6 : 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
                   }}
                   onClick={() => {
                     setRejectTarget(item);
@@ -3736,6 +3847,7 @@ function AuthorQuestionsTabContent({ status }: { status: AuthorQuestionsTab }) {
                     setActionError("");
                   }}
                 >
+                  <XCircleIcon size={14} />
                   Rad etish
                 </button>
               </div>

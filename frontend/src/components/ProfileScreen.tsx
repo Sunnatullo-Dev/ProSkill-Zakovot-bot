@@ -19,7 +19,19 @@ import { hapticResult, hapticSelect, hapticTap } from "../utils/haptics";
 import { useLanguage } from "../i18n/LanguageContext";
 import { LANG_FLAGS, LANG_LABELS, LANG_SUBLABEL, SUPPORTED_LANGS } from "../i18n/strings";
 import type { Lang } from "../i18n/strings";
-import { CheckCircleIcon, EditIcon, ShieldIcon, StarIcon, TeamIcon } from "./icons";
+import {
+  CalendarIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  CoinIcon,
+  ControllerSimpleIcon,
+  EditIcon,
+  PencilPlusIcon,
+  ShieldIcon,
+  StarIcon,
+  TeamIcon,
+  XCircleIcon,
+} from "./icons";
 import ShareSheet from "./ShareSheet";
 
 const EMPTY_STATS: GameStats = { gamesPlayed: 0, accuracy: 0, bestRoundScore: 0, totalCorrect: 0 };
@@ -506,13 +518,14 @@ export default function ProfileScreen({
                     <span
                       title="Premium a'zo"
                       style={{
-                        fontSize: "16px",
+                        color: "var(--gold)",
                         flex: "0 0 auto",
                         lineHeight: 1,
                         filter: "drop-shadow(0 0 4px rgba(218,165,32,0.7))",
+                        display: "inline-flex",
                       }}
                     >
-                      ⭐
+                      <StarIcon size={16} />
                     </span>
                   ) : null}
                   {canEdit ? (
@@ -622,7 +635,9 @@ export default function ProfileScreen({
             marginBottom: "12px",
           }}
         >
-          <span style={{ fontSize: "20px" }}>⭐</span>
+          <span style={{ color: "var(--gold)", display: "inline-flex" }}>
+            <StarIcon size={22} />
+          </span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "14px", fontWeight: 800, color: "#DAA520" }}>
               Premium a'zo
@@ -652,7 +667,9 @@ export default function ProfileScreen({
             marginBottom: "12px",
           }}
         >
-          <span style={{ fontSize: "20px" }}>⭐</span>
+          <span style={{ color: "var(--gold)", display: "inline-flex" }}>
+            <StarIcon size={22} />
+          </span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
               Zakovat Premium
@@ -902,11 +919,33 @@ export default function ProfileScreen({
                     border: "1px solid rgba(218,165,32,0.15)",
                   }}
                 >
-                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>
-                    📅 {dateLabel} · ⏳ {item.durationDays} kun
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--muted)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <CalendarIcon size={12} />
+                    {dateLabel}
+                    <span style={{ opacity: 0.4, margin: "0 2px" }}>·</span>
+                    <ClockIcon size={12} />
+                    {item.durationDays} kun
                   </div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#DAA520" }}>
-                    💰 {item.amount.toLocaleString()} {item.currency}
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: "#DAA520",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <CoinIcon size={13} />
+                    {item.amount.toLocaleString()} {item.currency}
                   </div>
                 </div>
               );
@@ -946,10 +985,9 @@ export default function ProfileScreen({
             alignItems: "center",
             justifyContent: "center",
             flex: "0 0 auto",
-            fontSize: "20px",
           }}
         >
-          🎮
+          <ControllerSimpleIcon size={20} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
@@ -995,10 +1033,9 @@ export default function ProfileScreen({
             alignItems: "center",
             justifyContent: "center",
             flex: "0 0 auto",
-            fontSize: "20px",
           }}
         >
-          ✍️
+          <PencilPlusIcon size={20} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
@@ -1127,7 +1164,6 @@ function AuthorQuestionForm({
             background: "var(--card)",
             border: "1px solid var(--border)",
             color: "var(--text)",
-            fontSize: "18px",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -1136,7 +1172,9 @@ function AuthorQuestionForm({
           }}
           onClick={onClose}
         >
-          ‹
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.5 4.5 8 12l6.5 7.5" />
+          </svg>
         </button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: "17px", fontWeight: 900, color: "var(--text)" }}>
@@ -1146,7 +1184,15 @@ function AuthorQuestionForm({
             Mualliflik savoli — admin ko'rib chiqadi
           </div>
         </div>
-        <span style={{ fontSize: "22px", flex: "0 0 auto" }}>✍️</span>
+        <span
+          style={{
+            flex: "0 0 auto",
+            color: "#A78BFA",
+            display: "inline-flex",
+          }}
+        >
+          <PencilPlusIcon size={22} />
+        </span>
       </div>
 
       {/* Scrollable content */}
@@ -1172,7 +1218,21 @@ function AuthorQuestionForm({
               textAlign: "center",
             }}
           >
-            <span style={{ fontSize: "52px" }}>✅</span>
+            <div
+              style={{
+                width: "72px",
+                height: "72px",
+                borderRadius: "22px",
+                background: "rgba(34,197,94,0.14)",
+                border: "1.5px solid rgba(34,197,94,0.35)",
+                color: "#22C55E",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <CheckCircleIcon size={36} />
+            </div>
             <div style={{ fontSize: "18px", fontWeight: 900, color: "var(--text)" }}>
               Savolingiz yuborildi!
             </div>
@@ -1374,7 +1434,6 @@ function GameHistoryOverlay({
             background: "var(--card)",
             border: "1px solid var(--border)",
             color: "var(--text)",
-            fontSize: "18px",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -1383,7 +1442,9 @@ function GameHistoryOverlay({
           }}
           onClick={onClose}
         >
-          ‹
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.5 4.5 8 12l6.5 7.5" />
+          </svg>
         </button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: "17px", fontWeight: 900, color: "var(--text)" }}>
@@ -1395,7 +1456,9 @@ function GameHistoryOverlay({
             </div>
           ) : null}
         </div>
-        <span style={{ fontSize: "22px", flex: "0 0 auto" }}>🎮</span>
+        <span style={{ flex: "0 0 auto", color: "var(--accent)", display: "inline-flex" }}>
+          <ControllerSimpleIcon size={22} />
+        </span>
       </div>
 
       {/* Scrollable list */}
@@ -1421,7 +1484,9 @@ function GameHistoryOverlay({
               paddingTop: "60px",
             }}
           >
-            <span style={{ fontSize: "48px", opacity: 0.35 }}>🎮</span>
+            <span style={{ opacity: 0.35, color: "var(--accent)", display: "inline-flex" }}>
+              <ControllerSimpleIcon size={48} />
+            </span>
             <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--muted)", textAlign: "center" }}>
               Hali o'yin o'ynalmagan
             </div>

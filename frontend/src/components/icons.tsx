@@ -288,3 +288,56 @@ export function BroadcastIcon({ size = 20 }: IconProps) {
     </svg>
   );
 }
+
+export function PencilPlusIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <path d="m3.8 17.5 1-3.8L13.6 5a1.5 1.5 0 0 1 2.1 0l1.3 1.3a1.5 1.5 0 0 1 0 2.1L8.2 17l-4.4.5Z" />
+      <path d="m11.8 6.8 3.4 3.4" />
+      <path d="M18 13v6" />
+      <path d="M15 16h6" />
+    </svg>
+  );
+}
+
+export function ClockIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
+export function CalendarIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 10h17" />
+      <path d="M8 3.5V7" />
+      <path d="M16 3.5V7" />
+    </svg>
+  );
+}
+
+export function CoinIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v10" />
+      <path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5" />
+      <path d="M9.5 15h5" />
+    </svg>
+  );
+}
+
+export function ControllerSimpleIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...strokeProps(size)}>
+      <rect x="3" y="7" width="18" height="10" rx="5" />
+      <path d="M7.5 11.5v2.5M6.5 12.5h2.5" />
+      <circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="17.5" cy="12" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
