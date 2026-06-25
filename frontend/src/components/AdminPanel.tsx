@@ -3,9 +3,11 @@ import { createPortal } from "react-dom";
 import type { ChangeEvent, CSSProperties, ComponentType, ReactNode } from "react";
 import {
   approveAdminPremiumRequest,
+  approveAuthorQuestion,
   bulkCreateAdminQuestions,
   createAdminQuestion,
   deleteAdminQuestion,
+  getAdminAuthorQuestions,
   getAdminCategories,
   getAdminPremiumAnalytics,
   getAdminPremiumHolders,
@@ -18,6 +20,7 @@ import {
   getReportedQuestions,
   grantUserPremium,
   rejectAdminPremiumRequest,
+  rejectAuthorQuestion,
   renameAdminCategory,
   revokeUserPremium,
   sendAdminUserMessage,
@@ -32,7 +35,8 @@ import type {
   AdminQuestionsResponse,
   AdminStats,
   AdminUserListItem,
-  AdminUserProfile
+  AdminUserProfile,
+  AuthorQuestion,
 } from "../api/client";
 import type {
   AdminPremiumAnalytics,
@@ -78,7 +82,7 @@ type AdminPanelProps = {
   onExitToUser: () => void;
 };
 
-type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels" | "users" | "board" | "premium";
+type Section = "dashboard" | "questions" | "reports" | "categories" | "svoyak" | "settings" | "channels" | "users" | "board" | "premium" | "author_questions";
 
 type SectionMeta = {
   id: Section;
@@ -158,6 +162,13 @@ const SECTIONS: SectionMeta[] = [
     Icon: StarIcon,
     accent: "#DAA520",
     subtitle: "Premium tizimi — narx, bo'lim limitlari, foydalanuvchilarga berish"
+  },
+  {
+    id: "author_questions",
+    label: "Muallif savollari",
+    Icon: FileIcon,
+    accent: "#A78BFA",
+    subtitle: "Foydalanuvchilar yuborgan savollarni ko'rib chiqish va tasdiqlash"
   }
 ];
 
@@ -448,6 +459,7 @@ export default function AdminPanel({ onExitToUser }: AdminPanelProps) {
           {section === "settings" ? <SettingsSection /> : null}
           {section === "board" ? <BoardSection /> : null}
           {section === "premium" ? <PremiumAdminSection /> : null}
+          {section === "author_questions" ? <AuthorQuestionsAdminSection /> : null}
         </div>
       </div>
     </div>
@@ -3465,6 +3477,414 @@ function defaultSections(): PremiumSections {
     svoyak: { ...entry },
     gameroom: { ...entry },
   };
+}
+
+// ─── Muallif savollari admin bo'limi ─────────────────────────────────────────
+
+type AuthorQuestionsTab = "pending" | "approved" | "rejected";
+
+function AuthorQuestionsAdminSection() {
+  const [tab, setTab] = useState<AuthorQuestionsTab>("pending");
+
+  const TABS: Array<{ id: AuthorQuestionsTab; label: string; emoji: string }> = [
+    { id: "pending", label: "Kutilmoqda", emoji: "⏳" },
+    { id: "approved", label: "Tasdiqlangan", emoji: "✅" },
+    { id: "rejected", label: "Rad etilgan", emoji: "❌" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+      {/* Sub-tab nav */}
+      <div
+        style={{
+          display: "flex",
+          gap: "6px",
+          overflowX: "auto",
+          margin: "0 0 18px",
+          padding: "2px 0 6px",
+          scrollbarWidth: "none",
+        }}
+      >
+        {TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              style={{
+                flex: "0 0 auto",
+                padding: "8px 14px",
+                borderRadius: "999px",
+                border: active ? "1.5px solid #A78BFA" : "1.5px solid var(--border)",
+                background: active
+                  ? "linear-gradient(135deg, rgba(167,139,250,0.22), rgba(124,58,237,0.12))"
+                  : "var(--card)",
+                color: active ? "#A78BFA" : "var(--muted)",
+                fontSize: "12.5px",
+                fontWeight: active ? 800 : 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                transition: "all 0.15s",
+              }}
+            >
+              <span>{t.emoji}</span>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <AuthorQuestionsTabContent key={tab} status={tab} />
+    </div>
+  );
+}
+
+function AuthorQuestionsTabContent({ status }: { status: AuthorQuestionsTab }) {
+  const [items, setItems] = useState<AuthorQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState<AuthorQuestion | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<AuthorQuestion | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [acting, setActing] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await getAdminAuthorQuestions({ status, limit: 50 });
+    setItems(res.items);
+    setLoading(false);
+  }, [status]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function handleApprove(item: AuthorQuestion) {
+    setActing(true);
+    setActionError("");
+    const res = await approveAuthorQuestion(item.id);
+    setActing(false);
+    if (!res.ok) {
+      setActionError(res.error);
+      return;
+    }
+    setSelectedItem(null);
+    void load();
+  }
+
+  async function handleReject() {
+    if (!rejectTarget) return;
+    setActing(true);
+    setActionError("");
+    const res = await rejectAuthorQuestion(rejectTarget.id, rejectReason.trim() || undefined);
+    setActing(false);
+    if (!res.ok) {
+      setActionError(res.error);
+      return;
+    }
+    setRejectTarget(null);
+    setRejectReason("");
+    void load();
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {[1, 2, 3].map((id) => (
+          <div
+            key={id}
+            style={{
+              height: "100px",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "14px",
+              opacity: 0.5,
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const statusColor = status === "approved" ? "#22C55E" : status === "rejected" ? "#EF4444" : "#A78BFA";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+          Jami: <strong style={{ color: "var(--text)" }}>{items.length}</strong> ta
+        </div>
+        <button style={ghostButton} type="button" onClick={() => void load()}>
+          <RefreshIcon size={14} /> Yangilash
+        </button>
+      </div>
+
+      {actionError ? (
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "rgba(239,68,68,0.1)",
+            border: "1px solid rgba(239,68,68,0.25)",
+            borderRadius: "10px",
+            fontSize: "12px",
+            color: "#EF4444",
+          }}
+        >
+          {actionError}
+        </div>
+      ) : null}
+
+      {items.length === 0 ? (
+        <EmptyState
+          icon={<FileIcon size={28} />}
+          text={
+            status === "pending"
+              ? "Ko'rib chiqilmagan savollar yo'q"
+              : status === "approved"
+              ? "Tasdiqlangan savollar yo'q"
+              : "Rad etilgan savollar yo'q"
+          }
+        />
+      ) : (
+        items.map((item) => (
+          <div
+            key={item.id}
+            style={{
+              background: "var(--card)",
+              border: `1px solid ${statusColor}25`,
+              borderRadius: "14px",
+              padding: "14px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+              <span style={{ fontSize: "18px", flexShrink: 0, marginTop: "1px" }}>✍️</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 800,
+                    color: "var(--text)",
+                    marginBottom: "4px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: "vertical" as const,
+                  }}
+                >
+                  {item.questionText}
+                </div>
+                <div style={{ fontSize: "12px", color: "#22C55E", fontWeight: 700, marginBottom: "3px" }}>
+                  Javob: {item.answer}
+                </div>
+                <div style={{ fontSize: "11px", color: statusColor, fontWeight: 700, marginBottom: "3px" }}>
+                  Muallif: {item.authorName}
+                </div>
+                <div style={{ fontSize: "10px", color: "var(--muted)" }}>
+                  {item.createdAt ? new Date(item.createdAt).toLocaleString("uz-UZ", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
+                  {item.reviewedByName ? ` · ${item.reviewedByName}` : ""}
+                </div>
+                {item.rejectReason ? (
+                  <div style={{ fontSize: "11px", color: "#EF4444", marginTop: "4px" }}>
+                    Sabab: {item.rejectReason}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {status === "pending" ? (
+              <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                <button
+                  type="button"
+                  disabled={acting}
+                  style={{
+                    flex: 1,
+                    padding: "9px 12px",
+                    background: "rgba(34,197,94,0.12)",
+                    border: "1px solid rgba(34,197,94,0.3)",
+                    borderRadius: "10px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "#22C55E",
+                    cursor: acting ? "not-allowed" : "pointer",
+                    opacity: acting ? 0.6 : 1,
+                  }}
+                  onClick={() => void handleApprove(item)}
+                >
+                  Tasdiqlash
+                </button>
+                <button
+                  type="button"
+                  disabled={acting}
+                  style={{
+                    flex: 1,
+                    padding: "9px 12px",
+                    background: "rgba(239,68,68,0.12)",
+                    border: "1px solid rgba(239,68,68,0.3)",
+                    borderRadius: "10px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "#EF4444",
+                    cursor: acting ? "not-allowed" : "pointer",
+                    opacity: acting ? 0.6 : 1,
+                  }}
+                  onClick={() => {
+                    setRejectTarget(item);
+                    setRejectReason("");
+                    setActionError("");
+                  }}
+                >
+                  Rad etish
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ))
+      )}
+
+      {/* Rad etish dialogi */}
+      {rejectTarget
+        ? createPortal(
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.65)",
+                zIndex: 1000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "24px",
+              }}
+              onClick={() => setRejectTarget(null)}
+            >
+              <div
+                className="animate-scaleIn"
+                style={{
+                  width: "100%",
+                  maxWidth: "340px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "20px",
+                  padding: "22px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ fontSize: "17px", fontWeight: 800, color: "var(--text)" }}>
+                  Rad etishni tasdiqlang
+                </div>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--muted)",
+                    padding: "10px 12px",
+                    background: "var(--card)",
+                    borderRadius: "10px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {rejectTarget.questionText.slice(0, 120)}
+                  {rejectTarget.questionText.length > 120 ? "..." : ""}
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "10.5px",
+                      fontWeight: 700,
+                      color: "var(--muted)",
+                      letterSpacing: "1px",
+                      textTransform: "uppercase",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Sabab (ixtiyoriy)
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Rad etish sababi..."
+                    maxLength={300}
+                    value={rejectReason}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      background: "var(--card)",
+                      border: "1.5px solid var(--border)",
+                      borderRadius: "10px",
+                      fontSize: "13px",
+                      color: "var(--text)",
+                      outline: "none",
+                      fontFamily: "inherit",
+                    }}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                  />
+                </div>
+                {actionError ? (
+                  <div style={{ fontSize: "12px", color: "#EF4444" }}>{actionError}</div>
+                ) : null}
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    type="button"
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      borderRadius: "12px",
+                      border: "1px solid var(--border)",
+                      background: "var(--card)",
+                      color: "var(--text)",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                    onClick={() => setRejectTarget(null)}
+                  >
+                    Bekor
+                  </button>
+                  <button
+                    type="button"
+                    disabled={acting}
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      borderRadius: "12px",
+                      border: "none",
+                      background: acting ? "var(--border)" : "var(--error)",
+                      color: "white",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      cursor: acting ? "not-allowed" : "pointer",
+                      opacity: acting ? 0.6 : 1,
+                    }}
+                    onClick={() => void handleReject()}
+                  >
+                    {acting ? "..." : "Rad etish"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {selectedItem ? (
+        <ConfirmDialog
+          title="Tasdiqlashni bekor qilish"
+          message="Bu amal bekor qilindi."
+          confirmLabel="OK"
+          cancelLabel="Yopish"
+          variant="primary"
+          onConfirm={() => setSelectedItem(null)}
+          onCancel={() => setSelectedItem(null)}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 function fmtDate(iso: string | null | undefined): string {

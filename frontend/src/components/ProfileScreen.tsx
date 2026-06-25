@@ -7,6 +7,7 @@ import {
   getGameStats,
   getPremiumHistory,
   getReferrals,
+  submitAuthorQuestion,
   updateMyDisplayName,
   updateMyLanguage
 } from "../api/client";
@@ -172,6 +173,15 @@ export default function ProfileScreen({
   const [unlocks, setUnlocks] = useState<AchievementUnlock[]>([]);
   const checkedRef = useRef(false);
 
+  // Muallif savoli yuborish form
+  const [authorFormOpen, setAuthorFormOpen] = useState(false);
+  const [authorQuestion, setAuthorQuestion] = useState("");
+  const [authorAnswer, setAuthorAnswer] = useState("");
+  const [authorName, setAuthorName] = useState("");
+  const [authorSubmitting, setAuthorSubmitting] = useState(false);
+  const [authorError, setAuthorError] = useState("");
+  const [authorSuccess, setAuthorSuccess] = useState(false);
+
   function handleLangChange(next: Lang) {
     if (next === lang) return;
     hapticSelect();
@@ -287,6 +297,61 @@ export default function ProfileScreen({
     setEditingName(false);
     setNameError("");
     setDraftName(playerName);
+  }
+
+  function openAuthorForm() {
+    hapticTap();
+    setAuthorFormOpen(true);
+    setAuthorQuestion("");
+    setAuthorAnswer("");
+    setAuthorName("");
+    setAuthorError("");
+    setAuthorSuccess(false);
+  }
+
+  function closeAuthorForm() {
+    setAuthorFormOpen(false);
+    setAuthorError("");
+    setAuthorSuccess(false);
+  }
+
+  async function handleAuthorSubmit() {
+    setAuthorError("");
+    const qTrimmed = authorQuestion.trim();
+    const aTrimmed = authorAnswer.trim();
+    const nTrimmed = authorName.trim();
+
+    if (!qTrimmed) {
+      setAuthorError("Savol matnini kiriting");
+      return;
+    }
+    if (!aTrimmed) {
+      setAuthorError("To'g'ri javobni kiriting");
+      return;
+    }
+    if (!nTrimmed) {
+      setAuthorError("Muallif ismingizni kiriting");
+      return;
+    }
+
+    setAuthorSubmitting(true);
+    const result = await submitAuthorQuestion({
+      questionText: qTrimmed,
+      answer: aTrimmed,
+      authorName: nTrimmed,
+    });
+    setAuthorSubmitting(false);
+
+    if (!result.ok) {
+      setAuthorError(result.error);
+      return;
+    }
+
+    hapticResult("correct");
+    setAuthorSuccess(true);
+    setAuthorQuestion("");
+    setAuthorAnswer("");
+    setAuthorName("");
   }
 
   const levelInfo = getLevelInfo(score);
@@ -901,6 +966,70 @@ export default function ProfileScreen({
         <span style={{ fontSize: "16px", color: "var(--muted)" }}>›</span>
       </button>
 
+      {/* Savol qo'sh tugmasi */}
+      <button
+        type="button"
+        style={{
+          width: "100%",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "16px",
+          padding: "14px 16px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          textAlign: "left",
+          marginTop: "12px",
+        }}
+        onClick={openAuthorForm}
+      >
+        <div
+          style={{
+            width: "40px",
+            height: "40px",
+            borderRadius: "12px",
+            background: "rgba(167,139,250,0.14)",
+            color: "#A78BFA",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: "0 0 auto",
+            fontSize: "20px",
+          }}
+        >
+          ✍️
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+            Savol qo'sh
+          </div>
+          <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+            Mualliflik savolingizni yuboring
+          </div>
+        </div>
+        <span style={{ fontSize: "16px", color: "var(--muted)" }}>›</span>
+      </button>
+
+      {authorFormOpen
+        ? createPortal(
+            <AuthorQuestionForm
+              onClose={closeAuthorForm}
+              question={authorQuestion}
+              answer={authorAnswer}
+              authorName={authorName}
+              submitting={authorSubmitting}
+              error={authorError}
+              success={authorSuccess}
+              onChangeQuestion={setAuthorQuestion}
+              onChangeAnswer={setAuthorAnswer}
+              onChangeAuthorName={setAuthorName}
+              onSubmit={() => void handleAuthorSubmit()}
+            />,
+            document.body
+          )
+        : null}
+
       {historyOpen
         ? createPortal(
             <GameHistoryOverlay
@@ -921,6 +1050,284 @@ export default function ProfileScreen({
       {unlocks.length > 0 ? (
         <AchievementToast unlocks={unlocks} onClose={() => setUnlocks([])} />
       ) : null}
+    </div>
+  );
+}
+
+function AuthorQuestionForm({
+  onClose,
+  question,
+  answer,
+  authorName,
+  submitting,
+  error,
+  success,
+  onChangeQuestion,
+  onChangeAnswer,
+  onChangeAuthorName,
+  onSubmit,
+}: {
+  onClose: () => void;
+  question: string;
+  answer: string;
+  authorName: string;
+  submitting: boolean;
+  error: string;
+  success: boolean;
+  onChangeQuestion: (v: string) => void;
+  onChangeAnswer: (v: string) => void;
+  onChangeAuthorName: (v: string) => void;
+  onSubmit: () => void;
+}) {
+  const inputStyle: CSSProperties = {
+    width: "100%",
+    padding: "12px 14px",
+    background: "var(--card)",
+    border: "1.5px solid var(--border)",
+    borderRadius: "12px",
+    fontSize: "14px",
+    color: "var(--text)",
+    outline: "none",
+    fontFamily: "inherit",
+    resize: "vertical" as const,
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "var(--bg)",
+        zIndex: 1200,
+        display: "flex",
+        flexDirection: "column",
+        maxWidth: "430px",
+        margin: "0 auto",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "16px 20px",
+          borderBottom: "1px solid var(--border)",
+          flex: "0 0 auto",
+          paddingTop: "calc(16px + env(safe-area-inset-top))",
+        }}
+      >
+        <button
+          type="button"
+          aria-label="Orqaga"
+          style={{
+            width: "36px",
+            height: "36px",
+            borderRadius: "10px",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
+            color: "var(--text)",
+            fontSize: "18px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: "0 0 auto",
+          }}
+          onClick={onClose}
+        >
+          ‹
+        </button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: "17px", fontWeight: 900, color: "var(--text)" }}>
+            Savol qo'sh
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "1px" }}>
+            Mualliflik savoli — admin ko'rib chiqadi
+          </div>
+        </div>
+        <span style={{ fontSize: "22px", flex: "0 0 auto" }}>✍️</span>
+      </div>
+
+      {/* Scrollable content */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "20px",
+          paddingBottom: "calc(24px + env(safe-area-inset-bottom))",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
+        }}
+      >
+        {success ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "16px",
+              paddingTop: "40px",
+              textAlign: "center",
+            }}
+          >
+            <span style={{ fontSize: "52px" }}>✅</span>
+            <div style={{ fontSize: "18px", fontWeight: 900, color: "var(--text)" }}>
+              Savolingiz yuborildi!
+            </div>
+            <div style={{ fontSize: "13px", color: "var(--muted)", lineHeight: 1.6 }}>
+              Admin ko'rib chiqadi. Tasdiqlansa, savolingiz{" "}
+              <strong>"Mualliflik savollari"</strong> pooliga qo'shiladi.
+            </div>
+            <button
+              type="button"
+              style={{
+                marginTop: "8px",
+                padding: "12px 28px",
+                background: "var(--accent)",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: "14px",
+                fontWeight: 800,
+                color: "white",
+                cursor: "pointer",
+              }}
+              onClick={onClose}
+            >
+              Yopish
+            </button>
+          </div>
+        ) : (
+          <>
+            <div>
+              <div
+                style={{
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  color: "var(--muted)",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  marginBottom: "6px",
+                }}
+              >
+                Savol
+              </div>
+              <textarea
+                rows={4}
+                maxLength={2000}
+                placeholder="Savol matnini yozing..."
+                value={question}
+                style={inputStyle}
+                onChange={(e) => onChangeQuestion(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <div
+                style={{
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  color: "var(--muted)",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  marginBottom: "6px",
+                }}
+              >
+                To'g'ri javob
+              </div>
+              <input
+                type="text"
+                maxLength={500}
+                placeholder="To'g'ri javobni yozing..."
+                value={answer}
+                style={{ ...inputStyle, resize: undefined }}
+                onChange={(e) => onChangeAnswer(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <div
+                style={{
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  color: "var(--muted)",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  marginBottom: "6px",
+                }}
+              >
+                Muallif ismingiz (F.I.O)
+              </div>
+              <input
+                type="text"
+                maxLength={100}
+                placeholder="Ism Familiya Otasining ismi"
+                value={authorName}
+                style={{ ...inputStyle, resize: undefined }}
+                onChange={(e) => onChangeAuthorName(e.target.value)}
+              />
+            </div>
+
+            {error ? (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  background: "rgba(239,68,68,0.12)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: "10px",
+                  fontSize: "13px",
+                  color: "#EF4444",
+                  fontWeight: 600,
+                }}
+              >
+                {error}
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                padding: "12px 14px",
+                background: "rgba(77,166,255,0.08)",
+                border: "1px solid rgba(77,166,255,0.2)",
+                borderRadius: "10px",
+                fontSize: "12px",
+                color: "var(--muted)",
+                lineHeight: 1.6,
+              }}
+            >
+              Yuborilgan savol admin tomonidan ko'rib chiqiladi. Tasdiqlangandan
+              keyin u <strong style={{ color: "var(--text)" }}>asosiy savollar
+              bazasiga emas</strong>, alohida{" "}
+              <strong style={{ color: "var(--text)" }}>"Mualliflik savollari"</strong>{" "}
+              pooliga qo'shiladi.
+            </div>
+
+            <button
+              type="button"
+              disabled={submitting}
+              style={{
+                width: "100%",
+                padding: "14px 16px",
+                background: submitting
+                  ? "var(--border)"
+                  : "linear-gradient(135deg, #A78BFA, #7C3AED)",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: "14px",
+                fontWeight: 800,
+                color: "white",
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.6 : 1,
+                boxShadow: submitting ? "none" : "0 6px 18px rgba(124,58,237,0.3)",
+              }}
+              onClick={onSubmit}
+            >
+              {submitting ? "Yuborilmoqda..." : "Yuborish"}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

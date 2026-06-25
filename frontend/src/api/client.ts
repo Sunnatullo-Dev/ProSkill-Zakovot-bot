@@ -853,6 +853,74 @@ export async function deleteAdminBoardPost(id: number): Promise<ApiResult<{ ok: 
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Author Questions (Muallif savollari) ─────────────────────────────────────
+
+export type AuthorQuestion = {
+  id: number;
+  telegramId: number;
+  authorName: string;
+  questionText: string;
+  answer: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string | null;
+  reviewedByTelegramId: number | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  rejectReason: string;
+};
+
+export type AuthorQuestionsResponse = {
+  items: AuthorQuestion[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+/** Foydalanuvchi yangi muallif savoli yuboradi. */
+export async function submitAuthorQuestion(data: {
+  questionText: string;
+  answer: string;
+  authorName: string;
+}): Promise<ApiResult<{ ok: boolean }>> {
+  return requestResult<{ ok: boolean }>("/author-questions", {
+    method: "POST",
+    body: data,
+  });
+}
+
+/** Admin: muallif savollari ro'yxati (status filter + pagination). */
+export async function getAdminAuthorQuestions(
+  params: { status?: "pending" | "approved" | "rejected"; page?: number; limit?: number } = {}
+): Promise<AuthorQuestionsResponse> {
+  const q = new URLSearchParams();
+  if (params.status) q.set("status", params.status);
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  const path = q.toString() ? `/admin/author-questions?${q}` : "/admin/author-questions";
+  const res = await request<AuthorQuestionsResponse>(path);
+  return res ?? { items: [], total: 0, page: params.page ?? 1, limit: params.limit ?? 20 };
+}
+
+/** Admin: muallif savolini tasdiqlash. */
+export async function approveAuthorQuestion(
+  questionId: number
+): Promise<ApiResult<AuthorQuestion>> {
+  return requestResult<AuthorQuestion>(`/admin/author-questions/${questionId}/approve`, {
+    method: "POST",
+  });
+}
+
+/** Admin: muallif savolini rad etish. */
+export async function rejectAuthorQuestion(
+  questionId: number,
+  reason?: string
+): Promise<ApiResult<AuthorQuestion>> {
+  return requestResult<AuthorQuestion>(`/admin/author-questions/${questionId}/reject`, {
+    method: "POST",
+    body: reason ? { reason } : {},
+  });
+}
+
 // Backend xato xabarini UI ga uzatish uchun result-tipidagi yordamchi.
 async function requestResult<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
   try {

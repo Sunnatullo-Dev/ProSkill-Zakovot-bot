@@ -200,6 +200,7 @@ INSTALLED_APPS = [
     "apps.gamerooms",
     "apps.admin_board",
     "apps.premium",
+    "apps.author_questions",
 ]
 
 # Media saqlash uchun Telegram chat ID (xabar taxtasi uchun).

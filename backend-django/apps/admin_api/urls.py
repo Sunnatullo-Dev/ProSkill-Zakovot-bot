@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from apps.premium import views as premium_views
+from apps.author_questions import views as author_question_views
 
 urlpatterns = [
     path("settings", views.app_settings),
@@ -25,6 +26,10 @@ urlpatterns = [
     # Required Channels
     path("channels", views.channels_collection),
     path("channels/<int:channel_pk>", views.channel_detail),
+    # Author Questions (Muallif savollari)
+    path("author-questions", author_question_views.admin_list_author_questions),
+    path("author-questions/<int:question_id>/approve", author_question_views.admin_approve_author_question),
+    path("author-questions/<int:question_id>/reject", author_question_views.admin_reject_author_question),
     # Premium settings + holders + analytics
     path("premium/settings", premium_views.admin_premium_settings),
     path("premium/users", premium_views.admin_premium_users),
