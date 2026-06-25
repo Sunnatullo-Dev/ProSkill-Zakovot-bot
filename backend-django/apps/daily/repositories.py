@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core.exceptions import AppError
 from apps.questions.repositories import get_round_questions, get_questions_by_ids
@@ -30,7 +31,7 @@ def get_streak_bonus(streak: int) -> int:
 
 
 def get_or_create_today() -> DailyChallenge:
-    today = date.today()
+    today = timezone.localdate()
     challenge = DailyChallenge.objects.filter(date=today).first()
     if challenge:
         return challenge
@@ -52,7 +53,7 @@ def get_user_streak(telegram_id: int) -> dict[str, int]:
 
 def get_today_question_ids() -> list[str]:
     """Bugungi daily challenge savol ID'larini qaytaradi."""
-    challenge = DailyChallenge.objects.filter(date=date.today()).first()
+    challenge = DailyChallenge.objects.filter(date=timezone.localdate()).first()
     return list(challenge.question_ids) if challenge else []
 
 
@@ -66,7 +67,7 @@ def record_daily_answer(
     try:
         DailyAnswer.objects.get_or_create(
             telegram_id=telegram_id,
-            date=date.today(),
+            date=timezone.localdate(),
             question_id=question_id,
             defaults={"is_correct": is_correct, "points_earned": points_earned},
         )
@@ -76,7 +77,7 @@ def record_daily_answer(
 
 def get_daily_answers(telegram_id: int) -> list[dict]:
     """Foydalanuvchining bugungi daily javoblari."""
-    rows = DailyAnswer.objects.filter(telegram_id=telegram_id, date=date.today())
+    rows = DailyAnswer.objects.filter(telegram_id=telegram_id, date=timezone.localdate())
     return [
         {"question_id": r.question_id, "is_correct": r.is_correct, "points_earned": r.points_earned}
         for r in rows
@@ -85,7 +86,7 @@ def get_daily_answers(telegram_id: int) -> list[dict]:
 
 def has_completed_today(telegram_id: int) -> bool:
     return DailyChallengeEntry.objects.filter(
-        telegram_id=telegram_id, date=date.today()
+        telegram_id=telegram_id, date=timezone.localdate()
     ).exists()
 
 
@@ -99,7 +100,7 @@ def complete_daily(telegram_id: int) -> dict[str, Any]:
     """
     from apps.users.repositories import add_score
 
-    today = date.today()
+    today = timezone.localdate()
 
     if DailyChallengeEntry.objects.filter(telegram_id=telegram_id, date=today).exists():
         raise AppError(409, "Bugun allaqachon yakunlangansiz")

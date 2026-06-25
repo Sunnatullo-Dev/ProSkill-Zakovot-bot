@@ -668,12 +668,13 @@ def admin_premium_analytics(request):
     from django.db.models.functions import Coalesce
 
     now = timezone.now()
+    local_now = timezone.localtime(now)  # Asia/Tashkent (settings.TIME_ZONE)
 
-    # Bugungi kun boshlanishi (UTC)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Bugungi kun boshlanishi (Asia/Tashkent yarim tuni) — aware, DB so'rovida UTCga o'tadi
+    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # Bu oy boshlanishi (UTC)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Bu oy boshlanishi (Asia/Tashkent)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     # ── Sonlar ────────────────────────────────────────────────────────────────
     active_count = User.objects.filter(premium_until__gt=now).count()

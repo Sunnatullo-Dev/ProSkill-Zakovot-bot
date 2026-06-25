@@ -334,7 +334,10 @@ WHITENOISE_ADD_HEADERS_FUNCTION = _whitenoise_headers
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
-TIME_ZONE = "UTC"
+# Mahalliy kun/oy hisobi (limit reset, analytics "bugun/bu oy", countdown)
+# Asia/Tashkent bo'yicha — DB hali UTC saqlaydi (USE_TZ=True), faqat
+# localdate()/localtime() Tashkent vaqtini beradi.
+TIME_ZONE = "Asia/Tashkent"
 
 PORT = int(os.environ.get("PORT", "3000"))
 

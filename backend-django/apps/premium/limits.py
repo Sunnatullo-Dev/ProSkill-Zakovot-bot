@@ -13,9 +13,10 @@ Chaqirish tartibi:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from django.core.cache import cache
+from django.utils import timezone
 
 from apps.core.exceptions import AppError
 
@@ -39,7 +40,8 @@ _COUNTER_TTL = 26 * 60 * 60  # soniya
 
 
 def _today_str() -> str:
-    return date.today().isoformat()  # YYYY-MM-DD (mahalliy vaqtga asoslangan)
+    # Asia/Tashkent mahalliy sanasi (settings.TIME_ZONE) — kun yarim tunda yangilanadi.
+    return timezone.localdate().isoformat()  # YYYY-MM-DD
 
 
 def _cache_key(telegram_id: int, section: str) -> str:
@@ -53,9 +55,10 @@ def _resets_at_iso() -> str:
     reset vaqti ham xuddi shu asos bilan mos kelishi zarur.
     Qaytariladi: ISO 8601 string, masalan "2025-06-24T00:00:00".
     """
-    tomorrow = date.today() + timedelta(days=1)
-    reset_dt = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, 0)
-    return reset_dt.isoformat()
+    tomorrow = timezone.localdate() + timedelta(days=1)
+    naive_midnight = datetime.combine(tomorrow, time.min)
+    aware = timezone.make_aware(naive_midnight, timezone.get_current_timezone())
+    return aware.isoformat()
 
 
 def _get_settings():
