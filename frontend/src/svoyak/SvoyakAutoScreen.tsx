@@ -70,6 +70,8 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
   // ── Holat ─────────────────────────────────────────────────────────────────
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Buzz gate: har yangi savol uchun "+" bosilgunicha javob UI yashiriladi
+  const [buzzed, setBuzzed] = useState(false);
 
   // Mahalliy fazalar va taymerlari
   const [localPhase, setLocalPhase] = useState<"reading" | "answering">("reading");
@@ -150,6 +152,7 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
 
     setAnswer("");
     setSubmitting(false);
+    setBuzzed(false);
 
     // Server'dan kelgan faza va qolgan vaqtni olish
     const serverPhase = data.autoState.phase ?? "reading";
@@ -355,26 +358,75 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
         )}
       </div>
 
-      {/* ── Scoreboard ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: "6px", marginBottom: "14px", overflowX: "auto" }}>
-        {players.map((p, i) => (
-          <div
-            key={p.telegramId}
-            style={{
-              flex: "0 0 auto", padding: "8px 12px", borderRadius: "12px",
-              background: p.telegramId === myId ? "rgba(245,200,66,0.18)" : "var(--svoyak-surface, #0f1f3a)",
-              border: `1px solid ${p.telegramId === myId ? "rgba(245,200,66,0.5)" : "var(--svoyak-border, #1f3a6e)"}`,
-              textAlign: "center", minWidth: "70px",
-            }}
-          >
-            <div style={{ fontSize: "11px", color: "var(--muted)", marginBottom: "2px" }}>
-              {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`} {p.displayName.split(" ")[0]}
-            </div>
-            <div style={{ fontSize: "20px", fontWeight: 900, color: "var(--svoyak-gold, #f5c842)" }}>
-              {p.score}
-            </div>
-          </div>
-        ))}
+      {/* ── Leaderboard (vertikal, to'liq) ────────────────────────────────── */}
+      <div style={{
+        background: "var(--svoyak-surface, #0f1f3a)",
+        border: "1px solid var(--svoyak-border, #1f3a6e)",
+        borderRadius: "16px",
+        marginBottom: "14px",
+        overflow: "hidden",
+      }}>
+        <div style={{
+          padding: "8px 14px 6px",
+          fontSize: "10px",
+          fontWeight: 800,
+          letterSpacing: "1.2px",
+          color: "var(--muted)",
+          borderBottom: "1px solid var(--svoyak-border, #1f3a6e)",
+        }}>
+          REYTING
+        </div>
+        <div style={{
+          maxHeight: "160px",
+          overflowY: "auto",
+        }}>
+          {players.map((p, i) => {
+            const isMe = p.telegramId === myId;
+            const rankLabel = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+            return (
+              <div
+                key={p.telegramId}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "8px 14px",
+                  background: isMe ? "rgba(245,200,66,0.10)" : "transparent",
+                  borderBottom: i < players.length - 1 ? "1px solid rgba(31,58,110,0.5)" : "none",
+                }}
+              >
+                <span style={{ fontSize: "13px", minWidth: "24px", textAlign: "center" }}>
+                  {rankLabel}
+                </span>
+                <span style={{
+                  flex: 1,
+                  fontSize: "13px",
+                  fontWeight: isMe ? 800 : 600,
+                  color: isMe ? "var(--svoyak-gold, #f5c842)" : "var(--text)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {p.displayName}
+                  {isMe && (
+                    <span style={{ fontSize: "10px", fontWeight: 700, marginLeft: "5px", color: "var(--svoyak-gold, #f5c842)", opacity: 0.8 }}>
+                      (men)
+                    </span>
+                  )}
+                </span>
+                <span style={{
+                  fontSize: "15px",
+                  fontWeight: 900,
+                  color: isMe ? "var(--svoyak-gold, #f5c842)" : "var(--text)",
+                  minWidth: "36px",
+                  textAlign: "right",
+                }}>
+                  {p.score}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Savol va Taymer ────────────────────────────────────────────────── */}
@@ -586,8 +638,56 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
                     Boshqalarni kuting...
                   </div>
                 </div>
+              ) : !buzzed ? (
+                /* ── Buzz gate: "+" tugmasi ────────────────────────────────── */
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
+                  <button
+                    type="button"
+                    disabled={localSec === 0}
+                    onClick={() => {
+                      if (localSec === 0) return;
+                      hapticTap();
+                      setBuzzed(true);
+                      setTimeout(() => inputRef.current?.focus(), 80);
+                    }}
+                    style={{
+                      width: "96px",
+                      height: "96px",
+                      borderRadius: "50%",
+                      border: "3px solid var(--svoyak-gold, #f5c842)",
+                      background: localSec > 0
+                        ? "linear-gradient(135deg, var(--svoyak-gold,#f5c842) 0%, #FF8A4C 100%)"
+                        : "var(--border)",
+                      color: localSec > 0 ? "#0B0B14" : "var(--muted)",
+                      fontSize: "44px",
+                      fontWeight: 900,
+                      lineHeight: 1,
+                      cursor: localSec > 0 ? "pointer" : "not-allowed",
+                      opacity: localSec > 0 ? 1 : 0.4,
+                      boxShadow: localSec > 0
+                        ? "0 0 28px rgba(245,200,66,0.45), 0 4px 16px rgba(0,0,0,0.4)"
+                        : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "box-shadow 0.25s, opacity 0.25s",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                    aria-label="Javob beraman"
+                  >
+                    +
+                  </button>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--svoyak-gold, #f5c842)" }}>
+                      Javob beraman
+                    </div>
+                    <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "3px" }}>
+                      Javob yozish uchun "+" tugmasini bosing
+                    </div>
+                  </div>
+                </div>
               ) : (
-                /* Input */
+                /* Input — buzz bosilgandan keyin ko'rinadi */
                 <>
                   <input
                     ref={inputRef}
