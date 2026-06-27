@@ -1051,9 +1051,15 @@ export default function App() {
                 <img
                   src="/uchqun.png"
                   alt=""
-                  width={48}
-                  height={48}
-                  style={{ borderRadius: "12px", objectFit: "cover", display: "block" }}
+                  style={{
+                    height: "46px",
+                    width: "auto",
+                    borderRadius: "10px",
+                    objectFit: "contain",
+                    display: "block",
+                    background: "#ffffff",
+                    padding: "4px",
+                  }}
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                   }}
@@ -1063,9 +1069,9 @@ export default function App() {
                     fontSize: "24px",
                     fontWeight: 900,
                     letterSpacing: "0.02em",
-                    // Logo ranglariga mos gradient: ko'k → binafsha → pushti → to'q sariq
+                    // Logo (CN) ranglariga mos: kumush-ko'k → yorqin ko'k → to'q ko'k
                     background:
-                      "linear-gradient(95deg, #4DA6FF 0%, #A855F7 38%, #EC4899 68%, #F59E0B 100%)",
+                      "linear-gradient(120deg, #CFE8FF 0%, #4DA6FF 45%, #1565D8 100%)",
                     WebkitBackgroundClip: "text",
                     backgroundClip: "text",
                     WebkitTextFillColor: "transparent",
