@@ -5,15 +5,20 @@
  *  2. Javob fazasi   (sozlanuvchi) — input ochiladi, timer boshlanadi
  *
  * Javob bergach yoki vaqt tugagach keyingi savolga o'tiladi.
+ *
+ * TTS: Gemini fetchTTS orqali yuqori sifatli o'zbek ovozi (asosiy quiz bilan bir xil).
+ * Mute kaliti: zakovat:tts:muted (asosiy quiz bilan umumiy, default: O'CHIRILMAGAN).
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { autoAnswer, endGame } from "./api";
 import { useSvoyakRoom } from "./useSvoyakRoom";
+import { fetchTTS } from "../api/client";
 import type { SvoyakRoomState } from "./types";
 import { hapticResult, hapticTap } from "../utils/haptics";
 import { useAppSettings } from "../hooks/useAppSettings";
 
 const READING_SECS = 10; // O'qish fazasi — backend bilan mos (READING_TIME_MS = 10_000)
+const TTS_MUTE_KEY = "zakovat:tts:muted"; // QuestionCard bilan umumiy kalit
 
 type Props = {
   code: string;
@@ -34,6 +39,29 @@ const PAGE = {
   margin: "0 auto",
 } as const;
 
+// Gemini ba'zan WAV header'siz raw L16 PCM qaytaradi.
+// Agar RIFF imzosi yo'q bo'lsa — 24kHz/16-bit/mono WAV header qo'shamiz.
+function addWavHeaderIfNeeded(bytes: Uint8Array): ArrayBuffer {
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
+  const sampleRate = 24000;
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const dataSize = bytes.byteLength;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  const s = (o: number, t: string) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  s(0, "RIFF"); v.setUint32(4, 36 + dataSize, true); s(8, "WAVE");
+  s(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, numChannels, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+  v.setUint16(32, numChannels * bitsPerSample / 8, true); v.setUint16(34, bitsPerSample, true);
+  s(36, "data"); v.setUint32(40, dataSize, true);
+  new Uint8Array(buf, 44).set(bytes);
+  return buf;
+}
+
 export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
   const { data, error } = useSvoyakRoom(code);
   const appSettings = useAppSettings();
@@ -50,6 +78,63 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
 
   const lastQuestionIdx = useRef<number>(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // ── Gemini TTS holat ─────────────────────────────────────────────────────
+  // Mute — QuestionCard bilan umumiy kalit, default: O'CHIRILMAGAN (false)
+  const [ttsIsMuted, setTtsIsMuted] = useState<boolean>(() => {
+    try { return localStorage.getItem(TTS_MUTE_KEY) === "1"; } catch { return false; }
+  });
+  const [isPlayingTTS, setIsPlayingTTS] = useState(false);
+  const [hasAudio, setHasAudio] = useState(false);
+  const [isLoadingTTS, setIsLoadingTTS] = useState(false);
+
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // AudioContext — komponent mount bo'lganda yaratiladi.
+  // Svoyak lobby'sida foydalanuvchi allaqachon biror tugma bosgan bo'ladi
+  // (join/start), shuning uchun resume() muvaffaqiyatli ishlaydi.
+  useEffect(() => {
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    ctx.resume().catch(() => {});
+    return () => {
+      ctx.close().catch(() => {});
+    };
+  }, []);
+
+  // Bufer qaytadan chalish (replay tugmasi uchun)
+  const playBuffer = useCallback((onEnded?: () => void) => {
+    const ctx = audioCtxRef.current;
+    const buffer = audioBufferRef.current;
+    if (!ctx || !buffer) return;
+
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+      activeSourceRef.current.disconnect();
+      activeSourceRef.current = null;
+    }
+
+    const doPlay = () => {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.onended = () => {
+        setIsPlayingTTS(false);
+        onEnded?.();
+      };
+      activeSourceRef.current = source;
+      setIsPlayingTTS(true);
+      source.start(0);
+    };
+
+    if (ctx.state === "suspended") {
+      ctx.resume().then(doPlay).catch(() => { setIsPlayingTTS(false); onEnded?.(); });
+    } else {
+      doPlay();
+    }
+  }, []);
 
   // ── O'yin tugadi ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -79,6 +164,60 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [data?.autoState?.questionIndex, timePerQuestion]);
+
+  // ── Gemini TTS: yangi savol kelganda ovozli o'qish ───────────────────────
+  // Taymer TTS'ga bog'liq EMAS — countdown mustaqil ishlaydi.
+  // Shunchaki audio fetch + play qilamiz; xato bo'lsa — jim o'tamiz.
+  useEffect(() => {
+    // Avvalgi audio va source'ni to'xtatib tozalaymiz
+    if (activeSourceRef.current) {
+      try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+      activeSourceRef.current.disconnect();
+      activeSourceRef.current = null;
+    }
+    audioBufferRef.current = null;
+    setIsPlayingTTS(false);
+    setHasAudio(false);
+    setIsLoadingTTS(false);
+
+    const text = data?.autoState?.questionText;
+    if (!text) return;
+
+    // Mute bo'lsa — fetch qilmaymiz
+    if (ttsIsMuted) return;
+
+    setIsLoadingTTS(true);
+    let cancelled = false;
+
+    fetchTTS(text).then(async (result) => {
+      if (cancelled) { setIsLoadingTTS(false); return; }
+      if (!result) { setIsLoadingTTS(false); return; }
+      try {
+        const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0));
+        const arrayBuf = addWavHeaderIfNeeded(bytes);
+        const ctx = audioCtxRef.current;
+        if (!ctx) { setIsLoadingTTS(false); return; }
+        const decoded = await ctx.decodeAudioData(arrayBuf);
+        if (cancelled) return;
+        audioBufferRef.current = decoded;
+        setHasAudio(true);
+        setIsLoadingTTS(false);
+        // Countdown TTS'ga bog'liq EMAS — shunchaki auto-play
+        playBuffer();
+      } catch (err) {
+        console.error("[SvoyakTTS] decode error:", err);
+        setIsLoadingTTS(false);
+      }
+    }).catch((err) => {
+      if (!cancelled) {
+        console.error("[SvoyakTTS] fetch error:", err);
+        setIsLoadingTTS(false);
+      }
+    });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.autoState?.questionIndex]);
 
   // ── O'qish fazasi taymer ──────────────────────────────────────────────────
   useEffect(() => {
@@ -241,22 +380,106 @@ export default function SvoyakAutoScreen({ code, onGameEnded, onExit }: Props) {
       {/* ── Savol va Taymer ────────────────────────────────────────────────── */}
       {isPlaying && auto?.questionText ? (
         <>
-          {/* Savol matni */}
+          {/* Savol matni + TTS tugmalari */}
           <div style={{
             background: "var(--svoyak-surface, #0f1f3a)",
             border: `1.5px solid ${localPhase === "reading" ? "rgba(77,166,255,0.35)" : "var(--svoyak-border, #1f3a6e)"}`,
             borderRadius: "20px",
-            padding: "24px 20px",
-            fontSize: "18px",
-            fontWeight: 700,
-            color: "var(--text)",
-            lineHeight: 1.5,
-            textAlign: "center",
             marginBottom: "20px",
-            userSelect: "none",
+            overflow: "hidden",
             transition: "border-color 0.4s",
           }}>
-            {auto.questionText}
+            <div style={{
+              padding: "24px 20px 16px",
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "var(--text)",
+              lineHeight: 1.5,
+              textAlign: "center",
+              userSelect: "none",
+            }}>
+              {auto.questionText}
+            </div>
+            {/* TTS boshqaruv tugmalari — QuestionCard bilan bir xil stil */}
+            <div style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "center",
+              gap: "8px",
+              padding: "0 14px 12px",
+            }}>
+              {/* Mute/unmute toggle */}
+              <button
+                type="button"
+                title={ttsIsMuted ? "Ovozni yoqish" : "Ovozni o'chirish"}
+                onClick={() => {
+                  setTtsIsMuted((prev) => {
+                    const next = !prev;
+                    try { localStorage.setItem(TTS_MUTE_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+                    if (next && activeSourceRef.current) {
+                      try { activeSourceRef.current.stop(); } catch { /* ignore */ }
+                      activeSourceRef.current.disconnect();
+                      activeSourceRef.current = null;
+                      setIsPlayingTTS(false);
+                    }
+                    return next;
+                  });
+                }}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  border: `1.5px solid ${ttsIsMuted ? "rgba(239,68,68,0.5)" : "rgba(255,255,255,0.15)"}`,
+                  background: ttsIsMuted ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.05)",
+                  color: ttsIsMuted ? "#ef4444" : "var(--muted)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                  flexShrink: 0,
+                }}
+              >
+                {ttsIsMuted ? "🔇" : "🔈"}
+              </button>
+              {/* Qayta o'qish (replay) */}
+              <button
+                type="button"
+                title="Savolni qayta eshitish"
+                disabled={isLoadingTTS || !hasAudio || ttsIsMuted}
+                onClick={() => { if (!ttsIsMuted) playBuffer(); }}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  border: `1.5px solid ${isPlayingTTS ? "#4DA6FF" : "rgba(255,255,255,0.15)"}`,
+                  background: isPlayingTTS ? "rgba(77,166,255,0.15)" : "rgba(255,255,255,0.05)",
+                  color: isPlayingTTS ? "#4DA6FF" : "var(--muted)",
+                  cursor: hasAudio && !isLoadingTTS && !ttsIsMuted ? "pointer" : "not-allowed",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: (!hasAudio && !isLoadingTTS) || ttsIsMuted ? 0.35 : 1,
+                  fontSize: "14px",
+                  flexShrink: 0,
+                }}
+              >
+                {isLoadingTTS ? (
+                  <svg
+                    fill="none"
+                    height="13"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    width="13"
+                    style={{ animation: "spin 1s linear infinite" }}
+                  >
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  </svg>
+                ) : isPlayingTTS ? "🔊" : "▶"}
+              </button>
+            </div>
           </div>
 
           {/* ─── O'qish fazasi UI ─────────────────────────────────────────── */}
