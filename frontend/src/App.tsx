@@ -38,7 +38,7 @@ import ResultScreen from "./components/ResultScreen";
 import { useLanguage } from "./i18n/LanguageContext";
 import { SUPPORTED_LANGS } from "./i18n/strings";
 import type { Lang } from "./i18n/strings";
-import { useTelegram } from "./hooks/useTelegram";
+import { useTelegram, tg } from "./hooks/useTelegram";
 import { useTimer } from "./hooks/useTimer";
 import { hapticResult, hapticSelect, hapticTap } from "./utils/haptics";
 import type {
@@ -147,6 +147,14 @@ export default function App() {
 
   const { initData, isReady, startParam, user: telegramUser, initDataMissing, inTelegram } = useTelegram();
   const { lang, setLang, t } = useLanguage();
+
+  // Splash'dagi "Code Nation" brendini bosganda rasmiy kanalni ochadi.
+  const openCodeNation = useCallback(() => {
+    const url = "https://t.me/CodeNation_info";
+    if (tg?.openTelegramLink) tg.openTelegramLink(url);
+    else if (tg?.openLink) tg.openLink(url);
+    else window.open(url, "_blank", "noopener,noreferrer");
+  }, []);
   const [onboardingDone, setOnboardingDone] = useState<boolean>(() => readOnboardingDone());
   const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<AppUser | null>(null);
@@ -1047,7 +1055,19 @@ export default function App() {
               >
                 from
               </span>
-              <div style={{ display: "flex", alignItems: "center", gap: "11px" }}>
+              <div
+                onClick={openCodeNation}
+                role="button"
+                tabIndex={0}
+                aria-label="Code Nation kanalini ochish"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openCodeNation();
+                  }
+                }}
+                style={{ display: "flex", alignItems: "center", gap: "11px", cursor: "pointer" }}
+              >
                 <img
                   src="/uchqun.png"
                   alt=""
