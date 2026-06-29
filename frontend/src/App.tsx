@@ -1046,7 +1046,7 @@ export default function App() {
             >
               <span
                 style={{
-                  fontSize: "15px",
+                  fontSize: "18px",
                   letterSpacing: "0.08em",
                   color: "var(--muted)",
                   opacity: 0.85,
@@ -1072,13 +1072,10 @@ export default function App() {
                   src="/uchqun.png"
                   alt=""
                   style={{
-                    height: "46px",
+                    height: "52px",
                     width: "auto",
-                    borderRadius: "10px",
                     objectFit: "contain",
                     display: "block",
-                    background: "#ffffff",
-                    padding: "4px",
                   }}
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
