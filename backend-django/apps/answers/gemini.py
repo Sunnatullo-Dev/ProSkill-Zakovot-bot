@@ -104,7 +104,7 @@ def _uzbek_text_to_number(raw: str) -> Optional[int]:
         # tanilmagan so'z — o'tkazib yubor
 
     total += current
-    return total if found and total > 0 else None
+    return total if found else None
 
 
 # ─── Asosiy funksiyalar ───────────────────────────────────────────────────────
@@ -226,6 +226,7 @@ _GRADER_SYSTEM_INSTRUCTION = (
     '    "toshkent" = "tashkent" = "toshken"\n'
     '    "alisher" = "aliser" = "alishar"\n'
     '  Raqam variantlari:\n'
+    '    "0" = "nol" = "no" (bu kontekstda "no" o\'zbek tilidagi "nol" degani)\n'
     '    "2026" = "2026-yil" = "2026 yil" = "ikki ming yigirma olti"\n'
     '    "100" = "yuz" = "bir yuz" = "yuzinchi"\n'
     '  Ism — faqat familiya yoki faqat ism yozsa ham to\'g\'ri:\n'
