@@ -11,6 +11,13 @@ import {
   handleGrRoomCreate,
   handleDeepLinkJoin,
 } from "./gameroom.js";
+import {
+  type ZtState,
+  handleZtText,
+  handleZtVoice,
+  handleZtCallback,
+  sendZtAdminMenu,
+} from "./zakovatTable.js";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -122,7 +129,8 @@ type State =
   | { t: "add_admin_id" }
   | { t: "add_admin_note"; telegramId: number }
   | { t: "ch_add_username" }
-  | GrState;
+  | GrState
+  | ZtState;
 
 const STATE_TTL_MS = 2 * 60 * 60 * 1000;
 const states = new Map<number, { state: State; updatedAt: number }>();
@@ -253,7 +261,7 @@ const ADMIN_KB = new Keyboard()
   .text("📄 PDF yuklash").text("📊 Statistika").row()
   .text("👥 Foydalanuvchilar").text("📢 Reklama").row()
   .text("👨‍💼 Adminlar").text("📢 Majburiy kanallar").row()
-  .text("🎮 O'yin xonasi").row()
+  .text("🎮 O'yin xonasi").text("🔴 Zakovat Stoli").row()
   .text("🏠 Asosiy menyu")
   .resized().persistent();
 
@@ -439,6 +447,8 @@ async function sendWelcome(ctx: any): Promise<void> {
   }
   // Online o'yin xonasiga kirish (kod bilan)
   inlineKb.row().text("🎮 Xonaga kirish (kod bilan)", "gr:join_manual");
+  // Interaktiv Zakovat Stoli — jonli jamoaviy o'yin
+  inlineKb.row().text("🔴 Interaktiv Zakovat Stoli", "zt:menu");
 
   await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: inlineKb });
 
@@ -580,6 +590,14 @@ bot.hears("🎮 O'yin xonasi", async ctx => {
     "Admin sifatida yangi xona yarating yoki mavjud xonaga kiring:",
     { parse_mode: "Markdown", reply_markup: kb }
   );
+});
+
+// 🔴 Zakovat Stoli — Interaktiv Zakovat Stoli admin paneli
+bot.hears("🔴 Zakovat Stoli", async ctx => {
+  const uid = ctx.from!.id;
+  if (!isAdmin(uid)) return;
+  clearState(uid);
+  await sendZtAdminMenu(ctx);
 });
 
 // 📊 Statistika
@@ -859,9 +877,12 @@ bot.on("message:document", async ctx => {
   }
 });
 
-// ─── Audio / Voice handler (gameroom audio savol uchun) ───────────────────────
+// ─── Audio / Voice handler (gameroom audio savol + Zakovat Stoli kapitan javobi) ─
 bot.on(["message:audio", "message:voice"], async ctx => {
   const uid = ctx.from!.id;
+  // Zakovat Stoli kapitani ovozli javob yuborishi mumkin — admin bo'lmasa ham
+  const ztHandled = await handleZtVoice(ctx, grDeps);
+  if (ztHandled) return;
   if (!isAdmin(uid)) return;
   await handleGrMedia(ctx, grDeps, "audio");
 });
@@ -884,6 +905,11 @@ bot.on("message:text", async ctx => {
   // Gameroom state machine — ishtirokchilar (non-admin) ham ishlatadi
   const grHandled = await handleGrText(ctx, grDeps);
   if (grHandled) return;
+
+  // Zakovat Stoli state machine — ishtirokchilar (non-admin) ham ishlatadi
+  // (kod kiritish, kapitan yakuniy javobi)
+  const ztHandled = await handleZtText(ctx, grDeps);
+  if (ztHandled) return;
 
   if (!isAdmin(uid)) return;
 
@@ -1109,6 +1135,13 @@ bot.on("callback_query:data", async ctx => {
   }
   if (data.startsWith("gr:")) {
     const handled = await handleGrCallback(ctx, grDeps);
+    if (handled) return;
+  }
+
+  // Zakovat Stoli callbacklari — ishtirokchilar/kuzatuvchilar ham bosa oladi
+  // (admin tekshiruvi handleZtCallback ichida)
+  if (data.startsWith("zt:")) {
+    const handled = await handleZtCallback(ctx, grDeps);
     if (handled) return;
   }
 
