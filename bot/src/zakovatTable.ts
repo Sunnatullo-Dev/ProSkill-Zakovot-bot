@@ -165,7 +165,9 @@ function buildAdminPanelMessage(state: any): { text: string; kb: InlineKeyboard 
   if (state.status === "waiting" && state.teamFull) {
     kb.row().text("👥 Jamoani tasdiqlash (6/6)", `zt:confirm:${state.code}`);
   }
-  if (state.status === "team_confirmed" && state.questionsTotal < QUESTION_COUNT) {
+  // Savollarni jamoa yig'ilayotganda ham (parallel) yuklash mumkin — faqat
+  // o'yin boshlanmaguncha (backend upload_questions ham shuni ruxsat qiladi).
+  if ((state.status === "waiting" || state.status === "team_confirmed") && state.questionsTotal < QUESTION_COUNT) {
     kb.row().text("📝 Savollarni yuklash (12 ta)", `zt:upload:${state.code}`);
   }
   if (state.status === "team_confirmed" && state.questionsTotal >= QUESTION_COUNT) {
@@ -238,15 +240,22 @@ async function announceGameOver(deps: ZtBotDeps, roomCode: string, state: any, e
 }
 
 // ─── 60 soniyalik muhokama timeri ────────────────────────────────────────────
+// GRACE_MS: bot va backend soatlari orasidagi kichik farqdan himoya — timer
+// server deadline'idan sal keyinroq otilishi kerak, aks holda backend
+// "hali tugamagan" deb rad etib, raund abadiy "muhokama" holatida qolib
+// ketishi mumkin (bu holatni tuzatadigan boshqa tugma yo'q).
+const DISCUSSION_GRACE_MS = 1500;
+const ADVANCE_RETRY_MS = 3000;
+const ADVANCE_MAX_ATTEMPTS = 3;
 
 function scheduleDiscussionAdvance(deps: ZtBotDeps, roomCode: string, delayMs: number) {
   const code = roomCode.toUpperCase();
   clearDiscussionTimer(code);
-  const timer = setTimeout(() => { void advanceDiscussion(deps, code); }, delayMs);
+  const timer = setTimeout(() => { void advanceDiscussion(deps, code); }, delayMs + DISCUSSION_GRACE_MS);
   discussionTimers.set(code, timer);
 }
 
-async function advanceDiscussion(deps: ZtBotDeps, roomCode: string) {
+async function advanceDiscussion(deps: ZtBotDeps, roomCode: string, attempt = 1) {
   const code = roomCode.toUpperCase();
   discussionTimers.delete(code);
 
@@ -254,7 +263,12 @@ async function advanceDiscussion(deps: ZtBotDeps, roomCode: string) {
   try {
     state = await deps.apiPost(`/api/zakovat-table/rooms/${code}/advance-discussion`, {});
   } catch {
-    // Deadline hali tugamagan yoki xona holati boshqacha o'zgargan — jim o'tamiz
+    // Vaqtinchalik tarmoq xatosi yoki soat farqi bo'lishi mumkin — bir necha
+    // marta qayta urinamiz, aks holda raund "osilib" qolishi mumkin.
+    if (attempt < ADVANCE_MAX_ATTEMPTS) {
+      const timer = setTimeout(() => { void advanceDiscussion(deps, code, attempt + 1); }, ADVANCE_RETRY_MS);
+      discussionTimers.set(code, timer);
+    }
     return;
   }
   if (state.status !== "awaiting_answer") return;
