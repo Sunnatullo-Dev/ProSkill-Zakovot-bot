@@ -52,6 +52,7 @@ urlpatterns = [
     path("api/daily/", include("apps.daily.urls")),
     path("api/channels/", include("apps.channels.urls")),
     path("api/gamerooms/", include("apps.gamerooms.urls")),
+    path("api/zakovat-table/", include("apps.zakovat_table.urls")),
     path("api/admin/board/", include("apps.admin_board.urls")),
     path("api/premium/", include("apps.premium.urls_public")),
     path("api/", include("apps.author_questions.urls_public")),  # POST /api/author-questions
