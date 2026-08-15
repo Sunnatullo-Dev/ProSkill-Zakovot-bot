@@ -169,6 +169,7 @@ export type Screen =
   | "svoyak"
   | "daily"
   | "gameroom"
+  | "zakovatTable"
   | "premium";
 
 // ─── Premium ──────────────────────────────────────────────────────────────────

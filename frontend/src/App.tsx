@@ -32,6 +32,7 @@ import ProfileScreen from "./components/ProfileScreen";
 import SvoyakRouter from "./svoyak/SvoyakRouter";
 import SvoyakDemoScreen from "./svoyak/SvoyakDemoScreen";
 import GameRoomRouter from "./gameroom/GameRoomRouter";
+import ZakovatTableRouter from "./zakovatTable/ZakovatTableRouter";
 import PremiumScreen from "./components/PremiumScreen";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
@@ -621,7 +622,7 @@ export default function App() {
     const backButton = window.Telegram?.WebApp?.BackButton;
     if (!backButton) return;
 
-    const showOn: Screen[] = ["team", "profile", "admin", "finish", "leaderboard", "gameroom"];
+    const showOn: Screen[] = ["team", "profile", "admin", "finish", "leaderboard", "gameroom", "zakovatTable"];
     if (showOn.includes(screen)) {
       backButton.onClick(handleBack);
       backButton.show();
@@ -1140,6 +1141,7 @@ export default function App() {
             onStart={(filter) => { setShowPremiumPaywall(false); void startGame(filter); }}
             onDailyOpen={() => setScreen("daily")}
             onGameRoomOpen={() => setScreen("gameroom")}
+            onZakovatTableOpen={() => setScreen("zakovatTable")}
             onPremiumOpen={showPremiumPaywall ? () => { setShowPremiumPaywall(false); setScreen("premium"); } : undefined}
           />
         ) : null}
@@ -1216,6 +1218,10 @@ export default function App() {
               setScreen("home");
             }}
           />
+        ) : null}
+
+        {screen === "zakovatTable" ? (
+          <ZakovatTableRouter onExit={() => setScreen("home")} />
         ) : null}
 
         {screen === "daily" && dailyInfo ? (

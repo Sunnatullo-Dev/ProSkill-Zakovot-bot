@@ -15,6 +15,7 @@ type HomeScreenProps = {
   onStart: (filter: RoundFilter) => void;
   onDailyOpen?: () => void;
   onGameRoomOpen?: () => void;
+  onZakovatTableOpen?: () => void;
   onPremiumOpen?: () => void;
 };
 
@@ -88,6 +89,7 @@ export default function HomeScreen({
   onStart,
   onDailyOpen,
   onGameRoomOpen,
+  onZakovatTableOpen,
   onPremiumOpen,
 }: HomeScreenProps) {
   const t = useT();
@@ -259,6 +261,38 @@ export default function HomeScreen({
               </div>
               <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
                 Kod bilan real-vaqt o'yiniga kiring
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "18px", color: "var(--muted)" }}>›</span>
+        </button>
+      ) : null}
+
+      {onZakovatTableOpen ? (
+        <button
+          type="button"
+          onClick={onZakovatTableOpen}
+          style={{
+            width: "100%",
+            background: "linear-gradient(135deg, rgba(239,68,68,0.16), rgba(245,158,11,0.14))",
+            border: "1px solid rgba(239,68,68,0.35)",
+            borderRadius: "16px",
+            padding: "14px 16px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            textAlign: "left"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "22px" }}>👁</span>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+                Zakovat Stoli
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                Guruhdagi jonli o'yinni kuzatish
               </div>
             </div>
           </div>
