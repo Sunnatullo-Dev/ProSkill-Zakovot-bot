@@ -93,14 +93,20 @@ class TelegramAuthMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        request.current_user = self._extract_user(request)
+        user, auth_source = self._extract_user(request)
+        request.current_user = user
+        # "bot" (Authorization: bot <KEY>) yoki "tma" (Authorization: tma <initData>)
+        # — view'lar shu orqali qaysi auth yo'li bilan kirilganini bilishi mumkin
+        # (masalan require_bot_auth: faqat botga xos amallarni tma orqali bloklash
+        # uchun). Auth yo'q bo'lsa — None.
+        request.auth_source = auth_source
         return self.get_response(request)
 
     @staticmethod
-    def _extract_user(request) -> TelegramUser | None:
+    def _extract_user(request) -> tuple[TelegramUser | None, str | None]:
         header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
         if not header:
-            return None
+            return None, None
 
         # Server-internal admin auth: "bot <key>" — Telegram boti serverdagi
         # admin endpoint'larini chaqirishi uchun.
@@ -109,7 +115,7 @@ class TelegramAuthMiddleware:
         if header.lower().startswith("bot "):
             provided_key = header[4:].strip()
             if not provided_key or not settings.ADMIN_TELEGRAM_IDS:
-                return None
+                return None, None
 
             internal_key = getattr(settings, "BOT_INTERNAL_API_KEY", "") or ""
             if not internal_key:
@@ -119,7 +125,7 @@ class TelegramAuthMiddleware:
                     "Bot admin auth rad etildi: BOT_INTERNAL_API_KEY o'rnatilmagan. "
                     "Render env'ga BOT_INTERNAL_API_KEY qo'ying."
                 )
-                return None
+                return None, None
 
             if hmac.compare_digest(provided_key, internal_key):
                 # Bot ishtirokchi nomidan harakat qilsa: X-On-Behalf-Of: <telegram_id>
@@ -134,14 +140,14 @@ class TelegramAuthMiddleware:
                             first_name="BotProxy",
                             last_name=None,
                             username=None,
-                        )
-                return _bot_admin_user()
+                        ), "bot"
+                return _bot_admin_user(), "bot"
 
-            return None
+            return None, None
 
         prefix = "tma "
         if not header.lower().startswith(prefix):
-            return None
+            return None, None
         init_data = header[len(prefix):].strip()
         user = verify_init_data(init_data)
 
@@ -165,7 +171,7 @@ class TelegramAuthMiddleware:
                     )
                     logger.info("dev-tid bypass: guest -> telegram_id=%s", dev_tid)
 
-        return user
+        return user, "tma"
 
 
 def _bot_admin_user() -> TelegramUser:

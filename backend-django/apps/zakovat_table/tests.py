@@ -10,6 +10,8 @@ Test qamrovi:
   7. Muhokama deadline himoyasi (vaqtidan oldin yakunlab bo'lmaydi)
   8. Faqat kapitan yakuniy javob bera oladi + adminga ko'rinadi, boshqalarga yo'q
   9. Admin baholash — ball hisoblash va g'olib aniqlash (6 ballga birinchi yetgan)
+  10. Mini-app kuzatuvchi (tma auth, allow_admin_fields=False) — to'g'ri javob va
+      kapitan javobi hech qachon ko'rinmaydi, hatto so'rovchi xona admini bo'lsa ham
 """
 from __future__ import annotations
 
@@ -195,3 +197,52 @@ class GameRoundTest(TestCase):
         self.assertTrue(state["gameOver"])
         self.assertEqual(state["status"], "finished")
         self.assertEqual(state["winner"], "team")
+
+
+class SpectatorReadOnlyStateTest(TestCase):
+    """Mini-app kuzatuvchi ekrani (tma auth) — get_room_state(allow_admin_fields=False).
+
+    Bu ekranda hech qanday admin boshqaruvi yo'q, shuning uchun backend hech
+    qachon to'g'ri javob yoki kapitan javobini qaytarmasligi kerak — hatto
+    so'rovchi aslida xona admini bo'lsa ham (masalan admin o'z mini-app'ini
+    ochib qo'yishi mumkin).
+    """
+
+    def _room_in_verifying(self) -> str:
+        room = _make_room()
+        code = room["code"]
+        _fill_team(code)
+        repo.confirm_team(code=code, admin_telegram_id=ADMIN_ID)
+        repo.upload_questions(code=code, admin_telegram_id=ADMIN_ID, questions=QUESTIONS)
+        repo.start_game(code=code, admin_telegram_id=ADMIN_ID)
+        repo.spin(code=code, admin_telegram_id=ADMIN_ID)
+        room_obj = ZtRoom.objects.get(code=code)
+        room_obj.discussion_deadline = timezone.now() - timedelta(seconds=1)
+        room_obj.save(update_fields=["discussion_deadline"])
+        repo.advance_discussion_if_due(code=code)
+        repo.submit_captain_answer(code=code, telegram_id=PLAYER_IDS[0], answer_text="mening javobim")
+        return code
+
+    def test_admin_fields_present_when_allowed(self):
+        code = self._room_in_verifying()
+        state = repo.get_room_state(code, viewer_telegram_id=ADMIN_ID, allow_admin_fields=True)
+        self.assertTrue(state["viewerIsAdmin"])
+        self.assertEqual(state["captainAnswerText"], "mening javobim")
+        sector = state["currentQuestion"]["sector"]
+        self.assertEqual(state["currentQuestion"]["answer"], QUESTIONS[sector - 1]["answer"])
+
+    def test_admin_fields_hidden_for_spectator_even_if_admin(self):
+        code = self._room_in_verifying()
+        # Xuddi shu admin, lekin tma orqali (mini-app kuzatuvchi) — allow_admin_fields=False.
+        state = repo.get_room_state(code, viewer_telegram_id=ADMIN_ID, allow_admin_fields=False)
+        self.assertFalse(state["viewerIsAdmin"])
+        self.assertNotIn("captainAnswerText", state)
+        self.assertNotIn("captainAnswerIsVoice", state)
+        self.assertIsNone(state["currentQuestion"].get("answer"))
+
+    def test_admin_fields_hidden_for_non_admin_regardless(self):
+        code = self._room_in_verifying()
+        state = repo.get_room_state(code, viewer_telegram_id=555, allow_admin_fields=True)
+        self.assertFalse(state["viewerIsAdmin"])
+        self.assertNotIn("captainAnswerText", state)
+        self.assertIsNone(state["currentQuestion"].get("answer"))

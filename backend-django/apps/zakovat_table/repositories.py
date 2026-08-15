@@ -12,6 +12,11 @@ Leak oldini olish:
     Savolning to'g'ri javobi FAQAT xona adminiga ko'rsatiladi (`viewer_telegram_id`
     xona admini bilan mos kelsa). Kapitan javobi ham faqat adminga ko'rinadi —
     bu spec'dagi "Message 6 — admin-only verification prompt" talabiga mos.
+
+    Mini-app'dagi (tma auth) kuzatuvchi ekrani `get_room_state`ni
+    `allow_admin_fields=False` bilan chaqiradi — natijada bu maydonlar hech
+    qachon ko'rsatilmaydi, hatto so'rovchi aslida xona admini bo'lsa ham
+    (qarang: apps/zakovat_table/views.py::get_state).
 """
 from __future__ import annotations
 
@@ -74,9 +79,24 @@ def get_room(code: str) -> ZtRoom:
     return room
 
 
-def _serialize_room(room: ZtRoom, viewer_telegram_id: int | None = None) -> dict[str, Any]:
+def _serialize_room(
+    room: ZtRoom,
+    viewer_telegram_id: int | None = None,
+    *,
+    allow_admin_fields: bool = True,
+) -> dict[str, Any]:
+    """`allow_admin_fields=False` — natija hech qachon admin-only maydonlarni
+    (to'g'ri javob, kapitan javobi) o'z ichiga olmaydi, hatto viewer aslida
+    xona admini bo'lsa ham. Mini-app'dagi kuzatuvchi (spectator) ekrani shu
+    bilan chaqiradi — u yerda hech qanday admin boshqaruvi yo'q, shuning
+    uchun bu maydonlarni ko'rsatishning hojati yo'q va sizib chiqishi
+    mumkin emas (spec talabi)."""
     players = list(room.players.all())
-    is_admin_viewer = viewer_telegram_id is not None and room.is_room_admin(viewer_telegram_id)
+    is_admin_viewer = (
+        allow_admin_fields
+        and viewer_telegram_id is not None
+        and room.is_room_admin(viewer_telegram_id)
+    )
     captain = next((p for p in players if p.is_captain), None)
 
     cq = room.current_question
@@ -131,9 +151,16 @@ def _serialize_room(room: ZtRoom, viewer_telegram_id: int | None = None) -> dict
     return data
 
 
-def get_room_state(code: str, *, viewer_telegram_id: int | None = None) -> dict[str, Any]:
+def get_room_state(
+    code: str,
+    *,
+    viewer_telegram_id: int | None = None,
+    allow_admin_fields: bool = True,
+) -> dict[str, Any]:
     room = get_room(code)
-    return _serialize_room(room, viewer_telegram_id=viewer_telegram_id)
+    return _serialize_room(
+        room, viewer_telegram_id=viewer_telegram_id, allow_admin_fields=allow_admin_fields,
+    )
 
 
 # ─── Xona yaratish ────────────────────────────────────────────────────────────

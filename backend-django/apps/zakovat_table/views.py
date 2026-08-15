@@ -1,8 +1,17 @@
 """Interaktiv Zakovat Stoli — REST endpoint'lari.
 
-Bu rejim faqat bot orqali boshqariladi (mini-app UI yo'q) — barcha
-so'rovlar `Authorization: bot <BOT_INTERNAL_API_KEY>` + `X-On-Behalf-Of`
-sarlavhalari bilan keladi (apps.core.middleware.TelegramAuthMiddleware).
+O'yin boshqaruvi (jamoa, savollar, spin, baholash va h.k.) faqat bot orqali
+amalga oshiriladi — bu amallar `@require_bot_auth` bilan himoyalangan va
+FAQAT `Authorization: bot <BOT_INTERNAL_API_KEY>` + `X-On-Behalf-Of`
+sarlavhalari bilan kelgan so'rovlarni qabul qiladi
+(apps.core.middleware.TelegramAuthMiddleware + apps.core.decorators).
+
+Yagona istisno — `get_state` (o'qish uchun, xona holatini olish): u
+mini-app'dagi "kuzatuvchi" (spectator) ekrani uchun `Authorization: tma
+<initData>` orqali ham chaqiriladi (`@require_auth` — ikkala auth turini
+ham qabul qiladi). tma orqali kelgan so'rovlarda admin-only maydonlar
+(to'g'ri javob, kapitan javobi) hech qachon qaytarilmaydi — qarang
+repositories.get_room_state(allow_admin_fields=...).
 
 Javob shakllari camelCase (loyihaning umumiy konvensiyasiga mos).
 """
@@ -11,7 +20,7 @@ from __future__ import annotations
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from apps.core.decorators import require_auth
+from apps.core.decorators import require_auth, require_bot_auth
 from apps.core.exceptions import AppError
 
 from . import repositories
@@ -20,12 +29,12 @@ from . import repositories
 # ─── Xona yaratish va ro'yxat ─────────────────────────────────────────────────
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def create_room(request):
     """Yangi xona yaratish.
 
     POST /api/zakovat-table/rooms
-    Auth: require_auth (admin ekanligi bot tomonidan tekshiriladi)
+    Auth: require_bot_auth (faqat bot; admin ekanligi bot tomonidan tekshiriladi)
     """
     user = request.current_user
     result = repositories.create_room(admin_telegram_id=user.telegram_id)
@@ -33,7 +42,7 @@ def create_room(request):
 
 
 @api_view(["GET"])
-@require_auth
+@require_bot_auth
 def admin_rooms(request):
     """Adminning oxirgi xonalari ro'yxati.
 
@@ -49,19 +58,25 @@ def admin_rooms(request):
 @api_view(["GET"])
 @require_auth
 def get_state(request, code: str):
-    """Xona holati — bot shu orqali xabarlarni quradi/yangilaydi.
+    """Xona holati.
 
     GET /api/zakovat-table/rooms/<code>/state
+    Auth: require_auth — botdan (`bot <KEY>`) yoki mini-app'dan (`tma <initData>`,
+    kuzatuvchi ekrani) kelishi mumkin. tma bilan kelgan so'rovda admin-only
+    maydonlar (to'g'ri javob, kapitan javobi) hech qachon qaytarilmaydi.
     """
     user = request.current_user
-    result = repositories.get_room_state(code, viewer_telegram_id=user.telegram_id)
+    is_bot_auth = getattr(request, "auth_source", None) == "bot"
+    result = repositories.get_room_state(
+        code, viewer_telegram_id=user.telegram_id, allow_admin_fields=is_bot_auth,
+    )
     return Response(result)
 
 
 # ─── Qo'shilish ────────────────────────────────────────────────────────────────
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def join_player(request, code: str):
     """O'yinchi sifatida qo'shilish (birinchi 6 kishi, 1-si kapitan).
 
@@ -78,7 +93,7 @@ def join_player(request, code: str):
 
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def join_spectator(request, code: str):
     """Muxlis sifatida kuzatish uchun qo'shilish (o'qishga huquqli, holatga ta'sir qilmaydi).
 
@@ -92,7 +107,7 @@ def join_spectator(request, code: str):
 # ─── Admin: jamoa va o'yin boshqaruvi ─────────────────────────────────────────
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def confirm_team(request, code: str):
     """Jamoani tasdiqlash (6/6).
 
@@ -104,7 +119,7 @@ def confirm_team(request, code: str):
 
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def upload_questions(request, code: str):
     """Roppa-rosa 12 ta savol yuklash.
 
@@ -123,7 +138,7 @@ def upload_questions(request, code: str):
 
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def start_game(request, code: str):
     """O'yinni boshlash.
 
@@ -135,7 +150,7 @@ def start_game(request, code: str):
 
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def spin(request, code: str):
     """Otni aylantirish — tasodifiy ishlatilmagan sektor tanlanadi.
 
@@ -147,12 +162,12 @@ def spin(request, code: str):
 
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def advance_discussion(request, code: str):
     """Muhokama vaqti tugagach kapitandan javob so'rash bosqichiga o'tish.
 
     POST /api/zakovat-table/rooms/<code>/advance-discussion
-    Auth: require_auth (bot o'z 60s timeri bilan chaqiradi — deadline
+    Auth: require_bot_auth (bot o'z 60s timeri bilan chaqiradi — deadline
     server tomonida tekshiriladi, muddatidan oldin chaqirib bo'lmaydi)
     """
     result = repositories.advance_discussion_if_due(code=code)
@@ -160,7 +175,7 @@ def advance_discussion(request, code: str):
 
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def submit_captain_answer(request, code: str):
     """Kapitanning yakuniy javobi (matn yoki ovozli xabar relay qilingandan keyin).
 
@@ -178,7 +193,7 @@ def submit_captain_answer(request, code: str):
 
 
 @api_view(["POST"])
-@require_auth
+@require_bot_auth
 def admin_verify(request, code: str):
     """Admin qo'lda baholaydi: to'g'ri (Jamoa +1) yoki noto'g'ri (Muxlislar +1).
 
