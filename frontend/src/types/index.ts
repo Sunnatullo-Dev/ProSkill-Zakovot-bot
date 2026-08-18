@@ -37,6 +37,10 @@ export type TelegramWebApp = {
   setBackgroundColor?: (color: string) => void;
   HapticFeedback?: TelegramHapticFeedback;
   BackButton?: TelegramBackButton;
+  /** Telegram 7.7+: pastga siljitish (swipe-to-close / share) gestureni bloklaydi */
+  disableVerticalSwipes?: () => void;
+  /** Telegram 7.7+: pastga siljitish gestureni qayta yoqadi */
+  enableVerticalSwipes?: () => void;
 };
 
 declare global {

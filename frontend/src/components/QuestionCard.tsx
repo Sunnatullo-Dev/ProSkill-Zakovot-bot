@@ -534,7 +534,10 @@ export default function QuestionCard({
               flexDirection: "column",
               background: "var(--bg)",
               paddingTop: "env(safe-area-inset-top, 0px)",
-              paddingBottom: "env(safe-area-inset-bottom, 0px)"
+              paddingBottom: "env(safe-area-inset-bottom, 0px)",
+              // Reveal ekranida ham kontent himoyasi: nusxalash, ulashish bloklanadi
+              userSelect: "none",
+              WebkitUserSelect: "none",
             }}
           >
             {/* Scroll bo'ladigan yuqori qism */}

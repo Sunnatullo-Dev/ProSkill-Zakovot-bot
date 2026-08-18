@@ -621,6 +621,63 @@ export default function App() {
     // Profile'dan Home'ga otib yuboriladi.
   }, [initData, initDataMissing, isReady, loadTopUsers, onboardingDone, startParam, telegramUser]);
 
+  // ── Kontent himoyasi: savol/reveal ekranlarida copy, share, skrinshot bloklash ──
+  // Telegram Mini App'da to'liq skrinshot bloklash imkoni yo'q, lekin:
+  //  1. CSS user-select: none + -webkit-user-select: none — matn nusxalanmaydi
+  //  2. contextmenu event bloklanadi — o'ng tugma / long-press menyu yo'qoladi
+  //  3. Telegram WebApp.disableVerticalSwipes() — pastga siljitish (share gesture) bloklanadi
+  //  4. dragstart bloklanadi — matnni drag-and-drop qilib nusxalab bo'lmaydi
+  //  5. selectstart bloklanadi — tanlash boshlanmaydi
+  useEffect(() => {
+    const isProtected = screen === "question";
+
+    // 1. CSS global himoya: body'ga class qo'shamiz
+    if (isProtected) {
+      document.body.classList.add("content-protected");
+    } else {
+      document.body.classList.remove("content-protected");
+    }
+
+    // 2. Context menu (o'ng tugma / long-press) bloklanadi
+    const blockContextMenu = (e: Event) => { if (isProtected) e.preventDefault(); };
+    // 3. Drag bloklanadi
+    const blockDrag = (e: Event) => { if (isProtected) e.preventDefault(); };
+    // 4. Text selection bloklanadi
+    const blockSelect = (e: Event) => { if (isProtected) e.preventDefault(); };
+    // 5. Copy keyboard shortcut bloklanadi
+    const blockCopy = (e: ClipboardEvent) => {
+      if (isProtected) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    document.addEventListener("contextmenu", blockContextMenu);
+    document.addEventListener("dragstart", blockDrag);
+    document.addEventListener("selectstart", blockSelect);
+    document.addEventListener("copy", blockCopy);
+
+    // 6. Telegram WebApp: vertikal siljitish (share sheet) bloklanadi
+    const webApp = window.Telegram?.WebApp;
+    if (webApp) {
+      if (isProtected) {
+        webApp.disableVerticalSwipes?.();
+      } else {
+        webApp.enableVerticalSwipes?.();
+      }
+    }
+
+    return () => {
+      document.removeEventListener("contextmenu", blockContextMenu);
+      document.removeEventListener("dragstart", blockDrag);
+      document.removeEventListener("selectstart", blockSelect);
+      document.removeEventListener("copy", blockCopy);
+      document.body.classList.remove("content-protected");
+      // Ekrandan chiqqanda vertikal swipe'ni qayta yoqamiz
+      webApp?.enableVerticalSwipes?.();
+    };
+  }, [screen]);
+
   // BackButton handler'ini stable saqlaymiz — useCallback bilan kafolatlanmasa,
   // har screen o'zgarishda yangi closure yaratilib, Telegram SDK'da off/on
   // takror chaqirilganda handler'lar stack'lashishi mumkin.
@@ -628,6 +685,7 @@ export default function App() {
     setErrorMessage("");
     setScreen("home");
   }, []);
+
 
   useEffect(() => {
     const backButton = window.Telegram?.WebApp?.BackButton;

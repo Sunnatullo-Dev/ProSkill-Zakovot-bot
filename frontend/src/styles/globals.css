@@ -134,3 +134,26 @@ button {
     transform: rotate(360deg);
   }
 }
+
+/* ─── Kontent himoyasi — savol ekranida faollashadi ─────────────────────────
+   body.content-protected bo'lganda:
+   • user-select: none   → matn tanlash va Ctrl+C nusxalash bloklanadi
+   • -webkit-user-select: none → iOS/Android Safari uchun ham bloklanadi
+   • -webkit-touch-callout: none → iOS'da long-press "Nusxa olish" menyu yo'qoladi
+   Foydalanuvchilar savolni nusxalab tashqi joylarda ulasha olmaydi.
+   Bu skrinshot olishni to'g'ridan-to'g'ri bloklolmaydi (OS darajasi),
+   lekin matn va kontentni olish ancha qiyinlashadi.
+   ─────────────────────────────────────────────────────────────────────────── */
+body.content-protected,
+body.content-protected * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/* Input va textarea'da yozish imkoni saqlansin — faqat matn tanlanmasin */
+body.content-protected input,
+body.content-protected textarea {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
