@@ -29,6 +29,26 @@ from apps.core.exceptions import AppError
 CONSUMED_TTL_SECONDS = 180  # max savol vaqti 120s + grace 2s + marja
 
 
+def _warn_if_no_redis() -> None:
+    """Startup'da Redis o'rnatilmaganini log qiladi.
+
+    DatabaseCache SQLite bilan ishlatilganda, bir nechta Gunicorn worker'i
+    bir vaqtda bitta jti'ni consume qilishi mumkin (race condition).
+    Redis'da `cache.add` atomik — bu xavfdan himoya qiladi.
+    REDIS_URL muhit o'zgaruvchisini o'rnatish tavsiya etiladi.
+    """
+    from django.conf import settings as _s
+    backend = _s.CACHES.get("default", {}).get("BACKEND", "")
+    if "redis" not in backend.lower():
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "TICKET CACHE: Redis ishlatilmayapti (%s). "
+            "Bir nechta worker'da replay attack xavfi bor. "
+            "REDIS_URL muhit o'zgaruvchisini o'rnating.",
+            backend,
+        )
+
+
 @dataclass(frozen=True)
 class TicketPayload:
     question_id: str

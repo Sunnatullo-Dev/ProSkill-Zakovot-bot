@@ -24,6 +24,10 @@ class Question(models.Model):
 
     class Meta:
         db_table = "questions"
+        indexes = [
+            models.Index(fields=["category", "difficulty"], name="question_cat_diff_idx"),
+            models.Index(fields=["difficulty"], name="question_diff_idx"),
+        ]
 
     def __str__(self):
         return self.text[:80]

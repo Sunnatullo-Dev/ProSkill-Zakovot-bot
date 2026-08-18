@@ -132,7 +132,7 @@ type State =
   | GrState
   | ZtState;
 
-const STATE_TTL_MS = 2 * 60 * 60 * 1000;
+const STATE_TTL_MS = 2 * 60 * 60 * 1000; // 2 soat
 const states = new Map<number, { state: State; updatedAt: number }>();
 const getState = (id: number): State => {
   const entry = states.get(id);
@@ -145,6 +145,20 @@ const getState = (id: number): State => {
 };
 const setState = (id: number, s: State) => states.set(id, { state: s, updatedAt: Date.now() });
 const clearState = (id: number) => states.delete(id);
+
+// ─── State tozalash: eskirgan yozuvlarni har soatda o'chirish ────────────────
+// Bot hech qachon restart bo'lmasa ham xotira oqishining oldini oladi.
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [id, entry] of states.entries()) {
+    if (now - entry.updatedAt > STATE_TTL_MS) {
+      states.delete(id);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) console.log(`[bot] State tozalash: ${cleaned} ta eskirgan yozuv o'chirildi`);
+}, 60 * 60 * 1000);
 
 function md(value: unknown): string {
   return String(value ?? "").replace(/([\\_*[\]()`])/g, "\\$1");
@@ -335,7 +349,8 @@ async function doBroadcast(
     const batch = telegramIds.slice(i, i + BROADCAST_BATCH);
     await Promise.all(batch.map(async (id) => {
       try {
-        await bot.api.sendMessage(id, text);
+        // parse_mode="Markdown" — admin Markdown yozsa to'g'ri ko'rsatilsin
+        await bot.api.sendMessage(id, text, { parse_mode: "Markdown" });
         sent++;
       } catch {
         failed++;
@@ -369,8 +384,8 @@ const grDeps: GrBotDeps = {
   apiPatchOnBehalf,
   apiDeleteOnBehalf,
   isAdmin,
-  getState: (id: number) => getState(id) as any,
-  setState: (id: number, s: any) => setState(id, s as State),
+  getState: (id: number) => getState(id) as GrState | ZtState | { t: "idle" },
+  setState: (id: number, s: GrState | ZtState | { t: string }) => setState(id, s as State),
   clearState,
   get ADMIN_KB() { return ADMIN_KB; },
 };

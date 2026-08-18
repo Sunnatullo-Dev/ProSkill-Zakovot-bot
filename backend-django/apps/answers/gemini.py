@@ -11,6 +11,11 @@ from django.conf import settings
 
 from .scoring import AnswerStatus
 
+import concurrent.futures
+
+_GEMINI_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="gemini")
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -286,16 +291,22 @@ def _call_gemini_grader(
             model_name,
             system_instruction=_GRADER_SYSTEM_INSTRUCTION,
         )
-        response = gemini_model.generate_content(
+        future = _GEMINI_EXECUTOR.submit(
+            gemini_model.generate_content,
             data_message,
             request_options={"timeout": GEMINI_TIMEOUT_S},
         )
+        response = future.result(timeout=GEMINI_TIMEOUT_S + 2)
         text = (response.text or "").strip()
+    except concurrent.futures.TimeoutError:
+        logger.warning("Gemini grader [%s] timed out", model_name)
+        return None
     except Exception as error:
         logger.warning("Gemini grader [%s] failed: %s", model_name, error)
         return None
 
     return _parse_gemini_response(text)
+
 
 
 # ─── Aqlli lokal tekshiruv (Gemini ishlamasa ishga tushadi) ──────────────────

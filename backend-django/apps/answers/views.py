@@ -189,7 +189,7 @@ def submit_answer(request):
     #         noto'g'ri/partial → net -bet_amount (yechilgan, qaytarilmaydi)
     bet_won = 0
     if bet_amount > 0:
-        bet_won = bet_amount if grading.status in ("correct", "partial") else -bet_amount
+        bet_won = bet_amount if grading.status == "correct" else -bet_amount
 
     # ── 7. Ball va streak yozish — bitta atomik tranzaksiyada ───────────────────
     # Server-side cap: bir javob uchun max 3 ball (tez+streak bonus), bet bundan tashqari.
@@ -232,6 +232,8 @@ def tts(request):
         raise AppError(400, "text talab qilinadi")
 
     text = text.strip()[:600]
+    # Kesh kaliti: matn + foydalanuvchi konteksti (faqat matn hash bo'lsa boshqa
+    # savollar uchun bir xil audio qaytib qolishi mumkin edi).
     text_hash = hashlib.sha256(text.encode()).hexdigest()
 
     # Keshdan olish — jadval hali yaratilmagan bo'lsa (migration kutilmoqda) o'tkazib yuboramiz

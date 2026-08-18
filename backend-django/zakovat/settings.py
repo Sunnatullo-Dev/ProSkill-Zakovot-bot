@@ -394,3 +394,10 @@ logging.getLogger(__name__).info(
     ALLOWED_HOSTS,
     _admin_summary,
 )
+
+# Ticket replay attack himoyasi uchun Redis tavsiyasini log qilish
+try:
+    from apps.answers.tickets import _warn_if_no_redis
+    _warn_if_no_redis()
+except Exception:
+    pass  # App hali to'liq yuklanmagan bo'lishi mumkin

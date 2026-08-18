@@ -121,7 +121,8 @@ const RESULT_AUTO_DELAY_MS = 2000;
 const PARTIAL_RESULT_AUTO_DELAY_MS = 2500;
 // Kirish (splash) ekrani kamida shuncha ko'rinadi — brending (from Uchqun)
 // ko'rinib ulgursin. Bootstrap tezroq tugasa, qolgan vaqt kutiladi.
-const SPLASH_MIN_MS = 3000;
+// 1.5s: brending uchun yetarli, lekin foydalanuvchini uzoq kutdirmaymiz.
+const SPLASH_MIN_MS = 1500;
 const DEFAULT_FILTER: RoundFilter = { category: null, difficulty: null };
 // Auth ishlamay qolganda zaxira foydalanuvchi — ism bo'sh, frontend Telegram'dan
 // keladigan ismni ishlatadi (yoki "Foydalanuvchi" placeholder ko'rsatadi).
@@ -314,10 +315,20 @@ export default function App() {
         setScreen("result");
       } catch (error) {
         console.error("Answer submit failed", error);
-        const message =
-          error instanceof Error && error.message
-            ? `Javobni yuborib bo'lmadi: ${error.message}`
-            : "Javobni yuborib bo'lmadi. Qayta urinib ko'ring.";
+        // HTTP status bo'yicha aniqroq xabar
+        let message = "Javobni yuborib bo'lmadi. Qayta urinib ko'ring.";
+        if (error instanceof Error) {
+          const msg = error.message;
+          if (msg.includes("429") || msg.toLowerCase().includes("rate")) {
+            message = "Juda tez yuborildi. Bir oz kuting.";
+          } else if (msg.includes("409")) {
+            message = "Bu savol allaqachon yuborilgan.";
+          } else if (msg.includes("503") || msg.includes("502")) {
+            message = "Server hozir band. Qayta urinib ko'ring.";
+          } else if (msg) {
+            message = `Javobni yuborib bo'lmadi: ${msg}`;
+          }
+        }
         setErrorMessage(message);
         // Taymerni qaytadan boshlamaymiz — foydalanuvchi xatoni o'qib,
         // tugmani qayta bossin. Aks holda timer tugashi bilan bo'sh javob
