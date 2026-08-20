@@ -129,6 +129,21 @@ type State =
   | { t: "add_admin_id" }
   | { t: "add_admin_note"; telegramId: number }
   | { t: "ch_add_username" }
+  // ── Ustoz AI: Fan qo'shish ──
+  | { t: "ustoz_fan_nomi" }
+  | { t: "ustoz_fan_emoji"; name: string }
+  // ── Ustoz AI: Dars qo'shish ──
+  | { t: "ustoz_dars_fan_id" }
+  | { t: "ustoz_dars_nomi"; subjectId: number; subjectName: string }
+  // ── Ustoz AI: Savol qo'shish ──
+  | { t: "ustoz_savol_dars_id" }
+  | { t: "ustoz_savol_matn"; lessonId: number; lessonName: string }
+  | { t: "ustoz_savol_a"; lessonId: number; lessonName: string; text: string }
+  | { t: "ustoz_savol_b"; lessonId: number; lessonName: string; text: string; optionA: string }
+  | { t: "ustoz_savol_c"; lessonId: number; lessonName: string; text: string; optionA: string; optionB: string }
+  | { t: "ustoz_savol_d"; lessonId: number; lessonName: string; text: string; optionA: string; optionB: string; optionC: string }
+  | { t: "ustoz_savol_togri"; lessonId: number; lessonName: string; text: string; optionA: string; optionB: string; optionC: string; optionD: string }
+  | { t: "ustoz_savol_izoh"; lessonId: number; lessonName: string; text: string; optionA: string; optionB: string; optionC: string; optionD: string; correctOption: string }
   | GrState
   | ZtState;
 
@@ -276,6 +291,7 @@ const ADMIN_KB = new Keyboard()
   .text("👥 Foydalanuvchilar").text("📢 Reklama").row()
   .text("👨‍💼 Adminlar").text("📢 Majburiy kanallar").row()
   .text("🎮 O'yin xonasi").text("🔴 Zakovat Stoli").row()
+  .text("🎓 Ustoz AI").row()
   .text("🏠 Asosiy menyu")
   .resized().persistent();
 
@@ -613,6 +629,25 @@ bot.hears("🔴 Zakovat Stoli", async ctx => {
   if (!isAdmin(uid)) return;
   clearState(uid);
   await sendZtAdminMenu(ctx);
+});
+
+// ─── 🎓 Ustoz AI Admin menyusi ────────────────────────────────────────────────
+const USTOZ_ADMIN_KB = new InlineKeyboard()
+  .text("📚 Fan qo'shish", "ustoz:add_fan").row()
+  .text("📖 Dars qo'shish", "ustoz:add_dars").row()
+  .text("❓ Savol qo'shish", "ustoz:add_savol").row()
+  .text("📋 Fanlar ro'yxati", "ustoz:list_fans");
+
+bot.hears("🎓 Ustoz AI", async ctx => {
+  const uid = ctx.from!.id;
+  if (!isAdmin(uid)) return;
+  clearState(uid);
+  await ctx.reply(
+    "🎓 *Ustoz AI Admin Panel*\n\n" +
+    "Fan → Dars → Savollar ierarxiyasini boshqaring.\n\n" +
+    "Quyidagilardan birini tanlang:",
+    { parse_mode: "Markdown", reply_markup: USTOZ_ADMIN_KB }
+  );
 });
 
 // 📊 Statistika
@@ -1066,7 +1101,136 @@ bot.on("message:text", async ctx => {
     }
     return;
   }
+
+  // ── Ustoz AI: Fan nomi ──
+  if (st.t === "ustoz_fan_nomi") {
+    const name = text.trim();
+    if (!name || name.length < 2) {
+      await ctx.reply("❌ Fan nomi kamida 2 harf bo'lishi kerak. Qaytadan kiriting:");
+      return;
+    }
+    setState(uid, { t: "ustoz_fan_emoji", name });
+    await ctx.reply(
+      `✅ Fan nomi: *${md(name)}*\n\n📌 Emoji kiriting (masalan: 📐 🧪 📜 🌍)\nYoki /skip — standart 📚 uchun`,
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+
+  if (st.t === "ustoz_fan_emoji") {
+    const emoji = text.startsWith("/") ? "📚" : text.trim().slice(0, 10) || "📚";
+    try {
+      await apiPost("/api/admin/ustoz/subjects/", { name: st.name, iconEmoji: emoji });
+      clearState(uid);
+      await ctx.reply(
+        `✅ *Fan qo'shildi!*\n\n${emoji} ${md(st.name)}`,
+        { parse_mode: "Markdown", reply_markup: ADMIN_KB }
+      );
+    } catch (e: any) {
+      clearState(uid);
+      await ctx.reply(`❌ Fan qo'shib bo'lmadi: ${e?.message}`, { reply_markup: ADMIN_KB });
+    }
+    return;
+  }
+
+  // ── Ustoz AI: Dars nomi ──
+  if (st.t === "ustoz_dars_nomi") {
+    const name = text.trim();
+    if (!name || name.length < 2) {
+      await ctx.reply("❌ Dars nomi kamida 2 harf bo'lishi kerak. Qaytadan kiriting:");
+      return;
+    }
+    try {
+      await apiPost("/api/admin/ustoz/lessons/", { subjectId: st.subjectId, name });
+      clearState(uid);
+      await ctx.reply(
+        `✅ *Dars qo'shildi!*\n\n📖 ${md(st.subjectName)} → ${md(name)}`,
+        { parse_mode: "Markdown", reply_markup: ADMIN_KB }
+      );
+    } catch (e: any) {
+      clearState(uid);
+      await ctx.reply(`❌ Dars qo'shib bo'lmadi: ${e?.message}`, { reply_markup: ADMIN_KB });
+    }
+    return;
+  }
+
+  // ── Ustoz AI: Savol matni ──
+  if (st.t === "ustoz_savol_matn") {
+    const txt = text.trim();
+    if (!txt || txt.length < 5) {
+      await ctx.reply("❌ Savol matni kamida 5 harf bo'lishi kerak. Qaytadan kiriting:");
+      return;
+    }
+    setState(uid, { t: "ustoz_savol_a", lessonId: st.lessonId, lessonName: st.lessonName, text: txt });
+    await ctx.reply(`✅ Savol: *${md(txt.slice(0, 80))}*\n\n🅰️ A variant javobini kiriting:`, { parse_mode: "Markdown" });
+    return;
+  }
+
+  if (st.t === "ustoz_savol_a") {
+    const val = text.trim();
+    if (!val) { await ctx.reply("❌ Bo'sh bo'lmasin. A variant kiriting:"); return; }
+    setState(uid, { ...st, t: "ustoz_savol_b", optionA: val });
+    await ctx.reply(`✅ A: ${md(val)}\n\n🅱️ B variant javobini kiriting:`, { parse_mode: "Markdown" });
+    return;
+  }
+
+  if (st.t === "ustoz_savol_b") {
+    const val = text.trim();
+    if (!val) { await ctx.reply("❌ B variant kiriting:"); return; }
+    setState(uid, { ...st, t: "ustoz_savol_c", optionB: val });
+    await ctx.reply(`✅ B: ${md(val)}\n\n🅾️ C variant javobini kiriting:`, { parse_mode: "Markdown" });
+    return;
+  }
+
+  if (st.t === "ustoz_savol_c") {
+    const val = text.trim();
+    if (!val) { await ctx.reply("❌ C variant kiriting:"); return; }
+    setState(uid, { ...st, t: "ustoz_savol_d", optionC: val });
+    await ctx.reply(`✅ C: ${md(val)}\n\n🔷 D variant javobini kiriting:`, { parse_mode: "Markdown" });
+    return;
+  }
+
+  if (st.t === "ustoz_savol_d") {
+    const val = text.trim();
+    if (!val) { await ctx.reply("❌ D variant kiriting:"); return; }
+    setState(uid, { ...st, t: "ustoz_savol_togri", optionD: val });
+    const togriKb = new InlineKeyboard()
+      .text("🅰️ A", `ustoz_togri:a:${uid}`).text("🅱️ B", `ustoz_togri:b:${uid}`)
+      .text("🅾️ C", `ustoz_togri:c:${uid}`).text("🔷 D", `ustoz_togri:d:${uid}`);
+    await ctx.reply(
+      `✅ D: ${md(val)}\n\n✔️ *To'g'ri javob qaysi?*\n\nA: ${md(st.optionA)}\nB: ${md(st.optionB)}\nC: ${md(st.optionC)}\nD: ${md(val)}`,
+      { parse_mode: "Markdown", reply_markup: togriKb }
+    );
+    return;
+  }
+
+  if (st.t === "ustoz_savol_izoh") {
+    const explanation = text.startsWith("/") ? "" : text.trim();
+    try {
+      await apiPost("/api/admin/ustoz/questions/", {
+        lessonId: st.lessonId,
+        text: st.text,
+        optionA: st.optionA, optionB: st.optionB,
+        optionC: st.optionC, optionD: st.optionD,
+        correctOption: st.correctOption,
+        explanation,
+      });
+      clearState(uid);
+      await ctx.reply(
+        `✅ *Savol qo'shildi!*\n\n` +
+        `📖 Dars: ${md(st.lessonName)}\n` +
+        `❓ ${md(st.text.slice(0, 60))}\n` +
+        `✔️ To'g'ri: ${st.correctOption.toUpperCase()}`,
+        { parse_mode: "Markdown", reply_markup: ADMIN_KB }
+      );
+    } catch (e: any) {
+      clearState(uid);
+      await ctx.reply(`❌ Savol qo'shib bo'lmadi: ${e?.message}`, { reply_markup: ADMIN_KB });
+    }
+    return;
+  }
 });
+
 
 async function handleSkip(ctx: any) {
   const uid = ctx.from!.id;
@@ -1100,6 +1264,34 @@ async function handleSkip(ctx: any) {
     } catch (e: any) {
       clearState(uid);
       await ctx.reply(`❌ Qo'shib bo'lmadi: ${e?.message}`, { reply_markup: ADMIN_KB });
+    }
+  } else if (st.t === "ustoz_fan_emoji") {
+    // /skip — standart emoji ishlatib fan yaratamiz
+    try {
+      await apiPost("/api/admin/ustoz/subjects/", { name: st.name, iconEmoji: "📚" });
+      clearState(uid);
+      await ctx.reply(`✅ *Fan qo'shildi!*\n\n📚 ${md(st.name)}`, { parse_mode: "Markdown", reply_markup: ADMIN_KB });
+    } catch (e: any) {
+      clearState(uid);
+      await ctx.reply(`❌ Fan qo'shib bo'lmadi: ${e?.message}`, { reply_markup: ADMIN_KB });
+    }
+  } else if (st.t === "ustoz_savol_izoh") {
+    // /skip — izoхsiz saqlash
+    try {
+      await apiPost("/api/admin/ustoz/questions/", {
+        lessonId: st.lessonId, text: st.text,
+        optionA: st.optionA, optionB: st.optionB,
+        optionC: st.optionC, optionD: st.optionD,
+        correctOption: st.correctOption, explanation: "",
+      });
+      clearState(uid);
+      await ctx.reply(
+        `✅ *Savol qo'shildi!*\n\n📖 ${md(st.lessonName)}\n✔️ To'g'ri: ${st.correctOption.toUpperCase()}`,
+        { parse_mode: "Markdown", reply_markup: ADMIN_KB }
+      );
+    } catch (e: any) {
+      clearState(uid);
+      await ctx.reply(`❌ Savol qo'shib bo'lmadi: ${e?.message}`, { reply_markup: ADMIN_KB });
     }
   }
 }
@@ -1160,10 +1352,154 @@ bot.on("callback_query:data", async ctx => {
     if (handled) return;
   }
 
+  // ── Ustoz AI admin callbacklari ───────────────────────────────────────────
+  if (data.startsWith("ustoz:")) {
+    if (!isAdmin(uid)) { await ctx.answerCallbackQuery(); return; }
+    await ctx.answerCallbackQuery();
+
+    if (data === "ustoz:add_fan") {
+      setState(uid, { t: "ustoz_fan_nomi" });
+      await ctx.reply(
+        "📚 *Fan qo'shish*\n\n" +
+        "Fan nomini kiriting (masalan: Matematika, Fizika, Tarix):\n\n" +
+        "/cancel — bekor qilish",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    if (data === "ustoz:add_dars") {
+      // Fanlar ro'yxatini ko'rsatamiz
+      try {
+        const d = await apiGet("/api/ustoz/subjects/");
+        const subjects: any[] = d.items ?? [];
+        if (subjects.length === 0) {
+          await ctx.reply("❌ Hali fan yo'q. Avval fan qo'shing.");
+          return;
+        }
+        const kb = new InlineKeyboard();
+        for (const s of subjects) {
+          kb.row().text(`${s.iconEmoji} ${s.name} (${s.lessonCount} dars)`, `ustoz_dars_sel:${s.id}:${s.name}`);
+        }
+        setState(uid, { t: "ustoz_dars_fan_id" });
+        await ctx.reply("📖 *Qaysi fanga dars qo'shasiz?*", { parse_mode: "Markdown", reply_markup: kb });
+      } catch (e: any) {
+        await ctx.reply(`❌ Fanlarni olib bo'lmadi: ${e?.message}`);
+      }
+      return;
+    }
+
+    if (data === "ustoz:add_savol") {
+      // Fanlar ro'yxatini ko'rsatamiz, keyin dars tanlanadi
+      try {
+        const d = await apiGet("/api/ustoz/subjects/");
+        const subjects: any[] = d.items ?? [];
+        if (subjects.length === 0) {
+          await ctx.reply("❌ Hali fan yo'q. Avval fan → dars qo'shing.");
+          return;
+        }
+        const kb = new InlineKeyboard();
+        for (const s of subjects) {
+          kb.row().text(`${s.iconEmoji} ${s.name}`, `ustoz_savol_fan:${s.id}`);
+        }
+        setState(uid, { t: "ustoz_savol_dars_id" });
+        await ctx.reply("❓ *Savol qo'yiladigan fan:*", { parse_mode: "Markdown", reply_markup: kb });
+      } catch (e: any) {
+        await ctx.reply(`❌ Fanlarni olib bo'lmadi: ${e?.message}`);
+      }
+      return;
+    }
+
+    if (data === "ustoz:list_fans") {
+      try {
+        const d = await apiGet("/api/ustoz/subjects/");
+        const subjects: any[] = d.items ?? [];
+        if (subjects.length === 0) {
+          await ctx.reply("📋 Hali fan yo'q.");
+          return;
+        }
+        const text = "📋 *Fanlar ro'yxati:*\n\n" +
+          subjects.map((s: any, i: number) =>
+            `${i + 1}. ${s.iconEmoji} *${md(s.name)}* — ${s.lessonCount} dars`
+          ).join("\n");
+        await ctx.reply(text, { parse_mode: "Markdown" });
+      } catch (e: any) {
+        await ctx.reply(`❌ Xatolik: ${e?.message}`);
+      }
+      return;
+    }
+
+    // Dars uchun fan tanlandi
+    if (data.startsWith("ustoz_dars_sel:")) {
+      const parts = data.slice("ustoz_dars_sel:".length).split(":");
+      const subjectId = parseInt(parts[0], 10);
+      const subjectName = parts.slice(1).join(":");
+      setState(uid, { t: "ustoz_dars_nomi", subjectId, subjectName });
+      await ctx.reply(
+        `📖 *${md(subjectName)}* faniga dars qo'shish\n\nDars nomini kiriting:\n\n/cancel — bekor qilish`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    // Savol uchun fan tanlandi → darslar ro'yxati
+    if (data.startsWith("ustoz_savol_fan:")) {
+      const subjectId = parseInt(data.slice("ustoz_savol_fan:".length), 10);
+      try {
+        const d = await apiGet(`/api/ustoz/subjects/${subjectId}/lessons/`);
+        const lessons: any[] = d.items ?? [];
+        if (lessons.length === 0) {
+          await ctx.reply("❌ Bu fanda hali dars yo'q. Avval dars qo'shing.");
+          return;
+        }
+        const kb = new InlineKeyboard();
+        for (const l of lessons) {
+          kb.row().text(`${l.name} (${l.questionCount} savol)`, `ustoz_savol_sel:${l.id}:${l.name}`);
+        }
+        await ctx.reply("📖 *Qaysi darsga savol qo'shasiz?*", { parse_mode: "Markdown", reply_markup: kb });
+      } catch (e: any) {
+        await ctx.reply(`❌ Darslarni olib bo'lmadi: ${e?.message}`);
+      }
+      return;
+    }
+
+    // Savol uchun dars tanlandi
+    if (data.startsWith("ustoz_savol_sel:")) {
+      const parts = data.slice("ustoz_savol_sel:".length).split(":");
+      const lessonId = parseInt(parts[0], 10);
+      const lessonName = parts.slice(1).join(":");
+      setState(uid, { t: "ustoz_savol_matn", lessonId, lessonName });
+      await ctx.reply(
+        `❓ *"${md(lessonName)}"* darsiga savol qo'shish\n\nSavol matnini kiriting:\n\n/cancel — bekor qilish`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    return;
+  }
+
   // Qolgan barcha callbacklar faqat adminlar uchun
   if (!isAdmin(uid)) { await ctx.answerCallbackQuery(); return; }
 
+  // ── Ustoz AI: To'g'ri javob tanlash ──
+  if (data.startsWith("ustoz_togri:")) {
+    const parts = data.split(":");
+    const correctOption = parts[1] as "a" | "b" | "c" | "d";
+    await ctx.answerCallbackQuery();
+    const st = getState(uid);
+    if (st.t !== "ustoz_savol_togri") return;
+    setState(uid, { ...st, t: "ustoz_savol_izoh", correctOption });
+    await ctx.reply(
+      `✔️ To'g'ri javob: *${correctOption.toUpperCase()}*\n\n` +
+      `📝 Izoh kiriting (ixtiyoriy):\n/skip — izoхsiz saqlash`,
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+
   if (data === "noop") { await ctx.answerCallbackQuery(); return; }
+
 
   // Questions pagination
   if (data.startsWith("ql:")) {

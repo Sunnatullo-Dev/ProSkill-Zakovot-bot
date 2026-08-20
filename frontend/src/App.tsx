@@ -36,6 +36,10 @@ import ZakovatTableRouter from "./zakovatTable/ZakovatTableRouter";
 import PremiumScreen from "./components/PremiumScreen";
 import QuestionCard from "./components/QuestionCard";
 import ResultScreen from "./components/ResultScreen";
+import UstozoAiScreen from "./components/UstozoAiScreen";
+import UstozoLessonsScreen from "./components/UstozoLessonsScreen";
+import UstozoQuizScreen from "./components/UstozoQuizScreen";
+import type { UstozoSubject, UstozoLesson } from "./api/ustoz";
 import { useLanguage } from "./i18n/LanguageContext";
 import { SUPPORTED_LANGS } from "./i18n/strings";
 import type { Lang } from "./i18n/strings";
@@ -207,6 +211,9 @@ export default function App() {
   // Premium holati — login'dan yoki getPremiumInfo'dan olinadi.
   const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
+  // ── Ustoz AI holati ──────────────────────────────────────────────────────────
+  const [selectedSubject, setSelectedSubject] = useState<UstozoSubject | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<UstozoLesson | null>(null);
   // Bootstrap fakat bir martagina ishlasin — `lang` o'zgarganda qayta
   // login qilib foydalanuvchini Profile'dan Home'ga otib yubormasin.
   const bootstrapDoneRef = useRef(false);
@@ -1212,6 +1219,7 @@ export default function App() {
             onGameRoomOpen={() => setScreen("gameroom")}
             onZakovatTableOpen={() => setScreen("zakovatTable")}
             onPremiumOpen={showPremiumPaywall ? () => { setShowPremiumPaywall(false); setScreen("premium"); } : undefined}
+            onUstozoAiOpen={() => setScreen("ustozoAi")}
           />
         ) : null}
 
@@ -1344,6 +1352,40 @@ export default function App() {
 
         {screen === "premium" ? (
           <PremiumScreen onBack={() => setScreen("home")} />
+        ) : null}
+
+        {/* ── Ustoz AI ekranlari ──────────────────────────────────────────────── */}
+        {screen === "ustozoAi" ? (
+          <UstozoAiScreen
+            onSelectSubject={(subject) => {
+              setSelectedSubject(subject);
+              setScreen("ustozoLessons");
+            }}
+            onBack={() => setScreen("home")}
+          />
+        ) : null}
+
+        {screen === "ustozoLessons" && selectedSubject ? (
+          <UstozoLessonsScreen
+            subject={selectedSubject}
+            onSelectLesson={(lesson) => {
+              setSelectedLesson(lesson);
+              setScreen("ustozoQuiz");
+            }}
+            onBack={() => setScreen("ustozoAi")}
+          />
+        ) : null}
+
+        {screen === "ustozoQuiz" && selectedSubject && selectedLesson ? (
+          <UstozoQuizScreen
+            subject={selectedSubject}
+            lesson={selectedLesson}
+            onBack={() => setScreen("ustozoLessons")}
+            onFinish={() => {
+              // Test tugagach darslarga qaytamiz
+              setScreen("ustozoLessons");
+            }}
+          />
         ) : null}
 
         {showBottomNav ? (

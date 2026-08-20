@@ -174,7 +174,10 @@ export type Screen =
   | "daily"
   | "gameroom"
   | "zakovatTable"
-  | "premium";
+  | "premium"
+  | "ustozoAi"
+  | "ustozoLessons"
+  | "ustozoQuiz";
 
 // ─── Premium ──────────────────────────────────────────────────────────────────
 

@@ -1,0 +1,1 @@
+"""Ustoz AI — migratsiyalar init."""

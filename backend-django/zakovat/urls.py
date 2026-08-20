@@ -56,6 +56,8 @@ urlpatterns = [
     path("api/admin/board/", include("apps.admin_board.urls")),
     path("api/premium/", include("apps.premium.urls_public")),
     path("api/", include("apps.author_questions.urls_public")),  # POST /api/author-questions
+    path("api/ustoz/", include("apps.ustoz_ai.urls")),           # Ustoz AI public
+    path("api/admin/ustoz/", include("apps.ustoz_ai.admin_urls")),  # Ustoz AI admin
     re_path(
         rf"^(?!api/|{_admin_path}/|health$|static/).*$",
         spa_fallback,

@@ -17,6 +17,7 @@ type HomeScreenProps = {
   onGameRoomOpen?: () => void;
   onZakovatTableOpen?: () => void;
   onPremiumOpen?: () => void;
+  onUstozoAiOpen?: () => void;
 };
 
 const cardStyle = {
@@ -91,6 +92,7 @@ export default function HomeScreen({
   onGameRoomOpen,
   onZakovatTableOpen,
   onPremiumOpen,
+  onUstozoAiOpen,
 }: HomeScreenProps) {
   const t = useT();
   const appSettings = useAppSettings();
@@ -297,6 +299,39 @@ export default function HomeScreen({
             </div>
           </div>
           <span style={{ fontSize: "18px", color: "var(--muted)" }}>›</span>
+        </button>
+      ) : null}
+
+      {/* ── Ustoz AI ─────────────────────────────────────────────── */}
+      {onUstozoAiOpen ? (
+        <button
+          type="button"
+          onClick={onUstozoAiOpen}
+          style={{
+            width: "100%",
+            background: "linear-gradient(135deg, rgba(34,197,94,0.16), rgba(77,166,255,0.14))",
+            border: "1px solid rgba(34,197,94,0.35)",
+            borderRadius: "16px",
+            padding: "14px 16px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            textAlign: "left",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "22px" }}>🎓</span>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+                Ustoz AI
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
+                Fan tanlang va test ishlang
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: "18px", color: "var(--success)" }}>›</span>
         </button>
       ) : null}
 
