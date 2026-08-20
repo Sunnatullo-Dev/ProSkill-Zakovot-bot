@@ -93,7 +93,6 @@ export default function UstozoAiScreen({ onSelectSubject, onBack }: Props) {
         <div style={{ textAlign: "center", color: "var(--muted)", padding: "40px 0" }}>
           <div style={{ fontSize: "40px", marginBottom: "12px" }}>📚</div>
           <div style={{ fontSize: "14px", fontWeight: 600 }}>Hali fanlar qo'shilmagan</div>
-          <div style={{ fontSize: "12px", marginTop: "4px" }}>Admin panelidan fan qo'shing</div>
         </div>
       )}
 
