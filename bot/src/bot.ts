@@ -1429,59 +1429,59 @@ bot.on("callback_query:data", async ctx => {
       return;
     }
 
-    // Dars uchun fan tanlandi
-    if (data.startsWith("ustoz_dars_sel:")) {
-      await ctx.answerCallbackQuery();
-      if (!isAdmin(uid)) return;
-      const parts = data.slice("ustoz_dars_sel:".length).split(":");
-      const subjectId = parseInt(parts[0], 10);
-      const subjectName = parts.slice(1).join(":");
-      setState(uid, { t: "ustoz_dars_nomi", subjectId, subjectName });
-      await ctx.reply(
-        `📖 *${md(subjectName)}* faniga dars qo'shish\n\nDars nomini kiriting:\n\n/cancel — bekor qilish`,
-        { parse_mode: "Markdown" }
-      );
-      return;
-    }
+    return;
+  }
 
-    // Savol uchun fan tanlandi → darslar ro'yxati
-    if (data.startsWith("ustoz_savol_fan:")) {
-      await ctx.answerCallbackQuery();
-      if (!isAdmin(uid)) return;
-      const subjectId = parseInt(data.slice("ustoz_savol_fan:".length), 10);
-      try {
-        const d = await apiGet(`/api/ustoz/subjects/${subjectId}/lessons/`);
-        const lessons: any[] = d.items ?? [];
-        if (lessons.length === 0) {
-          await ctx.reply("❌ Bu fanda hali dars yo'q. Avval dars qo'shing.");
-          return;
-        }
-        const kb = new InlineKeyboard();
-        for (const l of lessons) {
-          kb.row().text(`${l.name} (${l.questionCount} savol)`, `ustoz_savol_sel:${l.id}:${l.name}`);
-        }
-        await ctx.reply("📖 *Qaysi darsga savol qo'shasiz?*", { parse_mode: "Markdown", reply_markup: kb });
-      } catch (e: any) {
-        await ctx.reply(`❌ Darslarni olib bo'lmadi: ${e?.message}`);
+  // ── Ustoz AI: Dars uchun fan tanlandi ─────────────────────────────────────
+  if (data.startsWith("ustoz_dars_sel:")) {
+    await ctx.answerCallbackQuery();
+    if (!isAdmin(uid)) return;
+    const parts = data.slice("ustoz_dars_sel:".length).split(":");
+    const subjectId = parseInt(parts[0], 10);
+    const subjectName = parts.slice(1).join(":");
+    setState(uid, { t: "ustoz_dars_nomi", subjectId, subjectName });
+    await ctx.reply(
+      `📖 *${md(subjectName)}* faniga dars qo'shish\n\nDars nomini kiriting:\n\n/cancel — bekor qilish`,
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+
+  // ── Ustoz AI: Savol uchun fan tanlandi → darslar ro'yxati ─────────────────
+  if (data.startsWith("ustoz_savol_fan:")) {
+    await ctx.answerCallbackQuery();
+    if (!isAdmin(uid)) return;
+    const subjectId = parseInt(data.slice("ustoz_savol_fan:".length), 10);
+    try {
+      const d = await apiGet(`/api/ustoz/subjects/${subjectId}/lessons/`);
+      const lessons: any[] = d.items ?? [];
+      if (lessons.length === 0) {
+        await ctx.reply("❌ Bu fanda hali dars yo'q. Avval dars qo'shing.");
+        return;
       }
-      return;
+      const kb = new InlineKeyboard();
+      for (const l of lessons) {
+        kb.row().text(`${l.name} (${l.questionCount} savol)`, `ustoz_savol_sel:${l.id}:${l.name}`);
+      }
+      await ctx.reply("📖 *Qaysi darsga savol qo'shasiz?*", { parse_mode: "Markdown", reply_markup: kb });
+    } catch (e: any) {
+      await ctx.reply(`❌ Darslarni olib bo'lmadi: ${e?.message}`);
     }
+    return;
+  }
 
-    // Savol uchun dars tanlandi
-    if (data.startsWith("ustoz_savol_sel:")) {
-      await ctx.answerCallbackQuery();
-      if (!isAdmin(uid)) return;
-      const parts = data.slice("ustoz_savol_sel:".length).split(":");
-      const lessonId = parseInt(parts[0], 10);
-      const lessonName = parts.slice(1).join(":");
-      setState(uid, { t: "ustoz_savol_matn", lessonId, lessonName });
-      await ctx.reply(
-        `❓ *"${md(lessonName)}"* darsiga savol qo'shish\n\nSavol matnini kiriting:\n\n/cancel — bekor qilish`,
-        { parse_mode: "Markdown" }
-      );
-      return;
-    }
-
+  // ── Ustoz AI: Savol uchun dars tanlandi ───────────────────────────────────
+  if (data.startsWith("ustoz_savol_sel:")) {
+    await ctx.answerCallbackQuery();
+    if (!isAdmin(uid)) return;
+    const parts = data.slice("ustoz_savol_sel:".length).split(":");
+    const lessonId = parseInt(parts[0], 10);
+    const lessonName = parts.slice(1).join(":");
+    setState(uid, { t: "ustoz_savol_matn", lessonId, lessonName });
+    await ctx.reply(
+      `❓ *"${md(lessonName)}"* darsiga savol qo'shish\n\nSavol matnini kiriting:\n\n/cancel — bekor qilish`,
+      { parse_mode: "Markdown" }
+    );
     return;
   }
 
