@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { DailyInfo, RoundFilter, Difficulty } from "../types";
-import { PlayIcon, StarIcon, TrophyIcon } from "./icons";
 import { useT } from "../i18n";
+import type { StringKey } from "../i18n";
 import { useAppSettings } from "../hooks/useAppSettings";
 
 type HomeScreenProps = {
@@ -20,513 +20,278 @@ type HomeScreenProps = {
   onUstozoAiOpen?: () => void;
 };
 
-const cardStyle = {
-  background: "var(--card)",
-  border: "1px solid var(--border)",
-  borderRadius: "20px",
-  padding: "18px"
-};
-
-
-function statCell(icon: ReactNode, value: number, label: string, color: string) {
-  return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" }}>
-      <span style={{ color, display: "flex" }}>{icon}</span>
-      <span style={{ fontSize: "22px", fontWeight: 900, color: "var(--text)", lineHeight: 1 }}>{value}</span>
-      <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "1.5px", color: "var(--muted)" }}>
-        {label}
-      </span>
-    </div>
-  );
-}
-
 type DifficultyOption = {
   value: Difficulty | null;
   emoji: string;
   labelKey: "home_difficulty_easy" | "home_difficulty_medium" | "home_difficulty_hard" | "home_any_difficulty";
-  gradient: string;
-  shadow: string;
+  color: string;
+  glow: string;
+  desc: string;
 };
 
 const DIFFICULTY_OPTIONS: DifficultyOption[] = [
-  {
-    value: "easy",
-    emoji: "🟢",
-    labelKey: "home_difficulty_easy",
-    gradient: "linear-gradient(135deg, #22C55E, #16A34A)",
-    shadow: "0 8px 22px rgba(34,197,94,0.32)",
-  },
-  {
-    value: "medium",
-    emoji: "🟡",
-    labelKey: "home_difficulty_medium",
-    gradient: "linear-gradient(135deg, #F59E0B, #D97706)",
-    shadow: "0 8px 22px rgba(245,158,11,0.32)",
-  },
-  {
-    value: "hard",
-    emoji: "🔴",
-    labelKey: "home_difficulty_hard",
-    gradient: "linear-gradient(135deg, #EF4444, #DC2626)",
-    shadow: "0 8px 22px rgba(239,68,68,0.32)",
-  },
-  {
-    value: null,
-    emoji: "🎲",
-    labelKey: "home_any_difficulty",
-    gradient: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
-    shadow: "0 8px 22px rgba(77,166,255,0.32)",
-  },
+  { value: "easy",   emoji: "🟢", labelKey: "home_difficulty_easy",   color: "#22C55E", glow: "rgba(34,197,94,0.25)",   desc: "Boshlang'ich" },
+  { value: "medium", emoji: "🟡", labelKey: "home_difficulty_medium", color: "#F59E0B", glow: "rgba(245,158,11,0.25)", desc: "O'rtacha"      },
+  { value: "hard",   emoji: "🔴", labelKey: "home_difficulty_hard",   color: "#EF4444", glow: "rgba(239,68,68,0.25)",  desc: "Murakkab"      },
+  { value: null,     emoji: "🎲", labelKey: "home_any_difficulty",    color: "#A78BFA", glow: "rgba(167,139,250,0.25)", desc: "Barchasi"      },
 ];
 
+function MenuRow({ icon, iconBg, title, subtitle, onClick, badge }: {
+  icon: string; iconBg: string; title: string; subtitle: string;
+  onClick?: () => void; badge?: ReactNode;
+}) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={!onClick}
+      style={{ width: "100%", background: "transparent", border: "none", borderRadius: "16px",
+        padding: "12px 4px", cursor: onClick ? "pointer" : "default",
+        display: "flex", alignItems: "center", gap: "14px", textAlign: "left", transition: "background 0.15s" }}
+      onMouseDown={e  => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+      onMouseUp={e    => { e.currentTarget.style.background = "transparent"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+      onTouchStart={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+      onTouchEnd={e   => { e.currentTarget.style.background = "transparent"; }}
+    >
+      <div style={{ width: "46px", height: "46px", borderRadius: "14px", background: iconBg,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: "22px", flexShrink: 0, boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
+        {icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text)", lineHeight: 1.3 }}>{title}</div>
+        <div style={{ fontSize: "12px", color: "var(--text-sub)", marginTop: "2px", lineHeight: 1.3 }}>{subtitle}</div>
+      </div>
+      {badge ?? <div style={{ color: "var(--muted)", fontSize: "18px", fontWeight: 300, flexShrink: 0 }}>›</div>}
+    </button>
+  );
+}
+
+function DiffCard({ opt, disabled, onClick, t }: {
+  opt: DifficultyOption; disabled: boolean; onClick: () => void; t: (key: StringKey) => string;
+}) {
+  return (
+    <button type="button" disabled={disabled} onClick={onClick}
+      style={{ padding: "18px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px",
+        background: "var(--glass-bg)", border: `1.5px solid ${opt.color}30`,
+        borderTop: `2.5px solid ${opt.color}`, borderRadius: "18px",
+        color: "var(--text)", cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1, transition: "transform 0.12s", backdropFilter: "blur(8px)" }}
+      onMouseDown={e  => { e.currentTarget.style.transform = "scale(0.95)"; }}
+      onMouseUp={e    => { e.currentTarget.style.transform = "scale(1)"; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+      onTouchStart={e => { e.currentTarget.style.transform = "scale(0.95)"; }}
+      onTouchEnd={e   => { e.currentTarget.style.transform = "scale(1)"; }}
+    >
+      <span style={{ fontSize: "28px", lineHeight: 1, filter: `drop-shadow(0 2px 8px ${opt.glow})` }}>{opt.emoji}</span>
+      <span style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.02em" }}>{t(opt.labelKey)}</span>
+      <span style={{ fontSize: "10px", color: "var(--text-sub)", fontWeight: 500 }}>{opt.desc}</span>
+    </button>
+  );
+}
+
+function ZakovatLogo() {
+  return (
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none"
+      style={{ filter: "drop-shadow(0 0 18px rgba(245,200,66,0.4))", animation: "logoFloat 4s ease-in-out infinite" }}>
+      <defs>
+        <linearGradient id="zGold" x1="0" y1="0" x2="72" y2="72" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFE580" />
+          <stop offset="50%" stopColor="#F5C842" />
+          <stop offset="100%" stopColor="#D4960A" />
+        </linearGradient>
+      </defs>
+      <path d="M14 14 L58 14 L58 22 L26 50 L58 50 L58 58 L14 58 L14 50 L46 22 L14 22 Z" fill="url(#zGold)" />
+    </svg>
+  );
+}
+
 export default function HomeScreen({
-  error,
-  isLoading,
-  playerName,
-  record,
-  score,
-  dailyInfo,
-  showPremiumPaywall,
-  onStart,
-  onDailyOpen,
-  onGameRoomOpen,
-  onZakovatTableOpen,
-  onPremiumOpen,
-  onUstozoAiOpen,
+  error, isLoading, playerName, record, score, dailyInfo,
+  showPremiumPaywall, onStart, onDailyOpen, onGameRoomOpen,
+  onZakovatTableOpen, onPremiumOpen, onUstozoAiOpen,
 }: HomeScreenProps) {
   const t = useT();
   const appSettings = useAppSettings();
   const userInitial = playerName.trim()[0]?.toUpperCase() ?? "Z";
 
-  // Admin tomonidan o'chirilgan qiyinlik darajalarini filtrlaymiz
   const enabledDifficulties = DIFFICULTY_OPTIONS.slice(0, 3).filter((opt) => {
-    if (opt.value === "easy" && !appSettings.difficultyEasyEnabled) return false;
+    if (opt.value === "easy"   && !appSettings.difficultyEasyEnabled)   return false;
     if (opt.value === "medium" && !appSettings.difficultyMediumEnabled) return false;
-    if (opt.value === "hard" && !appSettings.difficultyHardEnabled) return false;
+    if (opt.value === "hard"   && !appSettings.difficultyHardEnabled)   return false;
     return true;
   });
 
   return (
-    <div
-      className="animate-fadeInUp"
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-        background: "var(--bg)",
-        padding: "32px 20px 104px"
-      }}
-    >
-      <div style={{ textAlign: "center" }}>
-        <div
-          style={{
-            fontSize: "60px",
-            lineHeight: 1,
-            filter: "drop-shadow(0 0 28px rgba(77,166,255,0.45))"
-          }}
-        >
-          {"\u{1F9E0}"}
-        </div>
-        <div
-          style={{
-            fontSize: "33px",
-            fontWeight: 900,
-            letterSpacing: "7px",
-            marginTop: "8px",
-            background: "linear-gradient(135deg, #4DA6FF, #A78BFA)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent"
-          }}
-        >
-          ZAKOVAT
-        </div>
-        <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "6px" }}>
-          Bilimingizni sinang
-        </div>
-      </div>
+    <div className="animate-fadeInUp"
+      style={{ minHeight: "100vh", display: "flex", flexDirection: "column",
+        background: "var(--bg)", padding: "0 0 104px", position: "relative", overflow: "hidden" }}>
 
-      <div style={cardStyle}>
-        <div style={{ display: "flex", alignItems: "center", gap: "13px" }}>
-          <div
-            style={{
-              width: "46px",
-              height: "46px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #4DA6FF, #7C3AED)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "19px",
-              fontWeight: 800,
-              color: "white",
-              flex: "0 0 auto"
-            }}
+      {/* Background glow */}
+      <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
+        width: "340px", height: "280px",
+        background: "radial-gradient(ellipse at top, rgba(245,200,66,0.08) 0%, transparent 70%)",
+        pointerEvents: "none" }} />
+
+      <div style={{ display: "flex", flexDirection: "column", padding: "0 20px" }}>
+
+        {/* HEADER */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+          paddingTop: "20px", paddingBottom: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "46px", height: "46px", borderRadius: "50%",
+              border: "2px solid var(--gold)", background: "var(--surface)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "18px", fontWeight: 900, color: "var(--gold)",
+              boxShadow: "0 0 12px rgba(245,200,66,0.2)", flexShrink: 0 }}>
+              {userInitial}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "140px" }}>
+                {playerName}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-sub)", marginTop: "1px" }}>
+                Zakovat o'yinchisi
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px",
+            background: "rgba(245,200,66,0.1)", border: "1px solid rgba(245,200,66,0.25)",
+            borderRadius: "24px", padding: "6px 14px" }}>
+            <span style={{ fontSize: "14px" }}>🏆</span>
+            <span style={{ fontSize: "15px", fontWeight: 800, color: "var(--gold)" }}>{score.toLocaleString()}</span>
+            <span style={{ fontSize: "11px", color: "var(--text-sub)", fontWeight: 600 }}>ball</span>
+          </div>
+        </div>
+
+        {/* HERO */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
+          paddingTop: "16px", paddingBottom: "20px", gap: "10px" }}>
+          <ZakovatLogo />
+          <div style={{ fontSize: "26px", fontWeight: 900, letterSpacing: "6px",
+            background: "linear-gradient(135deg, #FFFFFF 0%, #F5C842 60%, #E0A800 100%)",
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            ZAKOVAT
+          </div>
+          <div style={{ width: "56px", height: "2px",
+            background: "linear-gradient(90deg, transparent, var(--gold), transparent)", borderRadius: "2px" }} />
+          <div style={{ fontSize: "12px", color: "var(--text-sub)", fontStyle: "italic" }}>
+            Bilimingizni sinab ko'ring
+          </div>
+        </div>
+
+        {/* DIFFICULTY */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "2px",
+            color: "var(--muted)", textTransform: "uppercase" }}>
+            {t("home_difficulty")}
+          </div>
+          <div style={{ display: "grid",
+            gridTemplateColumns: `repeat(${Math.min(enabledDifficulties.length, 2)}, 1fr)`, gap: "10px" }}>
+            {enabledDifficulties.map((opt) => (
+              <DiffCard key={opt.value ?? "any"} opt={opt} disabled={isLoading}
+                onClick={() => onStart({ category: null, difficulty: opt.value })} t={t} />
+            ))}
+          </div>
+          <button type="button" disabled={isLoading}
+            onClick={() => onStart({ category: null, difficulty: null })}
+            style={{ width: "100%", padding: "16px",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
+              background: "linear-gradient(135deg, rgba(167,139,250,0.18), rgba(77,166,255,0.14))",
+              border: "1.5px solid rgba(167,139,250,0.35)", borderRadius: "18px",
+              color: "var(--text)", cursor: isLoading ? "not-allowed" : "pointer",
+              opacity: isLoading ? 0.6 : 1, fontWeight: 800, fontSize: "15px",
+              transition: "transform 0.12s" }}
+            onMouseDown={e  => { e.currentTarget.style.transform = "scale(0.98)"; }}
+            onMouseUp={e    => { e.currentTarget.style.transform = "scale(1)"; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+            onTouchStart={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
+            onTouchEnd={e   => { e.currentTarget.style.transform = "scale(1)"; }}
           >
-            {userInitial}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: "16px",
-                fontWeight: 800,
-                color: "var(--text)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap"
-              }}
-            >
-              {playerName}
-            </div>
-            <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-              Bilim sinovchisi
-            </div>
-          </div>
+            {isLoading
+              ? <span style={{ color: "var(--text-sub)" }}>{t("loading_dots")}</span>
+              : <><span style={{ fontSize: "22px" }}>🎲</span><span>{t("home_any_difficulty")}</span></>}
+          </button>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            marginTop: "16px",
-            paddingTop: "16px",
-            borderTop: "1px solid var(--border)"
-          }}
-        >
-          {statCell(<StarIcon size={18} />, score, "BALL", "var(--gold)")}
-          <div style={{ width: "1px", background: "var(--border)" }} />
-          {statCell(<TrophyIcon size={18} />, record, "REKORD", "var(--accent)")}
+        {/* REJIMLAR */}
+        <div style={{ marginTop: "20px" }}>
+          <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "2px",
+            color: "var(--muted)", textTransform: "uppercase", marginBottom: "4px" }}>
+            Qo'shimcha rejimlar
+          </div>
+          <div style={{ height: "1px", background: "var(--border)", marginBottom: "4px" }} />
+
+          {dailyInfo && onDailyOpen ? (
+            <MenuRow icon={dailyInfo.completed ? "✅" : dailyInfo.streak.current >= 3 ? "🔥" : "📅"}
+              iconBg={dailyInfo.completed ? "linear-gradient(135deg,#16A34A,#15803D)" : "linear-gradient(135deg,#2563EB,#1D4ED8)"}
+              title="Kunlik topshiriq"
+              subtitle={dailyInfo.completed ? `Streak: ${dailyInfo.streak.current} kun ✓`
+                : dailyInfo.bonusPreview > 0 ? `+${dailyInfo.bonusPreview} bonus ball` : "Yangi savol har kun"}
+              onClick={onDailyOpen} />
+          ) : null}
+
+          {onGameRoomOpen ? (
+            <MenuRow icon="🎮" iconBg="linear-gradient(135deg,#7C3AED,#6D28D9)"
+              title="Online O'yin Xonasi" subtitle="Do'stlar bilan real-vaqt o'yini" onClick={onGameRoomOpen} />
+          ) : null}
+
+          {onZakovatTableOpen ? (
+            <MenuRow icon="👁" iconBg="linear-gradient(135deg,#DC2626,#B91C1C)"
+              title="Zakovat Stoli" subtitle="Jonli guruh o'yinini kuzating" onClick={onZakovatTableOpen} />
+          ) : null}
+
+          {onUstozoAiOpen ? (
+            <MenuRow icon="🎓" iconBg="linear-gradient(135deg,#0EA5E9,#0284C7)"
+              title="Ustoz AI" subtitle="Fan va darslar bo'yicha test" onClick={onUstozoAiOpen} />
+          ) : null}
+
+          {onPremiumOpen ? (
+            <MenuRow icon="⭐" iconBg="linear-gradient(135deg,#D97706,#B45309)"
+              title="Zakovat Premium" subtitle="Cheksiz o'yin, barcha bo'limlar" onClick={onPremiumOpen}
+              badge={
+                <div style={{ background: "linear-gradient(135deg,#F5C842,#D4960A)",
+                  borderRadius: "8px", padding: "3px 9px",
+                  fontSize: "10px", fontWeight: 800, color: "#1a0a00" }}>PRO</div>
+              } />
+          ) : null}
         </div>
+
+        {/* PAYWALL */}
+        {showPremiumPaywall && onPremiumOpen ? (
+          <div style={{ marginTop: "12px",
+            background: "linear-gradient(135deg,rgba(184,134,11,0.14),rgba(218,165,32,0.08))",
+            border: "1.5px solid rgba(245,200,66,0.35)", borderRadius: "18px", padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "24px", flexShrink: 0 }}>⛔</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)" }}>Bugungi bepul limit tugadi!</div>
+                <div style={{ fontSize: "12px", color: "var(--text-sub)", marginTop: "2px" }}>⏳ Limit ertaga yangilanadi</div>
+              </div>
+              <button type="button" onClick={onPremiumOpen}
+                style={{ padding: "8px 14px", background: "linear-gradient(135deg,#F5C842,#D4960A)",
+                  border: "none", borderRadius: "12px", fontSize: "12px", fontWeight: 800,
+                  color: "#1a0a00", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                ⭐ Premium
+              </button>
+            </div>
+          </div>
+        ) : error ? (
+          <div style={{ marginTop: "8px", fontSize: "13px", fontWeight: 600, color: "var(--error)", textAlign: "center" }}>
+            {error}
+          </div>
+        ) : null}
+
+        {/* Record */}
+        {record > 0 ? (
+          <div style={{ marginTop: "16px", display: "flex", alignItems: "center",
+            justifyContent: "center", gap: "8px", fontSize: "12px", color: "var(--text-sub)" }}>
+            <span>🏅</span><span>Shaxsiy rekord:</span>
+            <span style={{ fontWeight: 800, color: "var(--gold)" }}>{record.toLocaleString()} ball</span>
+          </div>
+        ) : null}
+
       </div>
-
-      {dailyInfo && onDailyOpen ? (
-        <button
-          type="button"
-          onClick={onDailyOpen}
-          style={{
-            width: "100%",
-            background: dailyInfo.completed
-              ? "var(--card)"
-              : "linear-gradient(135deg, rgba(77,166,255,0.18), rgba(124,58,237,0.18))",
-            border: `1px solid ${dailyInfo.completed ? "var(--border)" : "rgba(77,166,255,0.4)"}`,
-            borderRadius: "16px",
-            padding: "14px 16px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            textAlign: "left"
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "22px" }}>
-              {dailyInfo.completed ? "✅" : dailyInfo.streak.current >= 3 ? "🔥" : "🗓"}
-            </span>
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
-                Kunlik topshiriq
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                {dailyInfo.completed
-                  ? `Streak: ${dailyInfo.streak.current} kun ✓`
-                  : dailyInfo.bonusPreview > 0
-                  ? `+${dailyInfo.bonusPreview} bonus ball imkoniyati`
-                  : "5 ta savol, har kuni yangi"}
-              </div>
-            </div>
-          </div>
-          <span style={{ fontSize: "18px", color: "var(--muted)" }}>›</span>
-        </button>
-      ) : null}
-
-      {onGameRoomOpen ? (
-        <button
-          type="button"
-          onClick={onGameRoomOpen}
-          style={{
-            width: "100%",
-            background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(77,166,255,0.18))",
-            border: "1px solid rgba(124,58,237,0.35)",
-            borderRadius: "16px",
-            padding: "14px 16px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            textAlign: "left"
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "22px" }}>🎮</span>
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
-                Online O'yin Xonasi
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                Kod bilan real-vaqt o'yiniga kiring
-              </div>
-            </div>
-          </div>
-          <span style={{ fontSize: "18px", color: "var(--muted)" }}>›</span>
-        </button>
-      ) : null}
-
-      {onZakovatTableOpen ? (
-        <button
-          type="button"
-          onClick={onZakovatTableOpen}
-          style={{
-            width: "100%",
-            background: "linear-gradient(135deg, rgba(239,68,68,0.16), rgba(245,158,11,0.14))",
-            border: "1px solid rgba(239,68,68,0.35)",
-            borderRadius: "16px",
-            padding: "14px 16px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            textAlign: "left"
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "22px" }}>👁</span>
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
-                Zakovat Stoli
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                Guruhdagi jonli o'yinni kuzatish
-              </div>
-            </div>
-          </div>
-          <span style={{ fontSize: "18px", color: "var(--muted)" }}>›</span>
-        </button>
-      ) : null}
-
-      {/* ── Ustoz AI ─────────────────────────────────────────────── */}
-      {onUstozoAiOpen ? (
-        <button
-          type="button"
-          onClick={onUstozoAiOpen}
-          style={{
-            width: "100%",
-            background: "linear-gradient(135deg, rgba(34,197,94,0.16), rgba(77,166,255,0.14))",
-            border: "1px solid rgba(34,197,94,0.35)",
-            borderRadius: "16px",
-            padding: "14px 16px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            textAlign: "left",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "22px" }}>🎓</span>
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
-                Ustoz AI
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                Fan tanlang va test ishlang
-              </div>
-            </div>
-          </div>
-          <span style={{ fontSize: "18px", color: "var(--success)" }}>›</span>
-        </button>
-      ) : null}
-
-      {onPremiumOpen ? (
-        <button
-          type="button"
-          onClick={onPremiumOpen}
-          style={{
-            width: "100%",
-            background: "linear-gradient(135deg, rgba(184,134,11,0.18), rgba(218,165,32,0.12))",
-            border: "1.5px solid rgba(218,165,32,0.45)",
-            borderRadius: "16px",
-            padding: "14px 16px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            textAlign: "left",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "22px" }}>⭐</span>
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
-                Zakovat Premium
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                Cheksiz o'yin, barcha bo'limlar
-              </div>
-            </div>
-          </div>
-          <span style={{ fontSize: "18px", color: "var(--gold)" }}>›</span>
-        </button>
-      ) : null}
-
-      {showPremiumPaywall && onPremiumOpen ? (
-        <div
-          style={{
-            background: "linear-gradient(135deg, rgba(184,134,11,0.16), rgba(218,165,32,0.1))",
-            border: "1.5px solid rgba(218,165,32,0.5)",
-            borderRadius: "16px",
-            padding: "14px 16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-          }}
-        >
-          {/* Top row: icon + text + button */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <span style={{ fontSize: "22px", flex: "0 0 auto" }}>⛔</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text)" }}>
-                Bugungi bepul limit tugadi!
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--muted)", marginTop: "2px" }}>
-                Premium oling — cheksiz o'ynang!
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onPremiumOpen}
-              style={{
-                padding: "9px 14px",
-                background: "linear-gradient(135deg, #B8860B, #DAA520)",
-                border: "none",
-                borderRadius: "10px",
-                fontSize: "12px",
-                fontWeight: 800,
-                color: "#1a0a00",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                flex: "0 0 auto",
-              }}
-            >
-              ⭐ Premium
-            </button>
-          </div>
-          {/* Reset hint */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "11.5px",
-              fontWeight: 600,
-              color: "#F59E0B",
-              paddingLeft: "2px",
-            }}
-          >
-            <span>⏳</span>
-            <span>Limit ertaga yangilanadi</span>
-          </div>
-        </div>
-      ) : error ? (
-        <div
-          style={{
-            fontSize: "13px",
-            fontWeight: 600,
-            color: "var(--error)",
-            textAlign: "center"
-          }}
-        >
-          {error}
-        </div>
-      ) : null}
-
-      {/* Qiyinlik tanlash — 4 ta kartochka */}
-      <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "10px" }}>
-        <div
-          style={{
-            fontSize: "11px",
-            fontWeight: 700,
-            color: "var(--muted)",
-            letterSpacing: "1.5px",
-            textTransform: "uppercase",
-            textAlign: "center",
-            marginBottom: "2px",
-          }}
-        >
-          {t("home_difficulty")}
-        </div>
-        {/* 3 ta qiyinlik (oson/o'rtacha/qiyin) — qator */}
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${enabledDifficulties.length}, 1fr)`, gap: "8px" }}>
-          {enabledDifficulties.map((opt) => (
-            <button
-              key={opt.value ?? "any"}
-              type="button"
-              disabled={isLoading}
-              onClick={() => onStart({ category: null, difficulty: opt.value })}
-              style={{
-                padding: "14px 8px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "6px",
-                background: opt.gradient,
-                border: "none",
-                borderRadius: "14px",
-                color: "white",
-                cursor: isLoading ? "not-allowed" : "pointer",
-                boxShadow: opt.shadow,
-                opacity: isLoading ? 0.6 : 1,
-                transition: "transform 0.12s, opacity 0.15s",
-                fontWeight: 800,
-              }}
-              onMouseDown={(e) => {
-                e.currentTarget.style.transform = "scale(0.96)";
-              }}
-              onMouseUp={(e) => {
-                e.currentTarget.style.transform = "scale(1)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "scale(1)";
-              }}
-            >
-              <span style={{ fontSize: "26px", lineHeight: 1 }}>{opt.emoji}</span>
-              <span style={{ fontSize: "13px", letterSpacing: "0.02em" }}>{t(opt.labelKey)}</span>
-            </button>
-          ))}
-        </div>
-        {/* Aralash — alohida keng tugma */}
-        <button
-          type="button"
-          disabled={isLoading}
-          onClick={() => onStart({ category: null, difficulty: null })}
-          style={{
-            width: "100%",
-            padding: "14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "9px",
-            background: DIFFICULTY_OPTIONS[3].gradient,
-            border: "none",
-            borderRadius: "14px",
-            color: "white",
-            cursor: isLoading ? "not-allowed" : "pointer",
-            boxShadow: DIFFICULTY_OPTIONS[3].shadow,
-            opacity: isLoading ? 0.6 : 1,
-            fontWeight: 800,
-            fontSize: "15px",
-          }}
-        >
-          {isLoading ? (
-            t("loading_dots")
-          ) : (
-            <>
-              <PlayIcon size={16} />
-              <span style={{ fontSize: "16px" }}>{DIFFICULTY_OPTIONS[3].emoji}</span>
-              {t("home_any_difficulty")} ({t("home_start").toLowerCase()})
-            </>
-          )}
-        </button>
-      </div>
-
     </div>
   );
 }

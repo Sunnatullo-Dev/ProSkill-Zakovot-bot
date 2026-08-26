@@ -268,24 +268,19 @@ export default function QuestionCard({
         overflow: "hidden"
       }}
     >
-      <div
-        style={{
-          height: "3px",
-          background: "var(--border)",
-          borderRadius: "2px",
-          marginBottom: "10px",
-          overflow: "hidden"
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${(questionNumber / totalQuestions) * 100}%`,
-            background: "linear-gradient(90deg, var(--accent), var(--accent2))",
-            borderRadius: "2px",
-            transition: "width 0.3s ease"
-          }}
-        />
+      {/* ── Progress bar ── */}
+      <div style={{
+        height: "4px", background: "rgba(255,255,255,0.06)",
+        borderRadius: "4px", marginBottom: "12px", overflow: "hidden",
+      }}>
+        <div style={{
+          height: "100%",
+          width: `${(questionNumber / totalQuestions) * 100}%`,
+          background: "linear-gradient(90deg, var(--gold), #FFE580)",
+          borderRadius: "4px",
+          transition: "width 0.4s ease",
+          boxShadow: "0 0 8px rgba(245,200,66,0.4)",
+        }} />
       </div>
 
       <div
@@ -366,24 +361,20 @@ export default function QuestionCard({
           overflow: "hidden"  // savol kartasi bu chegaradan tashqariga chiqa olmaydi
         }}
       >
-        {/* ── Savol kartasi — flex:1 bilan qolgan joyni egallaydi, zarur bo'lsa ichida scroll ── */}
-        <div
-          style={{
-            width: "100%",
-            background: "var(--card)",
-            border: "1px solid var(--border)",
-            borderRadius: "20px",
-            marginBottom: "10px",
-            display: "flex",
-            flexDirection: "column",
-            // flex:1 + minHeight:0 — bu karta mavjud bo'sh joyni egallaydi.
-            // Timer va javob elementlari flexShrink:0 bo'lgani uchun ular
-            // doim ko'rinadi; karta qisqartiriladi (shrink), ichidagi matn scroll bo'ladi.
-            flex: 1,
-            minHeight: "64px",
-            overflow: "hidden"
-          }}
-        >
+        {/* ── Savol kartasi ── */}
+        <div style={{
+          width: "100%",
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "24px",
+          marginBottom: "10px",
+          display: "flex",
+          flexDirection: "column",
+          flex: 1, minHeight: "64px",
+          overflow: "hidden",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)",
+        }}>
           {/* Scrollable matn qismi */}
           <div
             style={{
@@ -489,31 +480,22 @@ export default function QuestionCard({
         </div>
 
         {/* ── Timer doirasi ── */}
-        <svg height="60" style={{ marginBottom: "8px", flexShrink: 0 }} viewBox="0 0 80 80" width="60">
-          <circle cx="40" cy="40" fill="none" r="34" stroke="var(--border)" strokeWidth="6" />
+        <svg height="68" style={{ marginBottom: "8px", flexShrink: 0 }} viewBox="0 0 80 80" width="68">
+          <circle cx="40" cy="40" fill="none" r="34" stroke="rgba(255,255,255,0.06)" strokeWidth="5" />
           <circle
-            cx="40"
-            cy="40"
-            fill="none"
-            r="34"
-            stroke={timerColor}
+            cx="40" cy="40" fill="none" r="34"
+            stroke={timeLeft > 20 ? "var(--gold)" : timeLeft > 8 ? "#F59E0B" : "#EF4444"}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
-            strokeWidth="6"
-            style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease" }}
+            strokeWidth="5"
+            style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease", filter: `drop-shadow(0 0 6px ${timeLeft > 8 ? "rgba(245,200,66,0.5)" : "rgba(239,68,68,0.5)"})` }}
             transform="rotate(-90 40 40)"
           />
-          <text
-            dominantBaseline="central"
-            fill={timerColor}
-            fontSize="20"
-            fontWeight="800"
+          <text dominantBaseline="central" fill={timeLeft > 20 ? "var(--gold)" : timeLeft > 8 ? "#F59E0B" : "#EF4444"}
+            fontSize="19" fontWeight="900"
             style={{ transition: "fill 0.5s" }}
-            textAnchor="middle"
-            x="40"
-            y="40"
-          >
+            textAnchor="middle" x="40" y="40">
             {timeLeft}
           </text>
         </svg>
@@ -549,62 +531,47 @@ export default function QuestionCard({
                 padding: "24px 16px 12px"
               }}
             >
-              <div
-                style={{
-                  background: "var(--card)",
-                  border: "1px solid var(--accent)",
-                  borderRadius: "16px",
-                  padding: "18px"
-                }}
-              >
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)", marginBottom: "12px" }}>
-                  {"\u{1F4DA}"} Bilib oling
+              <div style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "24px", padding: "22px",
+                backdropFilter: "blur(12px)",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
+              }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-sub)", letterSpacing: "2px", marginBottom: "12px" }}>
+                  📚 TO'G'RI JAVOB
                 </div>
-                <div style={{ fontSize: "11px", color: "var(--muted)", letterSpacing: "2px" }}>
-                  TO'G'RI JAVOB
+                <div style={{ fontSize: "20px", fontWeight: 900, color: "var(--success)", marginBottom: "12px",
+                  textShadow: "0 0 16px rgba(34,197,94,0.4)" }}>
+                  {reveal.correctAnswer || "—"}
                 </div>
-                <div style={{ fontSize: "20px", fontWeight: 800, color: "var(--success)", marginTop: "4px" }}>
-                  {reveal.correctAnswer || "\u2014"}
-                </div>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: reveal.explanation ? "var(--text)" : "var(--muted)",
-                    fontStyle: reveal.explanation ? "normal" : "italic",
-                    lineHeight: 1.6,
-                    borderTop: "1px solid var(--border)",
-                    marginTop: "12px",
-                    paddingTop: "12px"
-                  }}
-                >
+                <div style={{
+                  fontSize: "14px",
+                  color: reveal.explanation ? "var(--text)" : "var(--muted)",
+                  fontStyle: reveal.explanation ? "normal" : "italic",
+                  lineHeight: 1.65,
+                  borderTop: "1px solid rgba(255,255,255,0.07)",
+                  marginTop: "12px", paddingTop: "12px",
+                }}>
                   {reveal.explanation || "To'g'ri javobni eslab qoling."}
                 </div>
               </div>
             </div>
 
-            {/* Pinlangan tugma \u2014 doim ekranning pastida ko'rinadi */}
-            <div
-              style={{
-                flexShrink: 0,
-                padding: "12px 16px"
-              }}
-            >
+            {/* Davom etish — doim pastda pinlangan */}
+            <div style={{ flexShrink: 0, padding: "12px 16px" }}>
               <button
                 style={{
-                  width: "100%",
-                  padding: "15px",
-                  background: "var(--accent)",
-                  border: "none",
-                  borderRadius: "14px",
-                  fontSize: "16px",
-                  fontWeight: 700,
-                  color: "white",
-                  cursor: "pointer"
+                  width: "100%", padding: "15px",
+                  background: "linear-gradient(135deg, var(--gold), #D4960A)",
+                  border: "none", borderRadius: "16px",
+                  fontSize: "16px", fontWeight: 800,
+                  color: "#1a0a00", cursor: "pointer",
+                  boxShadow: "0 4px 20px rgba(245,200,66,0.3)",
                 }}
-                type="button"
-                onClick={onContinue}
+                type="button" onClick={onContinue}
               >
-                Davom qilish {"\u2192"}
+                Davom qilish →
               </button>
             </div>
           </div>
@@ -622,8 +589,11 @@ export default function QuestionCard({
             Ma'lumot yuklanmoqda...
           </div>
         ) : isMultipleChoice ? (
-          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "8px", flexShrink: 0 }}>
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px", flexShrink: 0 }}>
             {options.map((option, index) => {
+              const letter = OPTION_LETTERS[index] ?? "";
+              const letterColors = ["#4DA6FF", "#A78BFA", "#22C55E", "#F59E0B"];
+              const letterColor = letterColors[index] ?? "var(--accent)";
               const isSelected = selectedOption === option;
               const disabled = isSubmitting || selectedOption !== null;
               return (
@@ -633,59 +603,43 @@ export default function QuestionCard({
                   disabled={disabled}
                   onClick={() => handlePickOption(option)}
                   style={{
-                    width: "100%",
-                    padding: "9px 12px",
-                    borderRadius: "14px",
-                    border: isSelected ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
-                    background: isSelected ? "rgba(77,166,255,0.16)" : "var(--card)",
-                    color: "var(--text)",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    textAlign: "left",
-                    cursor: disabled ? "not-allowed" : "pointer",
-                    opacity: disabled && !isSelected ? 0.55 : 1,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    transition: "all 0.15s"
+                    width: "100%", padding: "14px 14px",
+                    borderRadius: "16px",
+                    border: isSelected
+                      ? "1.5px solid var(--gold)"
+                      : "1px solid rgba(255,255,255,0.08)",
+                    background: isSelected
+                      ? "rgba(245,200,66,0.08)"
+                      : "rgba(255,255,255,0.03)",
+                    color: "var(--text)", fontSize: "14px", fontWeight: 600,
+                    textAlign: "left", cursor: disabled ? "not-allowed" : "pointer",
+                    opacity: disabled && !isSelected ? 0.5 : 1,
+                    display: "flex", alignItems: "center", gap: "12px",
+                    transition: "all 0.18s",
+                    backdropFilter: "blur(8px)",
+                    boxShadow: isSelected ? "0 0 16px rgba(245,200,66,0.15)" : "none",
                   }}
                 >
-                  <span
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      borderRadius: "50%",
-                      background: isSelected ? "var(--accent)" : "rgba(255,255,255,0.05)",
-                      color: isSelected ? "white" : "var(--accent)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "13px",
-                      fontWeight: 900,
-                      flex: "0 0 auto"
-                    }}
-                  >
-                    {OPTION_LETTERS[index] ?? ""}
+                  <span style={{
+                    width: "32px", height: "32px", borderRadius: "50%",
+                    background: isSelected ? "var(--gold)" : `${letterColor}18`,
+                    border: `1.5px solid ${isSelected ? "var(--gold)" : letterColor}`,
+                    color: isSelected ? "#1a0a00" : letterColor,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "13px", fontWeight: 900, flexShrink: 0,
+                    transition: "all 0.18s",
+                  }}>
+                    {letter}
                   </span>
                   <span style={{ flex: 1, lineHeight: 1.4 }}>{option}</span>
                 </button>
               );
             })}
             <button
-              style={{
-                width: "100%",
-                marginTop: "4px",
-                padding: "9px",
-                background: "transparent",
-                border: "none",
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "var(--muted)",
-                textDecoration: "underline",
-                cursor: "pointer"
-              }}
-              type="button"
-              onClick={onGiveUp}
+              style={{ width: "100%", marginTop: "2px", padding: "8px",
+                background: "transparent", border: "none", fontSize: "13px",
+                fontWeight: 600, color: "var(--muted)", textDecoration: "underline", cursor: "pointer" }}
+              type="button" onClick={onGiveUp}
               disabled={isSubmitting || selectedOption !== null}
             >
               Javobni bilmayman
