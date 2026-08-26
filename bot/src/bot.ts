@@ -1431,6 +1431,8 @@ bot.on("callback_query:data", async ctx => {
 
     // Dars uchun fan tanlandi
     if (data.startsWith("ustoz_dars_sel:")) {
+      await ctx.answerCallbackQuery();
+      if (!isAdmin(uid)) return;
       const parts = data.slice("ustoz_dars_sel:".length).split(":");
       const subjectId = parseInt(parts[0], 10);
       const subjectName = parts.slice(1).join(":");
@@ -1444,6 +1446,8 @@ bot.on("callback_query:data", async ctx => {
 
     // Savol uchun fan tanlandi → darslar ro'yxati
     if (data.startsWith("ustoz_savol_fan:")) {
+      await ctx.answerCallbackQuery();
+      if (!isAdmin(uid)) return;
       const subjectId = parseInt(data.slice("ustoz_savol_fan:".length), 10);
       try {
         const d = await apiGet(`/api/ustoz/subjects/${subjectId}/lessons/`);
@@ -1465,6 +1469,8 @@ bot.on("callback_query:data", async ctx => {
 
     // Savol uchun dars tanlandi
     if (data.startsWith("ustoz_savol_sel:")) {
+      await ctx.answerCallbackQuery();
+      if (!isAdmin(uid)) return;
       const parts = data.slice("ustoz_savol_sel:".length).split(":");
       const lessonId = parseInt(parts[0], 10);
       const lessonName = parts.slice(1).join(":");
