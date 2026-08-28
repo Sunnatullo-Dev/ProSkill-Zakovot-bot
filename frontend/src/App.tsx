@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useGameSounds } from "./hooks/useGameSounds";
 import {
   completeDailyChallenge,
   checkSubscriptions,
@@ -153,6 +154,7 @@ export default function App() {
 
   const { initData, isReady, startParam, user: telegramUser, initDataMissing, inTelegram } = useTelegram();
   const { lang, setLang, t } = useLanguage();
+  const { soundCorrect, soundWrong } = useGameSounds();
 
   // Splash'dagi "Code Nation" brendini bosganda rasmiy kanalni ochadi.
   const openCodeNation = useCallback(() => {
@@ -408,6 +410,17 @@ export default function App() {
       window.clearTimeout(timeoutId);
     };
   }, [handleNextQuestion, lastResult, screen]);
+
+  // ── Sound effect: javob natijasida ─────────────────────────────────────────
+  useEffect(() => {
+    if (!lastResult) return;
+    if (lastResult.status === "correct") {
+      soundCorrect();
+    } else if (lastResult.status === "incorrect") {
+      soundWrong();
+    }
+    // partial — ovoz yo'q (qisman to'g'ri, foydalanuvchini chalg'itmaymiz)
+  }, [lastResult, soundCorrect, soundWrong]);
 
   useEffect(() => {
     if (!isReady) {
@@ -814,6 +827,7 @@ export default function App() {
 
     hapticTap();
     stop();
+    soundWrong(); // Javobni bilmay qoldi — wrong sound
     // Javobni ko'rsatish tanlanganda bet bekor — pul deduct bo'lmaydi
     setCurrentBet(0);
     setIsRevealing(true);

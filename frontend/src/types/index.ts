@@ -115,6 +115,8 @@ export type Question = {
 export type RevealInfo = {
   correctAnswer: string;
   explanation: string;
+  /** To'g'ri/noto'g'ri — sound effect uchun. undefined = bilmaymiz (giveUp) */
+  isCorrect?: boolean;
 };
 
 export type AnswerStatus = "correct" | "partial" | "incorrect";
