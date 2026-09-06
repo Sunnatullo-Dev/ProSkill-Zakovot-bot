@@ -251,6 +251,115 @@ def get_referral_leaderboard() -> list[dict[str, Any]]:
     return output
 
 
+def get_referral_leaderboard_monthly() -> list[dict[str, Any]]:
+    """Shu oy (1-sanadan bugun gacha) ro'yxatdan o'tganlar bo'yicha taklif reytingi."""
+    from django.utils import timezone
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    top = (
+        User.objects.filter(referred_by__isnull=False, created_at__gte=month_start)
+        .values("referred_by")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:REFERRAL_LEADERBOARD_LIMIT]
+    )
+    if not top:
+        return []
+    ids = [row["referred_by"] for row in top]
+    user_map = {
+        u.telegram_id: u for u in User.objects.filter(telegram_id__in=ids)
+    }
+    output = []
+    for row in top:
+        tid = row["referred_by"]
+        if tid in user_map:
+            output.append({"user": _map_user(user_map[tid]), "count": row["count"]})
+    return output
+
+
+def get_referral_count_monthly(telegram_id: int) -> int:
+    """Shu oy foydalanuvchi taklif qilgan yangi foydalanuvchilar soni."""
+    from django.utils import timezone
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return User.objects.filter(referred_by=telegram_id, created_at__gte=month_start).count()
+
+
+def get_monthly_score_leaders(limit: int = 10, telegram_id: int = 0) -> tuple[list[dict[str, Any]], int]:
+    """Shu oy (1-sanadan bugun gacha) game_results.round_score summasi bo'yicha reyting.
+
+    Returns: (reyting_ro'yxati, joriy_foydalanuvchi_oydagi_balli)
+    """
+    from django.utils import timezone
+    from django.db.models import Sum
+    from apps.game_results.models import GameResult
+
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # GameResult dan shu oy earn qilingan ball summasi
+    top_raw = (
+        GameResult.objects.filter(created_at__gte=month_start)
+        .values("telegram_id")
+        .annotate(monthly_score=Sum("round_score"))
+        .order_by("-monthly_score")[:limit]
+    )
+    if not top_raw:
+        return [], 0
+
+    tids = [row["telegram_id"] for row in top_raw]
+    user_map = {u.telegram_id: u for u in User.objects.filter(telegram_id__in=tids)}
+
+    result = []
+    for row in top_raw:
+        tid = row["telegram_id"]
+        if tid in user_map:
+            u = user_map[tid]
+            user_data = _map_user(u)
+            # monthly_score ni score sifatida ko'rsatamiz frontend'da score fieldidan foydalaningach
+            user_data["score"] = row["monthly_score"]
+            result.append(user_data)
+
+    # Joriy foydalanuvchining oydagi balli
+    my_score = 0
+    if telegram_id:
+        my_agg = (
+            GameResult.objects.filter(telegram_id=telegram_id, created_at__gte=month_start)
+            .aggregate(total=Sum("round_score"))
+        )
+        my_score = my_agg["total"] or 0
+
+    return result, my_score
+
+
+def get_monthly_score_rank(telegram_id: int) -> int:
+    """Shu oy foydalanuvchining ball reytingidagi o'rni."""
+    from django.utils import timezone
+    from django.db.models import Sum
+    from apps.game_results.models import GameResult
+
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    my_agg = (
+        GameResult.objects.filter(telegram_id=telegram_id, created_at__gte=month_start)
+        .aggregate(total=Sum("round_score"))
+    )
+    my_score = my_agg["total"] or 0
+
+    if my_score <= 0:
+        return 0
+
+    # Mendan ko'p ball to'plagan foydalanuvchilar soni + 1
+    better = (
+        GameResult.objects.filter(created_at__gte=month_start)
+        .values("telegram_id")
+        .annotate(total=Sum("round_score"))
+        .filter(total__gt=my_score)
+        .count()
+    )
+    return better + 1
+
+
 def count_all() -> int:
     return User.objects.count()
 

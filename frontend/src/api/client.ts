@@ -180,10 +180,9 @@ export async function checkAchievements(): Promise<CheckAchievementsResponse | n
   }
 }
 
-export async function getReferrals(): Promise<ReferralData> {
+export async function getReferrals(period: "all" | "monthly" = "all"): Promise<ReferralData> {
   try {
-    const response = await request<ReferralData>("/users/referrals");
-
+    const response = await request<ReferralData>(`/users/referrals?period=${period}`);
     return response ?? { referrers: [], myCount: 0 };
   } catch (error) {
     console.error("Referrals fallback enabled", error);
@@ -320,10 +319,11 @@ export async function getTopUsers(limit = 3): Promise<LeaderboardUser[]> {
   }
 }
 
-export async function getLeaderboard(limit: 10 | 20 | 50 | 100 = 10): Promise<LeaderboardData> {
+export async function getLeaderboard(limit: 10 | 20 | 50 | 100 = 10, period: "all" | "monthly" = "all"): Promise<LeaderboardData & { myMonthlyScore?: number }> {
   try {
-    const response = await request<LeaderboardData>(`/users/leaderboard?limit=${limit}`);
-
+    const response = await request<LeaderboardData & { myMonthlyScore?: number }>(
+      `/users/leaderboard?limit=${limit}&period=${period}`
+    );
     return response ?? { users: [], rank: 0 };
   } catch (error) {
     console.error("Leaderboard fallback enabled", error);

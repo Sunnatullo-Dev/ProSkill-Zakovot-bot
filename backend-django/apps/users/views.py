@@ -42,6 +42,16 @@ def get_leaderboard(request):
         limit = 10
     if limit not in ALLOWED:
         limit = 10
+
+    period = request.query_params.get("period", "all")  # "all" | "monthly"
+
+    if period == "monthly":
+        users, my_score = repositories.get_monthly_score_leaders(
+            limit=limit, telegram_id=user.telegram_id
+        )
+        rank = repositories.get_monthly_score_rank(user.telegram_id)
+        return Response({"users": users, "rank": rank, "limit": limit, "myMonthlyScore": my_score})
+
     users = repositories.get_top_users(limit=limit)
     rank = repositories.get_user_rank(user.telegram_id)
     return Response({"users": users, "rank": rank, "limit": limit})
@@ -51,8 +61,15 @@ def get_leaderboard(request):
 @require_auth
 def get_referrals(request):
     user = request.current_user
-    referrers = repositories.get_referral_leaderboard()
-    my_count = repositories.get_referral_count(user.telegram_id)
+    period = request.query_params.get("period", "all")  # "all" | "monthly"
+
+    if period == "monthly":
+        referrers = repositories.get_referral_leaderboard_monthly()
+        my_count = repositories.get_referral_count_monthly(user.telegram_id)
+    else:
+        referrers = repositories.get_referral_leaderboard()
+        my_count = repositories.get_referral_count(user.telegram_id)
+
     return Response({"referrers": referrers, "myCount": my_count})
 
 

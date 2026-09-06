@@ -1,8 +1,9 @@
-/**
+﻿/**
  * LeaderboardScreen — Reyting bo'limi.
  *
  * Xususiyatlar:
  *  - Ball / Takliflar tab switcher
+ *  - Umumiy / Shu oygi period switcher (har ikki tabda)
  *  - 10 / 20 / 50 / 100 ta ko'rsatish (standart 10)
  *  - Limit o'zgarsa server'dan qayta yuklanadi
  *  - Top-3 alohida medal dizayn
@@ -22,6 +23,7 @@ type LeaderboardScreenProps = {
 
 type Mode = "score" | "referral";
 type Limit = 10 | 20 | 50 | 100;
+type Period = "all" | "monthly";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 const LIMITS: Limit[] = [10, 20, 50, 100];
@@ -42,7 +44,6 @@ function getInitials(user: LeaderboardUser): string {
   return name.replace(/^@/, "").slice(0, 2).toUpperCase();
 }
 
-// Rang palitasi — indeks bo'yicha takrorlanuvchi rang
 const AVATAR_COLORS = [
   "#4DA6FF", "#7B61FF", "#F5C842", "#22c55e",
   "#F59E0B", "#ef4444", "#8b5cf6", "#06b6d4",
@@ -52,35 +53,52 @@ function avatarColor(idx: number): string {
   return AVATAR_COLORS[idx % AVATAR_COLORS.length];
 }
 
+/** Shu oyning nomi: "Sentyabr 2026" */
+function currentMonthLabel(): string {
+  return new Date().toLocaleDateString("uz-UZ", { month: "long", year: "numeric" });
+}
+
 export default function LeaderboardScreen({ currentUserId, playerName, score }: LeaderboardScreenProps) {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardData>(EMPTY_LB);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardData & { myMonthlyScore?: number }>(EMPTY_LB);
   const [referrals, setReferrals] = useState<ReferralData>(EMPTY_REF);
   const [mode, setMode] = useState<Mode>("score");
+  const [period, setPeriod] = useState<Period>("all");
   const [limit, setLimit] = useState<Limit>(10);
   const [loading, setLoading] = useState(true);
   const [limitLoading, setLimitLoading] = useState(false);
 
-  const load = useCallback(async (lim: Limit, initial = false) => {
+  const load = useCallback(async (lim: Limit, prd: Period, initial = false) => {
     if (initial) setLoading(true);
     else setLimitLoading(true);
 
     const [lb, ref] = await Promise.all([
-      getLeaderboard(lim),
-      referrals.referrers.length === 0 ? getReferrals() : Promise.resolve(referrals),
+      getLeaderboard(lim, prd),
+      getReferrals(prd),
     ]);
 
     setLeaderboard(lb);
-    if (referrals.referrers.length === 0) setReferrals(ref);
+    setReferrals(ref);
+
     if (initial) setLoading(false);
     else setLimitLoading(false);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => { void load(10, true); }, [load]);
+  useEffect(() => { void load(10, "all", true); }, [load]);
 
   async function handleLimitChange(newLimit: Limit) {
     if (newLimit === limit || limitLoading) return;
     setLimit(newLimit);
-    await load(newLimit);
+    await load(newLimit, period);
+  }
+
+  async function handlePeriodChange(newPeriod: Period) {
+    if (newPeriod === period || limitLoading) return;
+    setPeriod(newPeriod);
+    await load(limit, newPeriod);
+  }
+
+  async function handleModeChange(newMode: Mode) {
+    setMode(newMode);
   }
 
   const isScore = mode === "score";
@@ -89,7 +107,20 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
     : referrals.referrers.map((e, i) => ({ user: e.user, value: e.count, index: i }));
 
   const myRank = isScore ? (leaderboard.rank > 0 ? `#${leaderboard.rank}` : "—") : null;
-  const myValue = isScore ? `${score} ball` : `${referrals.myCount} do'st`;
+  const myValue = isScore
+    ? period === "monthly"
+      ? `${leaderboard.myMonthlyScore ?? 0} ball`
+      : `${score} ball`
+    : `${referrals.myCount} do'st`;
+
+  const periodBtnStyle = (p: Period): React.CSSProperties => ({
+    flex: 1, padding: "8px 4px", borderRadius: "10px", border: "none",
+    background: p === period ? (p === "monthly" ? "rgba(245,200,66,0.2)" : "var(--accent)") : "transparent",
+    color: p === period ? (p === "monthly" ? "var(--gold)" : "white") : "var(--muted)",
+    fontSize: "12px", fontWeight: 700, cursor: limitLoading ? "not-allowed" : "pointer",
+    transition: "all 0.2s",
+    borderBottom: p === period ? `2px solid ${p === "monthly" ? "var(--gold)" : "var(--accent)"}` : "2px solid transparent",
+  });
 
   return (
     <div style={{
@@ -113,17 +144,17 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
         </div>
       </div>
 
-      {/* ── Tab switcher ─────────────────────────────────────────────────── */}
+      {/* ── Tab switcher (Ball / Takliflar) ──────────────────────────────── */}
       <div style={{
         display: "flex", gap: "6px",
         background: "var(--card)", border: "1px solid var(--border)",
-        borderRadius: "14px", padding: "4px", marginBottom: "14px",
+        borderRadius: "14px", padding: "4px", marginBottom: "10px",
       }}>
         {(["score", "referral"] as Mode[]).map((m) => (
           <button
             key={m}
             type="button"
-            onClick={() => setMode(m)}
+            onClick={() => void handleModeChange(m)}
             style={{
               flex: 1, padding: "10px", borderRadius: "10px", border: "none",
               background: m === mode ? "var(--accent)" : "transparent",
@@ -137,12 +168,48 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
         ))}
       </div>
 
+      {/* ── Period switcher (Umumiy / Shu oygi) ──────────────────────────── */}
+      <div style={{
+        display: "flex", gap: "0px",
+        background: "var(--card)", border: "1px solid var(--border)",
+        borderRadius: "14px", padding: "4px 6px", marginBottom: "14px",
+        alignItems: "center",
+      }}>
+        <button type="button" onClick={() => void handlePeriodChange("all")} style={periodBtnStyle("all")}>
+          🌐 Umumiy
+        </button>
+        <div style={{ width: "1px", height: "22px", background: "var(--border)", flexShrink: 0 }} />
+        <button type="button" onClick={() => void handlePeriodChange("monthly")} style={periodBtnStyle("monthly")}>
+          📅 Shu oygi
+        </button>
+      </div>
+
+      {/* Shu oygi belgisi */}
+      {period === "monthly" && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: "6px",
+          marginBottom: "12px", padding: "8px 14px",
+          background: "rgba(245,200,66,0.08)", border: "1px solid rgba(245,200,66,0.2)",
+          borderRadius: "12px",
+        }}>
+          <span style={{ fontSize: "13px" }}>📅</span>
+          <span style={{ fontSize: "12px", color: "var(--gold)", fontWeight: 700 }}>
+            {currentMonthLabel()} — oylik reyting
+          </span>
+        </div>
+      )}
+
       {/* ── Mening o'rnim ─────────────────────────────────────────────────── */}
       <div style={{
-        background: "linear-gradient(135deg, #4DA6FF 0%, #7C3AED 100%)",
+        background: period === "monthly"
+          ? "linear-gradient(135deg, #b45309 0%, #F5C842 100%)"
+          : "linear-gradient(135deg, #4DA6FF 0%, #7C3AED 100%)",
         borderRadius: "20px", padding: "16px 18px", marginBottom: "16px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        boxShadow: "0 4px 24px rgba(77,166,255,0.25)",
+        boxShadow: period === "monthly"
+          ? "0 4px 24px rgba(245,200,66,0.2)"
+          : "0 4px 24px rgba(77,166,255,0.25)",
+        transition: "all 0.3s",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div style={{
@@ -155,7 +222,9 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
           </div>
           <div>
             <div style={{ fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.7)", letterSpacing: "1.5px" }}>
-              {isScore ? "SIZNING O'RNINGIZ" : "SIZNING TAKLIFLARINGIZ"}
+              {isScore
+                ? period === "monthly" ? "BU OY SIZNING BALLINGIZ" : "SIZNING O'RNINGIZ"
+                : period === "monthly" ? "BU OY TAKLIFLARINGIZ" : "SIZNING TAKLIFLARINGIZ"}
             </div>
             <div style={{ fontSize: "15px", fontWeight: 800, color: "white", marginTop: "2px" }}>
               {playerName}
@@ -215,7 +284,6 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
 
       {/* ── Ro'yxat ───────────────────────────────────────────────────────── */}
       {loading ? (
-        /* Skeleton loading */
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} style={{
@@ -230,7 +298,9 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
         <div style={{ textAlign: "center", padding: "40px 0", color: "var(--muted)" }}>
           <div style={{ fontSize: "36px", marginBottom: "10px" }}>📭</div>
           <div style={{ fontSize: "14px" }}>
-            {isScore ? "Reyting hozircha bo'sh" : "Hali hech kim taklif qilmagan"}
+            {isScore
+              ? period === "monthly" ? "Bu oy hali hech kim o'ynamagan" : "Reyting hozircha bo'sh"
+              : period === "monthly" ? "Bu oy hali hech kim taklif qilmagan" : "Hali hech kim taklif qilmagan"}
           </div>
         </div>
       ) : (
@@ -241,7 +311,6 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
               display: "flex", gap: "8px", marginBottom: "12px",
               alignItems: "flex-end",
             }}>
-              {/* 2-o'rin (chap) */}
               {rows[1] && (
                 <PodiumCard
                   row={rows[1]}
@@ -249,18 +318,18 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
                   currentUserId={currentUserId}
                   height="80px"
                   small
+                  isScore={isScore}
                 />
               )}
-              {/* 1-o'rin (markazda, balandroq) */}
               {rows[0] && (
                 <PodiumCard
                   row={rows[0]}
                   colorIdx={0}
                   currentUserId={currentUserId}
                   height="96px"
+                  isScore={isScore}
                 />
               )}
-              {/* 3-o'rin (o'ng) */}
               {rows[2] && (
                 <PodiumCard
                   row={rows[2]}
@@ -268,6 +337,7 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
                   currentUserId={currentUserId}
                   height="72px"
                   small
+                  isScore={isScore}
                 />
               )}
             </div>
@@ -288,7 +358,6 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
                     transition: "all 0.15s",
                   }}
                 >
-                  {/* O'rin raqami */}
                   <div style={{
                     width: "30px", textAlign: "center",
                     fontSize: "13px", fontWeight: 800, color: "var(--muted)", flexShrink: 0,
@@ -296,7 +365,6 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
                     #{row.index + 1}
                   </div>
 
-                  {/* Avatar */}
                   <div style={{
                     width: "36px", height: "36px", borderRadius: "50%",
                     background: avatarColor(row.index),
@@ -307,7 +375,6 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
                     {getInitials(row.user)}
                   </div>
 
-                  {/* Ism */}
                   <div style={{
                     flex: 1, fontSize: "14px",
                     fontWeight: isCurrent ? 800 : 600,
@@ -322,19 +389,17 @@ export default function LeaderboardScreen({ currentUserId, playerName, score }: 
                     )}
                   </div>
 
-                  {/* Qiymat */}
                   <div style={{ fontSize: "15px", fontWeight: 800, color: "var(--gold)", flexShrink: 0 }}>
                     {typeof row.value === "number"
                       ? row.value.toLocaleString()
                       : row.value}
-                    {isScore ? "" : " 👥"}
+                    {isScore ? " ⭐" : " 👥"}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Pastki eslatma */}
           <div style={{ marginTop: "16px", textAlign: "center", fontSize: "12px", color: "var(--muted)" }}>
             {rows.length < limit
               ? `Jami ${rows.length} ta foydalanuvchi`
@@ -354,12 +419,14 @@ function PodiumCard({
   currentUserId,
   height,
   small,
+  isScore,
 }: {
   row: { user: LeaderboardUser; value: number | string; index: number };
   colorIdx: number;
   currentUserId: number;
   height: string;
   small?: boolean;
+  isScore: boolean;
 }) {
   const isCurrent = row.user.telegramId === currentUserId && currentUserId !== 0;
   const color = avatarColor(colorIdx);
@@ -379,10 +446,8 @@ function PodiumCard({
       gap: "4px",
       boxShadow: colorIdx === 0 ? "0 2px 16px rgba(245,200,66,0.15)" : "none",
     }}>
-      {/* Medal */}
       <div style={{ fontSize: small ? "20px" : "26px" }}>{medal}</div>
 
-      {/* Avatar */}
       <div style={{
         width: small ? "36px" : "44px",
         height: small ? "36px" : "44px",
@@ -396,7 +461,6 @@ function PodiumCard({
         {getInitials(row.user)}
       </div>
 
-      {/* Ism */}
       <div style={{
         fontSize: small ? "11px" : "12px",
         fontWeight: 700,
@@ -410,13 +474,13 @@ function PodiumCard({
         {isCurrent && " ✦"}
       </div>
 
-      {/* Ball */}
       <div style={{
         fontSize: small ? "13px" : "16px",
         fontWeight: 900,
         color: colorIdx === 0 ? "var(--svoyak-gold, #f5c842)" : "var(--text)",
       }}>
         {typeof row.value === "number" ? row.value.toLocaleString() : row.value}
+        {isScore ? " ⭐" : " 👥"}
       </div>
     </div>
   );
