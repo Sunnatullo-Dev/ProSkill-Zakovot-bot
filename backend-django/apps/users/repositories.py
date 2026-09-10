@@ -171,7 +171,7 @@ def set_streak(telegram_id: int, streak: int) -> None:
     User.objects.filter(telegram_id=telegram_id).update(current_streak=max(0, streak))
 
 
-def add_score(telegram_id: int, amount: int) -> dict[str, Any]:
+def add_score(telegram_id: int, amount: int, source: str = "answer") -> dict[str, Any]:
     """Foydalanuvchi balliga musbat miqdor qo'shadi.
 
     amount <= 0 bo'lsa — xato ko'taradi (manfiy ball berish ta'qiqlangan;
@@ -185,6 +185,12 @@ def add_score(telegram_id: int, amount: int) -> dict[str, Any]:
     )
     if not updated:
         raise AppError(404, "User not found")
+    # Oylik reyting uchun log
+    from .models import UserScoreLog
+    try:
+        UserScoreLog.objects.create(telegram_id=telegram_id, amount=amount, source=source)
+    except Exception:
+        pass  # Log yozish muvaffaqiyatsiz bo'lsa asosiy ball o'zgarishiga ta'sir qilmasin
     user = User.objects.get(telegram_id=telegram_id)
     return _map_user(user)
 
@@ -285,22 +291,25 @@ def get_referral_count_monthly(telegram_id: int) -> int:
 
 
 def get_monthly_score_leaders(limit: int = 10, telegram_id: int = 0) -> tuple[list[dict[str, Any]], int]:
-    """Shu oy (1-sanadan bugun gacha) game_results.round_score summasi bo'yicha reyting.
+    """Shu oy (1-sanadan bugun gacha) UserScoreLog.amount summasi bo'yicha reyting.
+
+    UserScoreLog — har `add_score` chaqiruvida yoziladi, shuning uchun
+    GameResult.round_score'dan ko'ra aniqroq (Game result frontend yuboradi,
+    ScoreLog esa server tomonida yoziladi).
 
     Returns: (reyting_ro'yxati, joriy_foydalanuvchi_oydagi_balli)
     """
     from django.utils import timezone
     from django.db.models import Sum
-    from apps.game_results.models import GameResult
+    from .models import UserScoreLog
 
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    # GameResult dan shu oy earn qilingan ball summasi
     top_raw = (
-        GameResult.objects.filter(created_at__gte=month_start)
+        UserScoreLog.objects.filter(created_at__gte=month_start)
         .values("telegram_id")
-        .annotate(monthly_score=Sum("round_score"))
+        .annotate(monthly_score=Sum("amount"))
         .order_by("-monthly_score")[:limit]
     )
     if not top_raw:
@@ -313,18 +322,15 @@ def get_monthly_score_leaders(limit: int = 10, telegram_id: int = 0) -> tuple[li
     for row in top_raw:
         tid = row["telegram_id"]
         if tid in user_map:
-            u = user_map[tid]
-            user_data = _map_user(u)
-            # monthly_score ni score sifatida ko'rsatamiz frontend'da score fieldidan foydalaningach
-            user_data["score"] = row["monthly_score"]
+            user_data = _map_user(user_map[tid])
+            user_data["score"] = row["monthly_score"]  # umumiy o'rniga oylik ball
             result.append(user_data)
 
-    # Joriy foydalanuvchining oydagi balli
     my_score = 0
     if telegram_id:
         my_agg = (
-            GameResult.objects.filter(telegram_id=telegram_id, created_at__gte=month_start)
-            .aggregate(total=Sum("round_score"))
+            UserScoreLog.objects.filter(telegram_id=telegram_id, created_at__gte=month_start)
+            .aggregate(total=Sum("amount"))
         )
         my_score = my_agg["total"] or 0
 
@@ -332,28 +338,27 @@ def get_monthly_score_leaders(limit: int = 10, telegram_id: int = 0) -> tuple[li
 
 
 def get_monthly_score_rank(telegram_id: int) -> int:
-    """Shu oy foydalanuvchining ball reytingidagi o'rni."""
+    """Shu oy foydalanuvchining ball reytingidagi o'rni (UserScoreLog asosida)."""
     from django.utils import timezone
     from django.db.models import Sum
-    from apps.game_results.models import GameResult
+    from .models import UserScoreLog
 
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     my_agg = (
-        GameResult.objects.filter(telegram_id=telegram_id, created_at__gte=month_start)
-        .aggregate(total=Sum("round_score"))
+        UserScoreLog.objects.filter(telegram_id=telegram_id, created_at__gte=month_start)
+        .aggregate(total=Sum("amount"))
     )
     my_score = my_agg["total"] or 0
 
     if my_score <= 0:
         return 0
 
-    # Mendan ko'p ball to'plagan foydalanuvchilar soni + 1
     better = (
-        GameResult.objects.filter(created_at__gte=month_start)
+        UserScoreLog.objects.filter(created_at__gte=month_start)
         .values("telegram_id")
-        .annotate(total=Sum("round_score"))
+        .annotate(total=Sum("amount"))
         .filter(total__gt=my_score)
         .count()
     )

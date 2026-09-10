@@ -205,3 +205,21 @@ class MilestoneState(models.Model):
 
     def __str__(self) -> str:
         return f"Milestone: {self.last_celebrated_user_milestone}"
+
+
+class UserScoreLog(models.Model):
+    """Har `add_score` chaqiruvida log yoziladi.
+
+    Oylik reyting uchun: shu oy yig'ilgan ball summasi.
+    Jadval kichik bo'lib qoladi — eski yozuvlar arxivlanishi mumkin.
+    """
+    telegram_id = models.BigIntegerField(db_index=True)
+    amount = models.IntegerField()                         # qo'shilgan ball
+    source = models.CharField(max_length=32, default="answer")  # "answer" | "achievement" | "streak"
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "user_score_log"
+        indexes = [
+            models.Index(fields=["telegram_id", "created_at"], name="score_log_tid_cat_idx"),
+        ]
