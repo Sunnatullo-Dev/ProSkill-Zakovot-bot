@@ -740,7 +740,7 @@ def start_password_recovery(*, identifier: str) -> dict:
     bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "ZakovatApp_bot") or "ZakovatApp_bot"
     deep_link = f"https://t.me/{bot_username}?start=reset_{session_token}"
 
-    if user and user.has_usable_password():
+    if user:
         TelegramOtpChallenge.objects.filter(
             user=user, purpose=TelegramOtpChallenge.PURPOSE_PASSWORD_RESET, is_used=False
         ).delete()

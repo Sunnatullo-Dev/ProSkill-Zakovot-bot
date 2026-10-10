@@ -214,7 +214,137 @@ def bot_start(request):
 
     total_count = UserModel.objects.count()
 
-    return Response({"isNew": created, "totalCount": total_count})
+    return Response({
+        "isNew": created,
+        "totalCount": total_count,
+        "hasPhone": bool(user.phone),
+        "phone": user.phone,
+    })
+
+
+@api_view(["GET", "POST"])
+@require_auth
+def bot_phone_status(request):
+    """Foydalanuvchining telefon raqami tasdiqlanganmi-yo'qligini tekshiradi."""
+    tid = request.query_params.get("telegramId")
+    if not tid and isinstance(request.data, dict):
+        tid = request.data.get("telegramId")
+    if not tid and getattr(request, "current_user", None) and request.current_user.telegram_id > 0:
+        tid = request.current_user.telegram_id
+
+    if not tid:
+        raise AppError(400, "telegramId talab qilinadi")
+
+    try:
+        telegram_id = int(tid)
+    except (TypeError, ValueError):
+        raise AppError(400, "telegramId musbat son bo'lishi kerak")
+
+    from .models import User as UserModel
+
+    user = UserModel.objects.filter(telegram_id=telegram_id).first()
+    return Response({
+        "telegramId": telegram_id,
+        "hasPhone": bool(user and user.phone),
+        "phone": user.phone if user else None,
+    })
+
+
+@api_view(["POST"])
+@require_auth
+def bot_save_phone(request):
+    """Telegram bot orqali kontakt ulashilganda telefon raqamini saqlaydi va akkauntlarni birlashtiradi."""
+    body = request.data if isinstance(request.data, dict) else {}
+    telegram_id = body.get("telegramId")
+    phone_raw = body.get("phone")
+
+    if not isinstance(telegram_id, int) or telegram_id <= 0:
+        raise AppError(400, "telegramId musbat son bo'lishi kerak")
+    if not isinstance(phone_raw, str) or not phone_raw.strip():
+        raise AppError(400, "phone talab qilinadi")
+
+    from apps.auth_api.credentials import normalize_phone
+    phone = normalize_phone(phone_raw)
+
+    first_name = body.get("firstName") or None
+    last_name = body.get("lastName") or None
+    username = body.get("username") or None
+
+    from django.db import transaction
+    from apps.auth_api.services import _migrate_user_records
+    from .models import AUTH_PROVIDER_BOTH, User as UserModel
+
+    with transaction.atomic():
+        tg_user, _ = UserModel.objects.select_for_update().get_or_create(
+            telegram_id=telegram_id,
+            defaults={
+                "first_name": first_name,
+                "last_name": last_name,
+                "username": username,
+                "display_name": first_name,
+            },
+        )
+
+        existing_phone_user = (
+            UserModel.objects.select_for_update()
+            .filter(phone=phone)
+            .exclude(pk=tg_user.pk)
+            .first()
+        )
+
+        if existing_phone_user:
+            if existing_phone_user.is_app_account():
+                old_synthetic_id = existing_phone_user.telegram_id
+                tg_user.score += existing_phone_user.score
+                if not tg_user.password_hash and existing_phone_user.password_hash:
+                    tg_user.password_hash = existing_phone_user.password_hash
+                if not tg_user.email and existing_phone_user.email:
+                    tg_user.email = existing_phone_user.email
+
+                existing_achs = (
+                    existing_phone_user.unlocked_achievements
+                    if isinstance(existing_phone_user.unlocked_achievements, list)
+                    else []
+                )
+                tg_achs = (
+                    tg_user.unlocked_achievements
+                    if isinstance(tg_user.unlocked_achievements, list)
+                    else []
+                )
+                tg_user.unlocked_achievements = list(dict.fromkeys(tg_achs + existing_achs))
+                tg_user.current_streak = max(
+                    tg_user.current_streak, existing_phone_user.current_streak
+                )
+
+                if existing_phone_user.premium_until and (
+                    not tg_user.premium_until
+                    or existing_phone_user.premium_until > tg_user.premium_until
+                ):
+                    tg_user.premium_until = existing_phone_user.premium_until
+
+                existing_phone_user.delete()
+                _migrate_user_records(old_synthetic_id, telegram_id)
+            else:
+                existing_phone_user.phone = None
+                existing_phone_user.save(update_fields=["phone", "updated_at"])
+
+        tg_user.phone = phone
+        if tg_user.has_usable_password():
+            tg_user.auth_provider = AUTH_PROVIDER_BOTH
+        if first_name and not tg_user.first_name:
+            tg_user.first_name = first_name
+        if last_name and not tg_user.last_name:
+            tg_user.last_name = last_name
+        if username and not tg_user.username:
+            tg_user.username = username
+        tg_user.save()
+
+    return Response({
+        "ok": True,
+        "telegramId": tg_user.telegram_id,
+        "phone": tg_user.phone,
+        "score": tg_user.score,
+    })
 
 
 def _parse_int(raw: str | None, *, default: int, lo: int, hi: int) -> int:

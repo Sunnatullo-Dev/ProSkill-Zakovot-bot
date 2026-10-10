@@ -532,6 +532,85 @@ async function notifyMilestoneIfNeeded(
   }
 }
 
+// ─── Telefon raqam tekshiruvi va xavfsiz bloklash (Gatekeeper) ─────────────
+const verifiedPhoneUsers = new Set<number>();
+
+async function isPhoneVerified(telegramId: number): Promise<boolean> {
+  if (verifiedPhoneUsers.has(telegramId)) return true;
+  try {
+    const res = await apiGet(`/api/users/bot-phone-status?telegramId=${telegramId}`);
+    if (res?.hasPhone) {
+      verifiedPhoneUsers.add(telegramId);
+      return true;
+    }
+    return false;
+  } catch (e: any) {
+    console.warn(`[bot] isPhoneVerified(${telegramId}) tekshirishda xatolik:`, e?.message);
+    return false;
+  }
+}
+
+async function sendPhonePrompt(ctx: any): Promise<void> {
+  const contactKb = new Keyboard()
+    .requestContact("📱 Telefon raqamimni yuborish")
+    .resized()
+    .persistent();
+
+  await ctx.reply(
+    `👋 *Assalomu alaykum! Zakovat tizimiga xush kelibsiz!*\n\n` +
+    `📱 *Botdan to'liq foydalanish uchun telefon raqamingizni tasdiqlang.*\n\n` +
+    `🚀 *Eslatma:* Tez kunlarda Zakovat mobil ilovasi *Google Play Market*da rasman taqdim etiladi! Raqamingizni hozir tasdiqlasangiz, mobil ilovaga ham bitta hisob bilan to'g'ridan-to'g'ri kira olasiz va reytingingiz saqlanadi.\n\n` +
+    `Iltimos, pastdagi *"📱 Telefon raqamimni yuborish"* tugmasini bosing:`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: contactKb,
+    }
+  );
+}
+
+// Gatekeeper middleware: telefon raqam yubormaguncha botdan foydalanishni cheklaydi
+bot.use(async (ctx, next) => {
+  const uid = ctx.from?.id;
+  if (!uid) return next();
+
+  // Kontakt ulashilayotgan bo'lsa — handlerga o'tkazamiz
+  if (ctx.message?.contact) return next();
+
+  // Deep-link /start komandalari (reg_, reset_, link_, del_) — maxsus oqimlarni o'tkazamiz
+  const text = ctx.message?.text ?? "";
+  if (
+    text.startsWith("/start ") &&
+    (text.includes("reg_") ||
+      text.includes("reset_") ||
+      text.includes("link_") ||
+      text.includes("del_"))
+  ) {
+    return next();
+  }
+
+  // Obuna tekshiruvi callback query bo'lsa — o'tkazamiz
+  if (ctx.callbackQuery?.data === "check_sub") {
+    return next();
+  }
+
+  const verified = await isPhoneVerified(uid);
+  if (verified) {
+    return next();
+  }
+
+  // Agar telefon tasdiqlanmagan bo'lsa va callback bosilsa:
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery({
+      text: "Botdan foydalanish uchun avval telefon raqamingizni tasdiqlang!",
+      show_alert: true,
+    });
+    return;
+  }
+
+  // Oddiy xabar yoki boshqa komandalar uchun telefon yuborishni talab qilamiz
+  await sendPhonePrompt(ctx);
+});
+
 // /start
 bot.command("start", async ctx => {
   const uid = ctx.from!.id;
@@ -577,6 +656,7 @@ bot.command("start", async ctx => {
 
       const phone = res.user?.phone ?? "";
       const score = res.user?.score ?? 0;
+      verifiedPhoneUsers.add(uid);
       await ctx.reply(
         `✅ *Akkauntingiz muvaffaqiyatli bog'landi!*\n\n` +
         `📱 Bog'langan telefon: \`${phone}\`\n` +
@@ -1029,64 +1109,112 @@ bot.on("message:contact", async ctx => {
   const contact = ctx.message!.contact;
   const pending = pendingContactVerifications.get(uid);
 
-  if (!pending || Date.now() - pending.time > 10 * 60 * 1000) {
-    pendingContactVerifications.delete(uid);
-    await ctx.reply(
-      "⚠️ *Tasdiqlash seansi topilmadi yoki muddati o'tgan.*\n\n" +
-      "Iltimos, mobil ilovada ro'yxatdan o'tishni qaytadan boshlang.",
-      { parse_mode: "Markdown", reply_markup: { remove_keyboard: true } }
-    );
-    return;
-  }
-
   // Telegram kontakt egasini tekshiramiz (contact.user_id === uid)
   const isOwner = contact.user_id === uid;
   let rawPhone = contact.phone_number.trim();
   if (!rawPhone.startsWith("+")) rawPhone = "+" + rawPhone;
 
+  // 1. Agar mobil ilovadan ro'yxatdan o'tish seansi bo'lsa
+  if (pending && Date.now() - pending.time <= 10 * 60 * 1000) {
+    try {
+      const res = await apiPost("/api/auth/telegram-otp/bot-link", {
+        token: pending.token,
+        telegramId: uid,
+        phone: rawPhone,
+        isOwner,
+        firstName: ctx.from?.first_name ?? "",
+        lastName: ctx.from?.last_name ?? null,
+        username: ctx.from?.username ?? null,
+      });
+
+      pendingContactVerifications.delete(uid);
+      verifiedPhoneUsers.add(uid);
+      const otp = res.otp;
+      const isSms = res.deliveryChannel === "sms";
+
+      let messageText = "";
+      if (isSms) {
+        messageText =
+          `✅ *Telefon raqamingiz muvaffaqiyatli tasdiqlandi!*\n\n` +
+          `📩 Tasdiqlash kodi telefoningizga SMS orqali yuborildi.\n\n` +
+          `Mobil ilovaga qayting va SMS kodini kiriting.`;
+      } else {
+        messageText =
+          `✅ *Telefon raqamingiz muvaffaqiyatli tasdiqlandi!*\n\n` +
+          `🔐 *Zakovat: Ro'yxatdan o'tish*\n\n` +
+          `Sizning bir martalik tasdiqlash kodingiz:\n\n` +
+          `👉 \`${otp}\` 👈\n\n` +
+          `⏱ Kod amal qilish muddati: *5 daqiqa*.\n` +
+          `⚠️ Ushbu kodni hech kimga, hatto adminlarga ham bermang!\n\n` +
+          `Mobil ilovaga qayting va ushbu kodni kiriting.`;
+      }
+
+      await ctx.reply(messageText, {
+        parse_mode: "Markdown",
+        reply_markup: { remove_keyboard: true },
+      });
+      return;
+    } catch (e: any) {
+      console.error("[bot] contact verification error:", e?.message);
+      const errorMsg = e?.message || "Telefon raqam mos kelmadi yoki xatolik yuz berdi";
+      await ctx.reply(
+        `⚠️ *Tasdiqlashda xatolik:*\n\n${errorMsg}\n\n` +
+        `Iltimos, mobil ilovada ko'rsatilgan raqam bilan bog'langan o'zingizning Telegram profilingizdan foydalaning.`,
+        { parse_mode: "Markdown", reply_markup: { remove_keyboard: true } }
+      );
+      return;
+    }
+  }
+
+  // 2. Bot ichida bir martalik umumiy telefon raqamni tasdiqlash
+  if (!isOwner) {
+    await ctx.reply(
+      "⚠️ *Iltimos, faqat o'zingizning shaxsiy telefon raqamingizni («📱 Telefon raqamimni yuborish» tugmasi orqali) yuboring.*",
+      { parse_mode: "Markdown" }
+    );
+    return;
+  }
+
   try {
-    const res = await apiPost("/api/auth/telegram-otp/bot-link", {
-      token: pending.token,
+    const res = await apiPost("/api/users/bot-save-phone", {
       telegramId: uid,
       phone: rawPhone,
-      isOwner,
       firstName: ctx.from?.first_name ?? "",
       lastName: ctx.from?.last_name ?? null,
       username: ctx.from?.username ?? null,
     });
 
-    pendingContactVerifications.delete(uid);
-    const otp = res.otp;
-    const isSms = res.deliveryChannel === "sms";
+    verifiedPhoneUsers.add(uid);
 
-    let messageText = "";
-    if (isSms) {
-      messageText =
-        `✅ *Telefon raqamingiz muvaffaqiyatli tasdiqlandi!*\n\n` +
-        `📩 Tasdiqlash kodi telefoningizga SMS orqali yuborildi.\n\n` +
-        `Mobil ilovaga qayting va SMS kodini kiriting.`;
-    } else {
-      messageText =
-        `✅ *Telefon raqamingiz muvaffaqiyatli tasdiqlandi!*\n\n` +
-        `🔐 *Zakovat: Ro'yxatdan o'tish*\n\n` +
-        `Sizning bir martalik tasdiqlash kodingiz:\n\n` +
-        `👉 \`${otp}\` 👈\n\n` +
-        `⏱ Kod amal qilish muddati: *5 daqiqa*.\n` +
-        `⚠️ Ushbu kodni hech kimga, hatto adminlarga ham bermang!\n\n` +
-        `Mobil ilovaga qayting va ushbu kodni kiriting.`;
+    await ctx.reply(
+      `✅ *Telefon raqamingiz muvaffaqiyatli tasdiqlandi!*\n\n` +
+      `📱 Bog'langan raqam: \`${res.phone || rawPhone}\`\n\n` +
+      `🎉 Endi bot va Telegram Mini App imkoniyatlaridan to'liq foydalanishingiz mumkin.\n` +
+      `🚀 Tez kunlarda Google Play Marketda chiqadigan Zakovat mobil ilovasiga ham ushbu raqamingiz orqali bitta akkaunt bilan kira olasiz!`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: { remove_keyboard: true },
+      }
+    );
+
+    // Kanal obunasini tekshiramiz (agar admin bo'lmasa)
+    if (!isAdmin(uid)) {
+      const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);
+      if (!allSubscribed) {
+        await sendSubscribePrompt(ctx, unsubscribed);
+        return;
+      }
     }
 
-    await ctx.reply(messageText, {
-      parse_mode: "Markdown",
-      reply_markup: { remove_keyboard: true },
-    });
+    await sendWelcome(ctx);
+    void notifyMilestoneIfNeeded(uid, ctx.from?.first_name, ctx.from?.last_name, ctx.from?.username);
   } catch (e: any) {
-    console.error("[bot] contact verification error:", e?.message);
-    const errorMsg = e?.message || "Telefon raqam mos kelmadi yoki xatolik yuz berdi";
+    console.error("[bot] bot-save-phone xatosi:", e?.message);
+    const errorMsg = e?.message || "Telefon raqamni saqlashda xatolik yuz berdi";
     await ctx.reply(
       `⚠️ *Tasdiqlashda xatolik:*\n\n${errorMsg}\n\n` +
-      `Iltimos, mobil ilovada ko'rsatilgan raqam bilan bog'langan o'zingizning Telegram profilingizdan foydalaning.`,
-      { parse_mode: "Markdown", reply_markup: { remove_keyboard: true } }
+      `Iltimos, qaytadan urinib ko'ring.`,
+      { parse_mode: "Markdown" }
     );
   }
 });

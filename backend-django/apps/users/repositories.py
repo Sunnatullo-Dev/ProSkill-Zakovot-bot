@@ -29,6 +29,7 @@ def _map_user(user: User) -> dict[str, Any]:
         "lastName": user.last_name,
         "username": user.username,
         "displayName": user.display_name,
+        "phone": user.phone,
         "score": user.score,
         "language": user.language,
     }

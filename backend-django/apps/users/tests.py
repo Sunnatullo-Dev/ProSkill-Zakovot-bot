@@ -245,3 +245,131 @@ class AccountDeletionTests(TestCase):
         self.assertTrue(result["ok"])
         self.assertFalse(User.objects.filter(pk=self.test_user.pk).exists())
 
+
+from django.test import override_settings
+
+
+@override_settings(BOT_INTERNAL_API_KEY="test_internal_key", ADMIN_TELEGRAM_IDS=[999999])
+class BotPhoneVerificationAndRecoveryTest(TestCase):
+    """Bot kontakt tasdiqlash, akkauntlarni birlashtirish va parolni tiklash testlari."""
+
+    def setUp(self):
+        self.auth_headers = {"HTTP_AUTHORIZATION": "bot test_internal_key"}
+
+    def test_bot_phone_status_and_save_phone(self):
+        """Telefon holatini tekshirish va yangi kontakt saqlash."""
+        # 1. Boshida telefon yo'q
+        resp = self.client.get(
+            "/api/users/bot-phone-status?telegramId=777666",
+            **self.auth_headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json()["hasPhone"])
+
+        # 2. Kontakt saqlash
+        save_resp = self.client.post(
+            "/api/users/bot-save-phone",
+            data={
+                "telegramId": 777666,
+                "phone": "+998 90 123 45 67",
+                "firstName": "Alisher",
+            },
+            content_type="application/json",
+            **self.auth_headers,
+        )
+        self.assertEqual(save_resp.status_code, 200)
+        self.assertTrue(save_resp.json()["ok"])
+        self.assertEqual(save_resp.json()["phone"], "+998901234567")
+
+        # 3. Endi hasPhone True bo'lishi kerak
+        status_resp = self.client.get(
+            "/api/users/bot-phone-status?telegramId=777666",
+            **self.auth_headers,
+        )
+        self.assertEqual(status_resp.status_code, 200)
+        self.assertTrue(status_resp.json()["hasPhone"])
+        self.assertEqual(status_resp.json()["phone"], "+998901234567")
+
+    def test_bot_save_phone_merges_synthetic_app_account(self):
+        """Mobil ilovadagi sintetik hisob botdagi haqiqiy profil bilan to'liq birlashadi."""
+        from apps.users.models import SYNTHETIC_TELEGRAM_ID_BASE
+
+        # Mobil ilovadan yaratilgan sintetik akkaunt
+        app_user = User.objects.create(
+            telegram_id=SYNTHETIC_TELEGRAM_ID_BASE + 99,
+            phone="+998907778899",
+            score=120,
+            display_name="AppUser",
+        )
+        app_user.set_password("SecretPass123!")
+        app_user.save()
+
+        # Bot foydalanuvchisi
+        tg_user = User.objects.create(
+            telegram_id=555444,
+            first_name="TgUser",
+            score=50,
+        )
+
+        # Botda kontakt ulashiladi
+        res = self.client.post(
+            "/api/users/bot-save-phone",
+            data={
+                "telegramId": 555444,
+                "phone": "+998907778899",
+            },
+            content_type="application/json",
+            **self.auth_headers,
+        )
+        self.assertEqual(res.status_code, 200)
+
+        # Sintetik akkaunt o'chirilgan
+        self.assertFalse(User.objects.filter(pk=app_user.pk).exists())
+
+        # Telegram profili birlashgan ma'lumotlarni o'z ichiga oladi
+        tg_user.refresh_from_db()
+        self.assertEqual(tg_user.phone, "+998907778899")
+        self.assertEqual(tg_user.score, 170)  # 50 + 120
+        self.assertTrue(tg_user.has_usable_password())
+        self.assertTrue(tg_user.check_password("SecretPass123!"))
+
+    @patch("apps.auth_api.services.send_message_sync")
+    def test_password_recovery_delivers_code_to_telegram_bot(self, mock_send):
+        """Mobil ilovadan parolni tiklash so'ralganda kod darhol Telegram botga boradi."""
+        from apps.auth_api import services
+
+        user = User.objects.create(
+            telegram_id=333222,
+            phone="+998903332211",
+            first_name="BotUser",
+        )
+        user.set_password("OldPassword123")
+        user.save()
+
+        recovery_res = services.start_password_recovery(identifier="+998903332211")
+        self.assertTrue(recovery_res["ok"])
+        session_token = recovery_res["sessionToken"]
+
+        # Telegram botga darhol xabar yuborilgan bo'lishi kerak
+        mock_send.assert_called_once()
+        args, _ = mock_send.call_args
+        self.assertEqual(args[0], 333222)
+        message_text = args[1]
+        self.assertIn("Zakovat", message_text)
+        self.assertIn("Parolni tiklash", message_text)
+
+        # Kodni matndan olamiz (<code>123456</code>)
+        import re
+        match = re.search(r"<code>(\d{6})</code>", message_text)
+        self.assertIsNotNone(match)
+        otp = match.group(1)
+
+        # Mobil ilovadan yangi parol o'rnatiladi
+        user, _ = services.verify_password_reset_otp(
+            session_token=session_token,
+            otp=otp,
+            new_password="BrandNewPassword456!",
+        )
+        self.assertTrue(user.check_password("BrandNewPassword456!"))
+
+

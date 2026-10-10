@@ -60,6 +60,7 @@ export type AppUser = {
   displayName: string | null;
   score: number;
   language?: string | null;
+  phone?: string | null;
 };
 
 export type AuthResponse = {
