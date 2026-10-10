@@ -349,9 +349,11 @@ class TelegramOtpChallenge(models.Model):
 
     PURPOSE_REGISTER = "register"
     PURPOSE_PASSWORD_RESET = "password_reset"
+    PURPOSE_ACCOUNT_DELETION = "account_deletion"
     PURPOSE_CHOICES = [
         (PURPOSE_REGISTER, "Ro'yxatdan o'tish"),
         (PURPOSE_PASSWORD_RESET, "Parolni tiklash"),
+        (PURPOSE_ACCOUNT_DELETION, "Hisobni o'chirish"),
     ]
 
     session_token_hash = models.CharField(max_length=64, unique=True, db_index=True)
@@ -385,5 +387,52 @@ class TelegramOtpChallenge(models.Model):
 
     def __str__(self) -> str:
         return f"OtpChallenge({self.purpose}, phone={self.phone}, used={self.is_used})"
+
+
+class AccountDeletionRequest(models.Model):
+    """Google Play talablariga muvofiq hisob va shaxsiy ma'lumotlarni o'chirish so'rovlari jurnali.
+
+    Xavfsizlik va audit talablari:
+    - O'chirish so'rovi vaqti, tasdiqlash usuli va natijasi yoziladi.
+    - Foydalanuvchining shaxsiy ma'lumotlari (ism, telefon, email, parol) esa to'liq o'chiriladi.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Kutilmoqda"),
+        (STATUS_COMPLETED, "O'chirildi"),
+        (STATUS_FAILED, "Xatolik yuz berdi"),
+        (STATUS_CANCELLED, "Bekor qilindi"),
+    ]
+
+    original_telegram_id = models.BigIntegerField(db_index=True)
+    masked_phone = models.CharField(max_length=32, blank=True, default="")
+    masked_username = models.CharField(max_length=255, blank=True, default="")
+    verification_method = models.CharField(max_length=32, default="password")  # "password" | "telegram_otp"
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
+    reason = models.TextField(blank=True, default="")
+    session_token_hash = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default="")
+    retention_notes = models.TextField(
+        blank=True,
+        default="Shaxsiy ma'lumotlar (ism, familiya, telefon, parol, sessiyalar) o'chirildi. Moliyaviy yozuvlar qonun bo'yicha 5 yil, xavfsizlik loglari 90 kun saqlanadi.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "account_deletion_requests"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["original_telegram_id", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"DeletionRequest({self.original_telegram_id}, status={self.status}, created={self.created_at})"
+
 
 

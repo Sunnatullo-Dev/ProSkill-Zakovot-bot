@@ -595,7 +595,10 @@ def bot_link_challenge(
         if last_name and not challenge.pending_payload.get("last_name"):
             challenge.pending_payload["last_name"] = last_name
 
-    elif challenge.purpose == TelegramOtpChallenge.PURPOSE_PASSWORD_RESET:
+    elif challenge.purpose in (
+        TelegramOtpChallenge.PURPOSE_PASSWORD_RESET,
+        TelegramOtpChallenge.PURPOSE_ACCOUNT_DELETION,
+    ):
         if challenge.user:
             if challenge.user.is_app_account():
                 challenge.user.telegram_id = telegram_id

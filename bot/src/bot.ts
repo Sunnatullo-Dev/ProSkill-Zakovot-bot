@@ -675,6 +675,42 @@ bot.command("start", async ctx => {
     return;
   }
 
+  // Deep-link: /start del_<TOKEN> — Hisobni o'chirish uchun OTP
+  if (param.startsWith("del_")) {
+    const token = param.slice(4).trim();
+    try {
+      const res = await apiPost("/api/auth/telegram-otp/bot-link", {
+        token,
+        telegramId: uid,
+        firstName: ctx.from?.first_name ?? "",
+        lastName: ctx.from?.last_name ?? null,
+        username: ctx.from?.username ?? null,
+      });
+
+      const otp = res.otp;
+      await ctx.reply(
+        `⚠️ *ZAKOVAT APP — HISOBNI O'CHIRISH SO'ROVI*\n\n` +
+        `Siz veb-sayt orqali hisobingizni va barcha shaxsiy ma'lumotlaringizni butunlay o'chirishni so'radingiz.\n\n` +
+        `Tasdiqlash kodingiz:\n\n` +
+        `👉 \`${otp}\` 👈\n\n` +
+        `⏱ Kod amal qilish muddati: *5 daqiqa*.\n` +
+        `⚠️ Ushbu amalni ortga qaytarib bo'lmaydi!\n` +
+        `Agar siz ushbu so'rovni yubormagan bo'lsangiz, kodni hech kimga bermang.`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (e: any) {
+      console.error("[bot] telegram delete otp error:", e?.message);
+      await ctx.reply(
+        `⚠️ *Hisobni o'chirish so'rovida xatolik yuz berdi!*\n\n` +
+        `Bu havola eskirgan yoki ushbu Telegram hisobi ko'rsatilgan profilga mos kelmadi.\n` +
+        `Iltimos, saytdan qaytadan so'rov yuboring.`,
+        { parse_mode: "Markdown" }
+      );
+    }
+    void notifyMilestoneIfNeeded(uid, ctx.from?.first_name, ctx.from?.last_name, ctx.from?.username);
+    return;
+  }
+
   // Kanal obunasini tekshirish — admin bo'lsa tekshirmaymiz
   if (!isAdmin(uid)) {
     const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);

@@ -28,3 +28,8 @@ def privacy_policy(request: HttpRequest) -> HttpResponse:
     response["X-Frame-Options"] = "SAMEORIGIN"
     response["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+# Re-export delete_account_view for easy access
+from apps.core.deletion_views import delete_account_view
+

@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.urls import include, path, re_path
 
-from apps.core.views import privacy_policy
+from apps.core.views import delete_account_view, privacy_policy
 
 _admin_path = getattr(settings, "ADMIN_SECRET_PATH", "admin").strip("/")
 
@@ -89,8 +89,11 @@ urlpatterns = [
     # ── Privacy Policy (Google Play & Public Web) ────────────────────────────
     path("privacy-policy", privacy_policy, name="privacy_policy"),
     path("privacy-policy/", privacy_policy, name="privacy_policy_slash"),
+    # ── Account Deletion (Google Play & Public Web) ──────────────────────────
+    path("delete-account", delete_account_view, name="account_deletion"),
+    path("delete-account/", delete_account_view, name="account_deletion_slash"),
     re_path(
-        rf"^(?!api/|{_admin_path}/|health$|privacy-policy|static/).*$",
+        rf"^(?!api/|{_admin_path}/|health$|privacy-policy|delete-account|static/).*$",
         spa_fallback,
     ),
 ]
