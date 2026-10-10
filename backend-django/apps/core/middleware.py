@@ -95,10 +95,11 @@ class TelegramAuthMiddleware:
     def __call__(self, request):
         user, auth_source = self._extract_user(request)
         request.current_user = user
-        # "bot" (Authorization: bot <KEY>) yoki "tma" (Authorization: tma <initData>)
-        # — view'lar shu orqali qaysi auth yo'li bilan kirilganini bilishi mumkin
-        # (masalan require_bot_auth: faqat botga xos amallarni tma orqali bloklash
-        # uchun). Auth yo'q bo'lsa — None.
+        # "bot" (Authorization: bot <KEY>), "tma" (Authorization: tma <initData>)
+        # yoki "jwt" (Authorization: Bearer <access token>, mobil ilova) —
+        # view'lar shu orqali qaysi auth yo'li bilan kirilganini bilishi mumkin
+        # (masalan require_bot_auth: faqat botga xos amallarni boshqa yo'llar
+        # orqali bloklash uchun). Auth yo'q bo'lsa — None.
         request.auth_source = auth_source
         return self.get_response(request)
 
@@ -107,6 +108,25 @@ class TelegramAuthMiddleware:
         header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
         if not header:
             return None, None
+
+        # Mobil ilova (Flutter): "Bearer <access JWT>".
+        # Token ichida `sub` = telegram_id, shu sababli qolgan barcha view'lar
+        # hech qanday o'zgarishsiz ishlashda davom etadi.
+        if header.lower().startswith("bearer "):
+            access_token = header[7:].strip()
+            if not access_token:
+                return None, None
+            from apps.auth_api.tokens import resolve_access
+
+            db_user = resolve_access(access_token)
+            if db_user is None:
+                return None, None
+            return TelegramUser(
+                telegram_id=db_user.telegram_id,
+                first_name=db_user.first_name,
+                last_name=db_user.last_name,
+                username=db_user.username,
+            ), "jwt"
 
         # Server-internal admin auth: "bot <key>" — Telegram boti serverdagi
         # admin endpoint'larini chaqirishi uchun.

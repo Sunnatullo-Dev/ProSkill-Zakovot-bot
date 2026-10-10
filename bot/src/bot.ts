@@ -550,6 +550,52 @@ bot.command("start", async ctx => {
     return;
   }
 
+  // Deep-link: /start link_<TOKEN> — Mobil ilova akkauntini Telegram'ga bog'lash
+  if (param.startsWith("link_")) {
+    const linkToken = param.slice(5).trim();
+    if (!isAdmin(uid)) {
+      const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);
+      if (!allSubscribed) {
+        await sendSubscribePrompt(ctx, unsubscribed);
+        return;
+      }
+    }
+    try {
+      const res = await apiPost("/api/auth/telegram-link/confirm", {
+        token: linkToken,
+        telegramId: uid,
+        firstName: ctx.from?.first_name ?? "",
+        lastName: ctx.from?.last_name ?? null,
+        username: ctx.from?.username ?? null,
+      });
+
+      const phone = res.user?.phone ?? "";
+      const score = res.user?.score ?? 0;
+      await ctx.reply(
+        `✅ *Akkauntingiz muvaffaqiyatli bog'landi!*\n\n` +
+        `📱 Bog'langan telefon: \`${phone}\`\n` +
+        `🏆 Umumiy hisobingiz: *${score} ball*\n\n` +
+        `Endi mobil ilovadagi va Telegram'dagi natijalaringiz, yutuqlaringiz va reytingingiz to'liq sinxronlashtirildi! 🎉`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: MINI_APP_URL
+            ? new InlineKeyboard().webApp("🚀 Zakovat O'yinini Ochish", MINI_APP_URL)
+            : undefined,
+        }
+      );
+    } catch (e: any) {
+      console.error("[bot] telegram link error:", e?.message);
+      await ctx.reply(
+        `⚠️ *Akkauntni bog'lashda xatolik yuz berdi!*\n\n` +
+        `Bu havola eskirgan yoki allaqachon ishlatilgan bo'lishi mumkin.\n` +
+        `Iltimos, mobil ilovaning *Sozlamalar* bo'limidan yangi havola oling va qayta urinib ko'ring.`,
+        { parse_mode: "Markdown" }
+      );
+    }
+    void notifyMilestoneIfNeeded(uid, ctx.from?.first_name, ctx.from?.last_name, ctx.from?.username);
+    return;
+  }
+
   // Kanal obunasini tekshirish — admin bo'lsa tekshirmaymiz
   if (!isAdmin(uid)) {
     const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);

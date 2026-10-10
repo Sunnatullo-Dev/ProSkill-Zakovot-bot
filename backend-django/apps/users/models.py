@@ -2,6 +2,29 @@ from django.db import models
 from django.utils import timezone
 
 
+# Mobil ilova (telefon+parol) orqali ro'yxatdan o'tgan foydalanuvchilar uchun
+# sintetik `telegram_id` shu asosdan boshlanadi.
+#
+# NEGA KERAK: butun kod bazasi foydalanuvchini `telegram_id` bo'yicha tanidi
+# (jamoalar, o'yin natijalari, xonalar, reyting — hammasi shu ustunga bog'langan).
+# Yangi ustun qo'shib hamma joyni o'zgartirish o'rniga, Telegramsiz akkauntlarga
+# ham noyob musbat `telegram_id` beramiz — shunda mavjud mantiq o'zgarmaydi.
+#
+# XAVFSIZLIK: haqiqiy Telegram ID'lari bugungi kunda ~10^10 atrofida (Bot API
+# ularni 52 bitgacha kafolatlaydi). 2*10^12 dan boshlash real ID bilan
+# to'qnashuv ehtimolini amalda nolga tushiradi.
+SYNTHETIC_TELEGRAM_ID_BASE = 2_000_000_000_000
+
+AUTH_PROVIDER_TELEGRAM = "telegram"
+AUTH_PROVIDER_PHONE = "phone"
+AUTH_PROVIDER_BOTH = "both"
+AUTH_PROVIDER_CHOICES = [
+    (AUTH_PROVIDER_TELEGRAM, "Telegram"),
+    (AUTH_PROVIDER_PHONE, "Telefon + parol"),
+    (AUTH_PROVIDER_BOTH, "Ikkalasi"),
+]
+
+
 class User(models.Model):
     telegram_id = models.BigIntegerField(unique=True, db_index=True)
     first_name = models.CharField(max_length=255, null=True, blank=True)
@@ -24,12 +47,84 @@ class User(models.Model):
     premium_granted_by_telegram_id = models.BigIntegerField(null=True, blank=True)
     premium_granted_by_name = models.CharField(max_length=255, null=True, blank=True)
     premium_granted_at = models.DateTimeField(null=True, blank=True)
+    # ── Mobil ilova hisob ma'lumotlari (telefon + parol) ─────────────────────
+    # Telegram orqali kirgan foydalanuvchilarda bular bo'sh bo'ladi.
+    phone = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text="E.164 formatda normallashtirilgan raqam, masalan +998901234567",
+    )
+    email = models.EmailField(
+        max_length=254,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Ixtiyoriy — parolni tiklash uchun",
+    )
+    password_hash = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Django PBKDF2 hash. Bo'sh — parol o'rnatilmagan (faqat Telegram akkaunt).",
+    )
+    auth_provider = models.CharField(
+        max_length=10,
+        choices=AUTH_PROVIDER_CHOICES,
+        default=AUTH_PROVIDER_TELEGRAM,
+        db_index=True,
+    )
+    # Har o'zgarganda barcha chiqarilgan refresh tokenlar kuchini yo'qotadi
+    # (parol almashtirilganda, "barcha qurilmalardan chiqish" bosilganda).
+    token_version = models.PositiveIntegerField(default=0)
+    last_login_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def is_premium_active(self) -> bool:
         """Premiumni tekshiradi: premium_until kelajakda bo'lsa True."""
         return self.premium_until is not None and self.premium_until > timezone.now()
+
+    def is_app_account(self) -> bool:
+        """Telegramsiz, faqat mobil ilova orqali yaratilgan akkauntmi?"""
+        return self.telegram_id >= SYNTHETIC_TELEGRAM_ID_BASE
+
+    def has_usable_password(self) -> bool:
+        return bool(self.password_hash)
+
+    def set_password(self, raw_password: str) -> None:
+        """Parolni hash qilib yozadi (saqlamaydi — `save()` chaqirish kerak).
+
+        Django'ning standart hasher'idan foydalanamiz (PBKDF2-SHA256).
+        `django.contrib.auth.hashers` `AUTH_USER_MODEL` ga bog'liq emas —
+        uni mustaqil ishlatish mumkin.
+        """
+        from django.contrib.auth.hashers import make_password
+
+        self.password_hash = make_password(raw_password)
+
+    def check_password(self, raw_password: str) -> bool:
+        """Parolni tekshiradi. Hash eskirgan bo'lsa yangilab qo'yadi."""
+        from django.contrib.auth.hashers import check_password
+
+        if not self.password_hash:
+            return False
+
+        def _setter(new_hash: str) -> None:
+            User.objects.filter(pk=self.pk).update(password_hash=new_hash)
+            self.password_hash = new_hash
+
+        return check_password(raw_password, self.password_hash, setter=_setter)
+
+    def bump_token_version(self) -> None:
+        """Barcha mavjud refresh tokenlarni bekor qiladi."""
+        from django.db.models import F
+
+        User.objects.filter(pk=self.pk).update(token_version=F("token_version") + 1)
+        self.refresh_from_db(fields=["token_version"])
 
     class Meta:
         db_table = "users"
@@ -207,6 +302,27 @@ class MilestoneState(models.Model):
         return f"Milestone: {self.last_celebrated_user_milestone}"
 
 
+class TelegramLinkToken(models.Model):
+    """Mobil ilova foydalanuvchisini Telegram hisobi bilan bir martalik xavfsiz bog'lash tokeni."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="telegram_link_tokens")
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    is_used = models.BooleanField(default=False, db_index=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    used_by_telegram_id = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "telegram_link_tokens"
+        indexes = [
+            models.Index(fields=["token_hash", "is_used"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"LinkToken for user {self.user_id} (used={self.is_used})"
+
+
 class UserScoreLog(models.Model):
     """Har `add_score` chaqiruvida log yoziladi.
 
@@ -223,3 +339,7 @@ class UserScoreLog(models.Model):
         indexes = [
             models.Index(fields=["telegram_id", "created_at"], name="score_log_tid_cat_idx"),
         ]
+
+    def __str__(self) -> str:
+        return f"UserScoreLog {self.telegram_id}: +{self.amount} ({self.source})"
+
