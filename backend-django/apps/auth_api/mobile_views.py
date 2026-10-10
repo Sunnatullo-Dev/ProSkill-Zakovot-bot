@@ -477,6 +477,8 @@ def bot_challenge_link(request):
     username = body.get("username")
     first_name = body.get("firstName")
     last_name = body.get("lastName")
+    phone = body.get("phone")
+    is_owner = body.get("isOwner")
 
     res = services.bot_link_challenge(
         token=token.strip(),
@@ -484,6 +486,8 @@ def bot_challenge_link(request):
         username=username if isinstance(username, str) else None,
         first_name=first_name if isinstance(first_name, str) else None,
         last_name=last_name if isinstance(last_name, str) else None,
+        phone=str(phone).strip() if phone else None,
+        is_owner=bool(is_owner) if is_owner is not None else None,
     )
     return Response(res)
 

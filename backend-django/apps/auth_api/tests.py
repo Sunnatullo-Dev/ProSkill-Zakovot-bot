@@ -10,13 +10,24 @@ Qamrov:
 """
 from __future__ import annotations
 
+import hashlib
+
 from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 
 from apps.auth_api.credentials import normalize_phone, validate_password
 from apps.auth_api.tokens import decode_access, issue_token_pair
 from apps.core.exceptions import AppError
-from apps.users.models import SYNTHETIC_TELEGRAM_ID_BASE, User
+from apps.core.sms_provider import (
+    DisabledSmsProvider,
+    get_sms_provider,
+    send_verification_sms,
+)
+from apps.users.models import (
+    SYNTHETIC_TELEGRAM_ID_BASE,
+    TelegramOtpChallenge,
+    User,
+)
 
 
 VALID_PASSWORD = "zakovat2026"
@@ -644,4 +655,133 @@ class TelegramOtpAuthTest(TestCase):
         )
         self.assertEqual(resend_res.status_code, 429)
         self.assertIn("soniya kuting", resend_res.json()["message"])
+
+    def test_bot_link_contact_verification_and_ownership(self):
+        start_res = self.client.post(
+            "/api/auth/telegram-otp/register/start",
+            data={
+                "phone": "+998901112233",
+                "password": "strongPassword123",
+                "firstName": "Sardor",
+            },
+            content_type="application/json",
+        )
+        session_token = start_res.json()["sessionToken"]
+
+        # Attempt 1: Contact phone doesn't match registration phone -> fails (400)
+        mismatch_res = self.client.post(
+            "/api/auth/telegram-otp/bot-link",
+            data={
+                "token": session_token,
+                "telegramId": 987654321,
+                "phone": "+998909998877",
+                "isOwner": True,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(mismatch_res.status_code, 400)
+        self.assertIn("mos kelmadi", mismatch_res.json()["message"])
+
+        # Attempt 2: Not owner's contact -> fails (400)
+        not_owner_res = self.client.post(
+            "/api/auth/telegram-otp/bot-link",
+            data={
+                "token": session_token,
+                "telegramId": 987654321,
+                "phone": "+998901112233",
+                "isOwner": False,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(not_owner_res.status_code, 400)
+        self.assertIn("o'zingizning shaxsiy", not_owner_res.json()["message"])
+
+        # Attempt 3: Matching phone and isOwner=True -> succeeds (200)
+        success_res = self.client.post(
+            "/api/auth/telegram-otp/bot-link",
+            data={
+                "token": session_token,
+                "telegramId": 987654321,
+                "phone": "+998901112233",
+                "isOwner": True,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(success_res.status_code, 200)
+        payload = success_res.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["deliveryChannel"], "telegram")
+
+        challenge = TelegramOtpChallenge.objects.get(
+            session_token_hash=hashlib.sha256(session_token.encode("utf-8")).hexdigest()
+        )
+        self.assertTrue(challenge.pending_payload.get("contact_verified"))
+        self.assertTrue(challenge.pending_payload.get("contact_is_owner"))
+
+    def test_sms_provider_abstraction(self):
+        provider = DisabledSmsProvider()
+        self.assertFalse(provider.is_configured)
+        result = provider.send_sms(phone="+998901234567", text="Test")
+        self.assertFalse(result.success)
+        self.assertIn("sozlanmagan", result.error)
+
+        current_provider = get_sms_provider()
+        self.assertIsInstance(current_provider, DisabledSmsProvider)
+
+        res = send_verification_sms("+998901234567", "123456")
+        self.assertFalse(res.success)
+
+    def test_setup_demo_reviewer_command_and_deterministic_otp(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from apps.daily.models import UserDailyStreak
+        from apps.game_results.models import GameResult
+        from apps.users.models import BotAdmin
+
+        out = StringIO()
+        call_command("setup_demo_reviewer", stdout=out)
+        output_str = out.getvalue()
+        self.assertIn("GOOGLE PLAY CONSOLE", output_str)
+
+        reviewer = User.objects.get(username="google_reviewer")
+        self.assertEqual(reviewer.phone, "+998901234567")
+        self.assertFalse(BotAdmin.objects.filter(telegram_id=reviewer.telegram_id).exists())
+        self.assertTrue(reviewer.check_password("Zakovat2026!Review"))
+
+        self.assertEqual(GameResult.objects.filter(telegram_id=reviewer.telegram_id).count(), 5)
+        self.assertTrue(UserDailyStreak.objects.filter(telegram_id=reviewer.telegram_id).exists())
+        self.assertGreaterEqual(len(reviewer.unlocked_achievements), 5)
+
+        # Reviewer password recovery gets deterministic OTP '123456'
+        recov_res = self.client.post(
+            "/api/auth/telegram-otp/forgot-password",
+            data={"phone": "+998901234567"},
+            content_type="application/json",
+        )
+        self.assertEqual(recov_res.status_code, 200)
+        session_token = recov_res.json()["sessionToken"]
+
+        recov_token_hash = hashlib.sha256(session_token.encode("utf-8")).hexdigest()
+        challenge = TelegramOtpChallenge.objects.get(session_token_hash=recov_token_hash)
+        expected_otp_hash = hashlib.sha256(f"123456:{session_token}".encode("utf-8")).hexdigest()
+        self.assertEqual(challenge.otp_hash, expected_otp_hash)
+
+        reset_res = self.client.post(
+            "/api/auth/telegram-otp/reset-password",
+            data={
+                "sessionToken": session_token,
+                "otp": "123456",
+                "newPassword": "NewReviewerPassword2026!",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(reset_res.status_code, 200)
+
+        login_res = self.client.post(
+            "/api/auth/login/password",
+            data={"phone": "+998901234567", "password": "NewReviewerPassword2026!"},
+            content_type="application/json",
+        )
+        self.assertEqual(login_res.status_code, 200)
+
 

@@ -208,7 +208,7 @@ class _TelegramOtpVerifyPageState extends State<TelegramOtpVerifyPage> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  'Botni oching va /start tugmasini bosing',
+                                  'Botni oching va "📱 Telefon raqamimni ulashish" orqali kontaktingizni tasdiqlang',
                                   style: theme.textTheme.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -231,6 +231,14 @@ class _TelegramOtpVerifyPageState extends State<TelegramOtpVerifyPage> {
                             label: Text(
                               '@${widget.challenge.botUsername} botini ochish',
                               style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Bot sizning kontaktingizni tasdiqlagach, 6 xonali kodni taqdim etadi.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],

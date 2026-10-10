@@ -78,6 +78,12 @@ function invalidateChannelsCache() {
 }
 
 const BOT_INTERNAL_API_KEY = process.env.BOT_INTERNAL_API_KEY || "";
+
+interface PendingContactVerification {
+  token: string;
+  time: number;
+}
+const pendingContactVerifications = new Map<number, PendingContactVerification>();
 const ADMIN_API_KEY = BOT_INTERNAL_API_KEY;
 if (!BOT_INTERNAL_API_KEY) {
   throw new Error("BOT_INTERNAL_API_KEY ko'rsatilmagan. Backend bilan bir xil kalitni o'rnating.");
@@ -596,10 +602,40 @@ bot.command("start", async ctx => {
     return;
   }
 
-  // Deep-link: /start reg_<TOKEN> yoki reset_<TOKEN> — OTP tasdiqlash
-  if (param.startsWith("reg_") || param.startsWith("reset_")) {
-    const isReset = param.startsWith("reset_");
-    const token = param.slice(isReset ? 6 : 4).trim();
+  // Deep-link: /start reg_<TOKEN> — Ro'yxatdan o'tish (kontaktni ulashish orqali tasdiqlash)
+  if (param.startsWith("reg_")) {
+    const token = param.slice(4).trim();
+    if (!isAdmin(uid)) {
+      const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);
+      if (!allSubscribed) {
+        await sendSubscribePrompt(ctx, unsubscribed);
+        return;
+      }
+    }
+
+    pendingContactVerifications.set(uid, { token, time: Date.now() });
+
+    const contactKb = new Keyboard()
+      .requestContact("📱 Telefon raqamimni ulashish")
+      .resized()
+      .oneTime();
+
+    await ctx.reply(
+      `📱 *Zakovat: Telefon raqamini tasdiqlash*\n\n` +
+      `Mobil ilovada ro'yxatdan o'tishni yakunlash uchun quyidagi *"📱 Telefon raqamimni ulashish"* tugmasini bosing.\n\n` +
+      `_Xavfsizlik: Bu telefon raqamingiz aynan sizga tegishli ekanligini tasdiqlash va hisobingizni himoyalash uchun zarur._`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: contactKb,
+      }
+    );
+    void notifyMilestoneIfNeeded(uid, ctx.from?.first_name, ctx.from?.last_name, ctx.from?.username);
+    return;
+  }
+
+  // Deep-link: /start reset_<TOKEN> — Parolni tiklash uchun OTP
+  if (param.startsWith("reset_")) {
+    const token = param.slice(6).trim();
     if (!isAdmin(uid)) {
       const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);
       if (!allSubscribed) {
@@ -617,9 +653,8 @@ bot.command("start", async ctx => {
       });
 
       const otp = res.otp;
-      const title = isReset ? "Parolni tiklash" : "Ro'yxatdan o'tish";
       await ctx.reply(
-        `🔐 *Zakovat: ${title}*\n\n` +
+        `🔐 *Zakovat: Parolni tiklash*\n\n` +
         `Sizning bir martalik tasdiqlash kodingiz:\n\n` +
         `👉 \`${otp}\` 👈\n\n` +
         `⏱ Kod amal qilish muddati: *5 daqiqa*.\n` +
@@ -628,11 +663,11 @@ bot.command("start", async ctx => {
         { parse_mode: "Markdown" }
       );
     } catch (e: any) {
-      console.error("[bot] telegram otp challenge error:", e?.message);
+      console.error("[bot] telegram reset otp error:", e?.message);
       await ctx.reply(
-        `⚠️ *Tasdiqlashda xatolik yuz berdi!*\n\n` +
-        `Bu havola eskirgan, noto'g'ri yoki allaqachon ishlatilgan bo'lishi mumkin.\n` +
-        `Iltimos, mobil ilovaga qaytib yangi kod so'rang yoki ro'yxatdan o'tishni qaytadan boshlang.`,
+        `⚠️ *Parolni tiklashda xatolik yuz berdi!*\n\n` +
+        `Bu havola eskirgan yoki ushbu Telegram hisobi ko'rsatilgan profilga mos kelmadi.\n` +
+        `Iltimos, mobil ilovadan qaytadan so'rang.`,
         { parse_mode: "Markdown" }
       );
     }
@@ -950,6 +985,74 @@ bot.command("cancel", async ctx => {
 // /skip
 bot.command("skip", async ctx => {
   await handleSkip(ctx);
+});
+
+// ─── Contact handler (Telefon raqamni tasdiqlash) ───────────────────────────
+bot.on("message:contact", async ctx => {
+  const uid = ctx.from!.id;
+  const contact = ctx.message!.contact;
+  const pending = pendingContactVerifications.get(uid);
+
+  if (!pending || Date.now() - pending.time > 10 * 60 * 1000) {
+    pendingContactVerifications.delete(uid);
+    await ctx.reply(
+      "⚠️ *Tasdiqlash seansi topilmadi yoki muddati o'tgan.*\n\n" +
+      "Iltimos, mobil ilovada ro'yxatdan o'tishni qaytadan boshlang.",
+      { parse_mode: "Markdown", reply_markup: { remove_keyboard: true } }
+    );
+    return;
+  }
+
+  // Telegram kontakt egasini tekshiramiz (contact.user_id === uid)
+  const isOwner = contact.user_id === uid;
+  let rawPhone = contact.phone_number.trim();
+  if (!rawPhone.startsWith("+")) rawPhone = "+" + rawPhone;
+
+  try {
+    const res = await apiPost("/api/auth/telegram-otp/bot-link", {
+      token: pending.token,
+      telegramId: uid,
+      phone: rawPhone,
+      isOwner,
+      firstName: ctx.from?.first_name ?? "",
+      lastName: ctx.from?.last_name ?? null,
+      username: ctx.from?.username ?? null,
+    });
+
+    pendingContactVerifications.delete(uid);
+    const otp = res.otp;
+    const isSms = res.deliveryChannel === "sms";
+
+    let messageText = "";
+    if (isSms) {
+      messageText =
+        `✅ *Telefon raqamingiz muvaffaqiyatli tasdiqlandi!*\n\n` +
+        `📩 Tasdiqlash kodi telefoningizga SMS orqali yuborildi.\n\n` +
+        `Mobil ilovaga qayting va SMS kodini kiriting.`;
+    } else {
+      messageText =
+        `✅ *Telefon raqamingiz muvaffaqiyatli tasdiqlandi!*\n\n` +
+        `🔐 *Zakovat: Ro'yxatdan o'tish*\n\n` +
+        `Sizning bir martalik tasdiqlash kodingiz:\n\n` +
+        `👉 \`${otp}\` 👈\n\n` +
+        `⏱ Kod amal qilish muddati: *5 daqiqa*.\n` +
+        `⚠️ Ushbu kodni hech kimga, hatto adminlarga ham bermang!\n\n` +
+        `Mobil ilovaga qayting va ushbu kodni kiriting.`;
+    }
+
+    await ctx.reply(messageText, {
+      parse_mode: "Markdown",
+      reply_markup: { remove_keyboard: true },
+    });
+  } catch (e: any) {
+    console.error("[bot] contact verification error:", e?.message);
+    const errorMsg = e?.message || "Telefon raqam mos kelmadi yoki xatolik yuz berdi";
+    await ctx.reply(
+      `⚠️ *Tasdiqlashda xatolik:*\n\n${errorMsg}\n\n` +
+      `Iltimos, mobil ilovada ko'rsatilgan raqam bilan bog'langan o'zingizning Telegram profilingizdan foydalaning.`,
+      { parse_mode: "Markdown", reply_markup: { remove_keyboard: true } }
+    );
+  }
 });
 
 // ─── Document handler (PDF) ────────────────────────────────────────────────────
