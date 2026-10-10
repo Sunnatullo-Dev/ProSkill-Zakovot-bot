@@ -379,8 +379,8 @@ class AppRouter {
       return location == AppRoutes.onboarding ? null : AppRoutes.onboarding;
     }
 
-    // 4. Kirilmagan, onboarding ko'rilgan → login/register ruxsat.
-    if (location == AppRoutes.login || location == AppRoutes.register) {
+    // 4. Kirilmagan, onboarding ko'rilgan → auth sahifalariga ruxsat.
+    if (AppRoutes.isAuthRoute(location)) {
       return null;
     }
     return AppRoutes.login;

@@ -99,8 +99,23 @@ class AppRoutes {
     resetPassword,
   };
 
+  /// Ro'yxatdan o'tish / kirish / parolni tiklash oqimi yo'llari.
+  static const Set<String> authRoutes = {
+    login,
+    register,
+    registerVerify,
+    forgotPassword,
+    resetPassword,
+  };
+
   static bool isPublic(String location) {
     return publicRoutes.any(
+      (route) => location == route || location.startsWith('$route/'),
+    );
+  }
+
+  static bool isAuthRoute(String location) {
+    return authRoutes.any(
       (route) => location == route || location.startsWith('$route/'),
     );
   }
