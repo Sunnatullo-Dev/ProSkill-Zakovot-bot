@@ -28,13 +28,14 @@ class AppConfig {
   static String get apiBaseUrl {
     const envUrl = String.fromEnvironment('API_BASE_URL');
     if (envUrl.isNotEmpty) return envUrl;
-    if (isProduction) {
-      return 'https://zakovat-backend-euc8.onrender.com';
+    const useLocal = bool.fromEnvironment('USE_LOCAL', defaultValue: false);
+    if (useLocal) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        return 'http://10.0.2.2:3000';
+      }
+      return 'http://127.0.0.1:3000';
     }
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:3000';
-    }
-    return 'http://127.0.0.1:3000';
+    return 'https://zakovat-backend-euc8.onrender.com';
   }
 
   static const String _flavorRaw = String.fromEnvironment(
@@ -57,7 +58,7 @@ class AppConfig {
   /// Telegram bot username — taklif havolalari uchun.
   static const String botUsername = String.fromEnvironment(
     'BOT_USERNAME',
-    defaultValue: 'zakovot_robot',
+    defaultValue: 'ZakovatApp_bot',
   );
 
   /// So'rov taymautlari.
