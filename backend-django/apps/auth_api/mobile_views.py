@@ -318,3 +318,172 @@ def telegram_link_status(request):
         "username": app_user.username if is_linked else None,
     })
 
+
+# ─── Telegram OTP Registratsiya va Parolni Tiklash ────────────────────────────
+
+@api_view(["POST"])
+@ratelimit(key="ip", rate="15/h", block=True)
+def register_telegram_start(request):
+    """Telegram orqali ro'yxatdan o'tish seansini boshlaydi.
+
+    Body: {phone, password, firstName, lastName?, email?, language?}
+    Javob: {sessionToken, botUsername, deepLink, expiresInSeconds}
+    """
+    body = _body(request)
+
+    phone = normalize_phone(body.get("phone"))
+    password = validate_password(body.get("password"))
+    first_name = validate_display_name(body.get("firstName"), field="Ism")
+
+    last_name_raw = body.get("lastName")
+    last_name = (
+        validate_display_name(last_name_raw, field="Familiya")
+        if isinstance(last_name_raw, str) and last_name_raw.strip()
+        else None
+    )
+
+    email_raw = body.get("email")
+    email = email_raw.strip().lower() if isinstance(email_raw, str) and email_raw.strip() else None
+
+    language = body.get("language")
+    if language not in SUPPORTED_LANGUAGES:
+        language = "uz-latn"
+
+    result = services.start_telegram_registration(
+        phone=phone,
+        password=password,
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        language=language,
+    )
+    return Response(result)
+
+
+@api_view(["POST"])
+@ratelimit(key="ip", rate="30/h", block=True)
+def register_telegram_verify(request):
+    """Telegram bot yuborgan 6 xonali OTP ni tasdiqlab hisobni faollashtiradi.
+
+    Body: {sessionToken, otp}
+    Javob: 201 {user, isAdmin, tokens}
+    """
+    body = _body(request)
+    session_token = body.get("sessionToken")
+    otp = body.get("otp")
+
+    if not isinstance(session_token, str) or not session_token.strip():
+        raise AppError(400, "sessionToken talab qilinadi")
+    if not isinstance(otp, str) or not otp.strip():
+        raise AppError(400, "Tasdiqlash kodini kiriting")
+
+    user = services.verify_registration_otp(
+        session_token=session_token.strip(),
+        otp=otp.strip(),
+    )
+
+    response = _auth_response(user)
+    response.status_code = 201
+    return response
+
+
+@api_view(["POST"])
+@ratelimit(key="ip", rate="15/h", block=True)
+def forgot_password(request):
+    """Parolni unutganda Telegram orqali OTP so'rash (anti-enumeration).
+
+    Body: {phone} yoki {identifier}
+    Javob: {ok, message, sessionToken, botUsername, deepLink, expiresInSeconds}
+    """
+    body = _body(request)
+    identifier = body.get("phone") or body.get("identifier")
+    if not isinstance(identifier, str) or not identifier.strip():
+        raise AppError(400, "Telefon raqam yoki foydalanuvchi nomini kiriting")
+
+    res = services.start_password_recovery(identifier=identifier.strip())
+    return Response(res)
+
+
+@api_view(["POST"])
+@ratelimit(key="ip", rate="15/h", block=True)
+def reset_password(request):
+    """Telegram OTP kodi va yangi parol bilan parolni yangilash.
+
+    Body: {sessionToken, otp, newPassword}
+    Javob: {ok, message, user, isAdmin, tokens}
+    """
+    body = _body(request)
+    session_token = body.get("sessionToken")
+    otp = body.get("otp")
+    new_password = validate_password(body.get("newPassword"))
+
+    if not isinstance(session_token, str) or not session_token.strip():
+        raise AppError(400, "sessionToken talab qilinadi")
+    if not isinstance(otp, str) or not otp.strip():
+        raise AppError(400, "Tasdiqlash kodini kiriting")
+
+    user, tokens = services.verify_password_reset_otp(
+        session_token=session_token.strip(),
+        otp=otp.strip(),
+        new_password=new_password,
+    )
+
+    return Response({
+        "ok": True,
+        "message": "Parol muvaffaqiyatli yangilandi",
+        "user": services.serialize_user(user),
+        "isAdmin": is_admin(user.telegram_id),
+        "tokens": tokens.to_dict(),
+    })
+
+
+@api_view(["POST"])
+@ratelimit(key="ip", rate="30/h", block=True)
+def resend_otp(request):
+    """OTP kodini qayta yuborish (60s cooldown).
+
+    Body: {sessionToken}
+    Javob: {ok, message, expiresInSeconds}
+    """
+    body = _body(request)
+    session_token = body.get("sessionToken")
+    if not isinstance(session_token, str) or not session_token.strip():
+        raise AppError(400, "sessionToken talab qilinadi")
+
+    res = services.resend_telegram_otp(session_token=session_token.strip())
+    return Response(res)
+
+
+@api_view(["POST"])
+@ratelimit(key="ip", rate="60/m", block=True)
+def bot_challenge_link(request):
+    """Telegram bot /start reg_<TOKEN> yoki /start reset_<TOKEN> orqali chaqiradi.
+
+    Body: {token, telegramId, username?, firstName?, lastName?}
+    Javob: {ok, purpose, otp, expiresInSeconds}
+    """
+    body = _body(request)
+    token = body.get("token")
+    telegram_id_raw = body.get("telegramId")
+
+    if not isinstance(token, str) or not token.strip():
+        raise AppError(400, "token talab qilinadi")
+
+    try:
+        telegram_id = int(telegram_id_raw)
+    except (TypeError, ValueError):
+        raise AppError(400, "telegramId musbat son bo'lishi kerak")
+
+    username = body.get("username")
+    first_name = body.get("firstName")
+    last_name = body.get("lastName")
+
+    res = services.bot_link_challenge(
+        token=token.strip(),
+        telegram_id=telegram_id,
+        username=username if isinstance(username, str) else None,
+        first_name=first_name if isinstance(first_name, str) else None,
+        last_name=last_name if isinstance(last_name, str) else None,
+    )
+    return Response(res)
+

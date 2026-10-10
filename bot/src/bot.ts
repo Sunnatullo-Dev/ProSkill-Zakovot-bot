@@ -596,6 +596,50 @@ bot.command("start", async ctx => {
     return;
   }
 
+  // Deep-link: /start reg_<TOKEN> yoki reset_<TOKEN> — OTP tasdiqlash
+  if (param.startsWith("reg_") || param.startsWith("reset_")) {
+    const isReset = param.startsWith("reset_");
+    const token = param.slice(isReset ? 6 : 4).trim();
+    if (!isAdmin(uid)) {
+      const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);
+      if (!allSubscribed) {
+        await sendSubscribePrompt(ctx, unsubscribed);
+        return;
+      }
+    }
+    try {
+      const res = await apiPost("/api/auth/telegram-otp/bot-link", {
+        token,
+        telegramId: uid,
+        firstName: ctx.from?.first_name ?? "",
+        lastName: ctx.from?.last_name ?? null,
+        username: ctx.from?.username ?? null,
+      });
+
+      const otp = res.otp;
+      const title = isReset ? "Parolni tiklash" : "Ro'yxatdan o'tish";
+      await ctx.reply(
+        `🔐 *Zakovat: ${title}*\n\n` +
+        `Sizning bir martalik tasdiqlash kodingiz:\n\n` +
+        `👉 \`${otp}\` 👈\n\n` +
+        `⏱ Kod amal qilish muddati: *5 daqiqa*.\n` +
+        `⚠️ Ushbu kodni hech kimga, hatto adminlarga ham bermang!\n\n` +
+        `Mobil ilovaga qayting va ushbu kodni kiriting.`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (e: any) {
+      console.error("[bot] telegram otp challenge error:", e?.message);
+      await ctx.reply(
+        `⚠️ *Tasdiqlashda xatolik yuz berdi!*\n\n` +
+        `Bu havola eskirgan, noto'g'ri yoki allaqachon ishlatilgan bo'lishi mumkin.\n` +
+        `Iltimos, mobil ilovaga qaytib yangi kod so'rang yoki ro'yxatdan o'tishni qaytadan boshlang.`,
+        { parse_mode: "Markdown" }
+      );
+    }
+    void notifyMilestoneIfNeeded(uid, ctx.from?.first_name, ctx.from?.last_name, ctx.from?.username);
+    return;
+  }
+
   // Kanal obunasini tekshirish — admin bo'lsa tekshirmaymiz
   if (!isAdmin(uid)) {
     const { allSubscribed, unsubscribed } = await checkAllSubscriptions(uid);

@@ -420,3 +420,228 @@ class TelegramAccountLinkingTest(TestCase):
         # Eski GameResult ham yangi telegram_id ga o'tgan
         self.assertTrue(GameResult.objects.filter(telegram_id=555666777).exists())
 
+
+class TelegramOtpAuthTest(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_telegram_registration_flow_success(self):
+        # 1. Start registration from mobile app
+        start_res = self.client.post(
+            "/api/auth/telegram-otp/register/start",
+            data={
+                "phone": "+998901112233",
+                "password": "strongPassword123",
+                "firstName": "Sardor",
+                "lastName": "Aliyev",
+                "language": "uz-latn",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(start_res.status_code, 200)
+        data = start_res.json()
+        session_token = data["sessionToken"]
+        self.assertIn("botUsername", data)
+        self.assertIn("deepLink", data)
+        self.assertTrue(data["deepLink"].startswith("https://t.me/"))
+
+        # User is not created in DB yet!
+        self.assertFalse(User.objects.filter(phone="+998901112233").exists())
+
+        # 2. User opens Telegram Bot -> Bot calls bot-link
+        bot_res = self.client.post(
+            "/api/auth/telegram-otp/bot-link",
+            data={
+                "token": session_token,
+                "telegramId": 987654321,
+                "username": "sardor_tg",
+                "firstName": "Sardor",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(bot_res.status_code, 200)
+        bot_data = bot_res.json()
+        self.assertEqual(bot_data["purpose"], "register")
+        otp = bot_data["otp"]
+        self.assertEqual(len(otp), 6)
+
+        # 3. User enters 6-digit OTP in mobile app
+        verify_res = self.client.post(
+            "/api/auth/telegram-otp/register/verify",
+            data={
+                "sessionToken": session_token,
+                "otp": otp,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(verify_res.status_code, 201)
+        verify_data = verify_res.json()
+        self.assertIn("tokens", verify_data)
+        self.assertEqual(verify_data["user"]["phone"], "+998901112233")
+        self.assertEqual(verify_data["user"]["telegramId"], 987654321)
+
+        # Verified in DB
+        created_user = User.objects.get(phone="+998901112233")
+        self.assertEqual(created_user.telegram_id, 987654321)
+        self.assertEqual(created_user.first_name, "Sardor")
+        self.assertTrue(created_user.check_password("strongPassword123"))
+
+    def test_telegram_registration_duplicate_phone_rejected(self):
+        User.objects.create(telegram_id=111, phone="+998901112233")
+        start_res = self.client.post(
+            "/api/auth/telegram-otp/register/start",
+            data={
+                "phone": "+998901112233",
+                "password": "strongPassword123",
+                "firstName": "Test",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(start_res.status_code, 409)
+
+    def test_telegram_registration_wrong_otp_and_attempt_limit(self):
+        start_res = self.client.post(
+            "/api/auth/telegram-otp/register/start",
+            data={
+                "phone": "+998909998877",
+                "password": "strongPassword123",
+                "firstName": "Jasur",
+            },
+            content_type="application/json",
+        )
+        session_token = start_res.json()["sessionToken"]
+        self.client.post(
+            "/api/auth/telegram-otp/bot-link",
+            data={"token": session_token, "telegramId": 123456789},
+            content_type="application/json",
+        )
+
+        # 1-4 wrong attempts: 400
+        for _ in range(4):
+            res = self.client.post(
+                "/api/auth/telegram-otp/register/verify",
+                data={"sessionToken": session_token, "otp": "000000"},
+                content_type="application/json",
+            )
+            self.assertEqual(res.status_code, 400)
+
+        # 5th wrong attempt: 400
+        res5 = self.client.post(
+            "/api/auth/telegram-otp/register/verify",
+            data={"sessionToken": session_token, "otp": "000000"},
+            content_type="application/json",
+        )
+        self.assertEqual(res5.status_code, 400)
+
+        # 6th attempt: 429 locked
+        res6 = self.client.post(
+            "/api/auth/telegram-otp/register/verify",
+            data={"sessionToken": session_token, "otp": "000000"},
+            content_type="application/json",
+        )
+        self.assertEqual(res6.status_code, 429)
+
+    def test_password_recovery_and_reset_flow(self):
+        from django.utils import timezone
+        from apps.users.models import TelegramOtpChallenge
+
+        # Create user with password and real Telegram ID
+        user = User.objects.create(
+            telegram_id=554433221,
+            phone="+998905554433",
+            first_name="Zafar",
+            auth_provider="both",
+        )
+        user.set_password("OldPassword123")
+        user.save()
+        initial_token_version = user.token_version
+
+        # 1. Forgot password request
+        forgot_res = self.client.post(
+            "/api/auth/telegram-otp/forgot-password",
+            data={"phone": "+998905554433"},
+            content_type="application/json",
+        )
+        self.assertEqual(forgot_res.status_code, 200)
+        data = forgot_res.json()
+        session_token = data["sessionToken"]
+
+        # Bot challenge exists in DB
+        challenge = TelegramOtpChallenge.objects.filter(user=user, purpose="password_reset").first()
+        self.assertIsNotNone(challenge)
+
+        # Bot delivers or generates OTP
+        bot_res = self.client.post(
+            "/api/auth/telegram-otp/bot-link",
+            data={"token": session_token, "telegramId": 554433221},
+            content_type="application/json",
+        )
+        self.assertEqual(bot_res.status_code, 200)
+        otp = bot_res.json()["otp"]
+
+        # 2. User enters OTP and new password
+        reset_res = self.client.post(
+            "/api/auth/telegram-otp/reset-password",
+            data={
+                "sessionToken": session_token,
+                "otp": otp,
+                "newPassword": "NewStrongPassword456",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(reset_res.status_code, 200)
+
+        # Old password fails
+        login_old = self.client.post(
+            "/api/auth/login/password",
+            data={"phone": "+998905554433", "password": "OldPassword123"},
+            content_type="application/json",
+        )
+        self.assertEqual(login_old.status_code, 401)
+
+        # New password succeeds
+        login_new = self.client.post(
+            "/api/auth/login/password",
+            data={"phone": "+998905554433", "password": "NewStrongPassword456"},
+            content_type="application/json",
+        )
+        self.assertEqual(login_new.status_code, 200)
+
+        # Token version bumped (old sessions revoked)
+        user.refresh_from_db()
+        self.assertGreater(user.token_version, initial_token_version)
+
+    def test_password_recovery_anti_enumeration_unknown_user(self):
+        res = self.client.post(
+            "/api/auth/telegram-otp/forgot-password",
+            data={"phone": "+998990000000"},
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data["ok"])
+        self.assertIn("sessionToken", data)
+        self.assertIn("deepLink", data)
+
+    def test_otp_resend_cooldown(self):
+        start_res = self.client.post(
+            "/api/auth/telegram-otp/register/start",
+            data={"phone": "+998907776655", "password": "passWord123", "firstName": "Ali"},
+            content_type="application/json",
+        )
+        session_token = start_res.json()["sessionToken"]
+        self.client.post(
+            "/api/auth/telegram-otp/bot-link",
+            data={"token": session_token, "telegramId": 77665544},
+            content_type="application/json",
+        )
+
+        # Resend immediately should be blocked by 60s cooldown
+        resend_res = self.client.post(
+            "/api/auth/telegram-otp/resend",
+            data={"sessionToken": session_token},
+            content_type="application/json",
+        )
+        self.assertEqual(resend_res.status_code, 429)
+        self.assertIn("soniya kuting", resend_res.json()["message"])
+

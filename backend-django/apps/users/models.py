@@ -343,3 +343,47 @@ class UserScoreLog(models.Model):
     def __str__(self) -> str:
         return f"UserScoreLog {self.telegram_id}: +{self.amount} ({self.source})"
 
+
+class TelegramOtpChallenge(models.Model):
+    """Telegram orqali ro'yxatdan o'tish va parolni tiklash uchun bir martalik OTP chaqiruvi."""
+
+    PURPOSE_REGISTER = "register"
+    PURPOSE_PASSWORD_RESET = "password_reset"
+    PURPOSE_CHOICES = [
+        (PURPOSE_REGISTER, "Ro'yxatdan o'tish"),
+        (PURPOSE_PASSWORD_RESET, "Parolni tiklash"),
+    ]
+
+    session_token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    purpose = models.CharField(max_length=32, choices=PURPOSE_CHOICES, db_index=True)
+    phone = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="otp_challenges",
+    )
+    telegram_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    pending_payload = models.JSONField(default=dict, blank=True)
+    otp_hash = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    is_verified = models.BooleanField(default=False, db_index=True)
+    is_used = models.BooleanField(default=False, db_index=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "telegram_otp_challenges"
+        indexes = [
+            models.Index(fields=["session_token_hash", "is_used"]),
+            models.Index(fields=["telegram_id", "purpose", "is_used"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"OtpChallenge({self.purpose}, phone={self.phone}, used={self.is_used})"
+
+

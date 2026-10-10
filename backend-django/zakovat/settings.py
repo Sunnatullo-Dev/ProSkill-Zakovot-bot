@@ -68,6 +68,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
+TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "ZakovatApp_bot").lstrip("@")
 
 # Admin panel himoyasi
 # ADMIN_SECRET_PATH — env'da o'rnatilmasa, SECRET_KEY'dan avtomatik

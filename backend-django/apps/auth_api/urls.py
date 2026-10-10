@@ -20,5 +20,13 @@ urlpatterns = [
     path("telegram-link/create-token", mobile_views.create_telegram_link_token),
     path("telegram-link/confirm", mobile_views.confirm_telegram_link),
     path("telegram-link/status", mobile_views.telegram_link_status),
+
+    # ─── Telegram OTP Registratsiya va Parolni Tiklash ────────────────────────
+    path("telegram-otp/register/start", mobile_views.register_telegram_start),
+    path("telegram-otp/register/verify", mobile_views.register_telegram_verify),
+    path("telegram-otp/forgot-password", mobile_views.forgot_password),
+    path("telegram-otp/reset-password", mobile_views.reset_password),
+    path("telegram-otp/resend", mobile_views.resend_otp),
+    path("telegram-otp/bot-link", mobile_views.bot_challenge_link),
 ]
 

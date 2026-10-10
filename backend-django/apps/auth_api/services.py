@@ -1,21 +1,29 @@
 """Mobil ilova akkauntlari — ro'yxatdan o'tish, kirish, Telegram'ga bog'lash."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
+import secrets
+from datetime import timedelta
 
+from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
 from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.exceptions import AppError
+from apps.core.telegram_notifier import send_message_sync
 from apps.users.models import (
     AUTH_PROVIDER_BOTH,
     AUTH_PROVIDER_PHONE,
     SYNTHETIC_TELEGRAM_ID_BASE,
+    TelegramOtpChallenge,
     User,
 )
 
-from .credentials import mask_phone
+from .credentials import mask_phone, normalize_phone
 
 
 logger = logging.getLogger(__name__)
@@ -465,4 +473,380 @@ def serialize_user(user: User) -> dict:
         "isPremium": user.is_premium_active(),
         "premiumUntil": user.premium_until.isoformat() if user.premium_until else None,
         "createdAt": user.created_at.isoformat() if user.created_at else None,
+    }
+
+
+def start_telegram_registration(
+    *,
+    phone: str,
+    password: str,
+    first_name: str,
+    last_name: str | None = None,
+    email: str | None = None,
+    language: str = "uz-latn",
+) -> dict:
+    """Telegram orqali ro'yxatdan o'tish seansini boshlaydi."""
+    existing = User.objects.filter(phone=phone).first()
+    if existing:
+        raise AppError(409, "Bu telefon raqam allaqachon ro'yxatdan o'tgan. Kirishga urinib ko'ring.")
+
+    if email and User.objects.filter(email=email).exists():
+        raise AppError(409, "Bu e-pochta allaqachon band")
+
+    session_token = secrets.token_urlsafe(32)
+    session_token_hash = hashlib.sha256(session_token.encode("utf-8")).hexdigest()
+    hashed_password = make_password(password)
+
+    TelegramOtpChallenge.objects.filter(
+        phone=phone, purpose=TelegramOtpChallenge.PURPOSE_REGISTER, is_used=False
+    ).delete()
+
+    TelegramOtpChallenge.objects.create(
+        session_token_hash=session_token_hash,
+        purpose=TelegramOtpChallenge.PURPOSE_REGISTER,
+        phone=phone,
+        pending_payload={
+            "password_hash": hashed_password,
+            "first_name": first_name,
+            "last_name": last_name or None,
+            "email": email or None,
+            "language": language,
+        },
+        expires_at=timezone.now() + timedelta(minutes=10),
+    )
+
+    bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "ZakovatApp_bot") or "ZakovatApp_bot"
+    deep_link = f"https://t.me/{bot_username}?start=reg_{session_token}"
+
+    logger.info(
+        "auth_telegram_reg_start",
+        extra={"event": "auth_telegram_reg_start", "phone": mask_phone(phone)},
+    )
+
+    return {
+        "sessionToken": session_token,
+        "botUsername": bot_username,
+        "deepLink": deep_link,
+        "expiresInSeconds": 600,
+    }
+
+
+def bot_link_challenge(
+    *,
+    token: str,
+    telegram_id: int,
+    username: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> dict:
+    """Telegram bot /start orqali chaqirilganda tokenni bog'laydi va 6 xonali OTP yaratadi."""
+    if telegram_id <= 0:
+        raise AppError(400, "telegram_id noto'g'ri")
+
+    token_hash = hashlib.sha256(token.strip().encode("utf-8")).hexdigest()
+    challenge = (
+        TelegramOtpChallenge.objects.select_for_update()
+        .filter(session_token_hash=token_hash)
+        .first()
+    )
+
+    if not challenge or challenge.is_used:
+        raise AppError(400, "Tasdiqlash havolasi yaroqsiz yoki allaqachon ishlatilgan")
+
+    if challenge.expires_at < timezone.now():
+        raise AppError(400, "Tasdiqlash havolasining amal qilish muddati tugagan")
+
+    if challenge.purpose == TelegramOtpChallenge.PURPOSE_REGISTER:
+        conflict = (
+            User.objects.filter(telegram_id=telegram_id)
+            .exclude(phone=challenge.phone)
+            .filter(phone__isnull=False)
+            .first()
+        )
+        if conflict:
+            raise AppError(
+                409,
+                f"Bu Telegram hisobi allaqachon boshqa raqamga bog'langan: {mask_phone(conflict.phone)}",
+            )
+
+        if username:
+            challenge.pending_payload["username"] = username
+        if first_name and not challenge.pending_payload.get("first_name"):
+            challenge.pending_payload["first_name"] = first_name
+        if last_name and not challenge.pending_payload.get("last_name"):
+            challenge.pending_payload["last_name"] = last_name
+
+    elif challenge.purpose == TelegramOtpChallenge.PURPOSE_PASSWORD_RESET:
+        if challenge.user:
+            if challenge.user.is_app_account():
+                challenge.user.telegram_id = telegram_id
+                challenge.user.save(update_fields=["telegram_id"])
+            elif challenge.user.telegram_id != telegram_id:
+                raise AppError(403, "Bu Telegram hisobi ko'rsatilgan hisobga mos kelmadi.")
+
+    otp = f"{secrets.randbelow(900000) + 100000}"
+    otp_hash = hashlib.sha256(f"{otp}:{token.strip()}".encode("utf-8")).hexdigest()
+
+    challenge.telegram_id = telegram_id
+    challenge.otp_hash = otp_hash
+    challenge.is_verified = True
+    challenge.expires_at = timezone.now() + timedelta(minutes=5)
+    challenge.last_sent_at = timezone.now()
+    challenge.attempt_count = 0
+    challenge.save()
+
+    logger.info(
+        "auth_bot_challenge_linked",
+        extra={
+            "event": "auth_bot_challenge_linked",
+            "purpose": challenge.purpose,
+            "telegram_id": telegram_id,
+        },
+    )
+
+    return {
+        "ok": True,
+        "purpose": challenge.purpose,
+        "otp": otp,
+        "expiresInSeconds": 300,
+    }
+
+
+def verify_registration_otp(*, session_token: str, otp: str) -> User:
+    """Mobil ilovadan kiritilgan 6 xonali OTP ni tekshirib, hisobni yaratadi/faollashtiradi."""
+    token_hash = hashlib.sha256(session_token.strip().encode("utf-8")).hexdigest()
+    challenge = (
+        TelegramOtpChallenge.objects.filter(
+            session_token_hash=token_hash, purpose=TelegramOtpChallenge.PURPOSE_REGISTER
+        ).first()
+    )
+
+    if not challenge or challenge.is_used:
+        raise AppError(400, "Tasdiqlash sessiyasi topilmadi yoki allaqachon ishlatilgan")
+
+    if not challenge.is_verified or not challenge.telegram_id:
+        raise AppError(400, "Avval Telegram botga kiring va Start tugmasini bosing")
+
+    if challenge.expires_at < timezone.now():
+        raise AppError(400, "Tasdiqlash kodi muddati o'tgan. Iltimos, yangi kod so'rang.")
+
+    if challenge.attempt_count >= 5:
+        raise AppError(429, "Urinishlar chegarasi tugadi. Iltimos, qaytadan ro'yxatdan o'ting.")
+
+    expected_hash = hashlib.sha256(f"{otp.strip()}:{session_token.strip()}".encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(challenge.otp_hash, expected_hash):
+        challenge.attempt_count += 1
+        challenge.save(update_fields=["attempt_count"])
+        remaining = max(0, 5 - challenge.attempt_count)
+        raise AppError(400, f"Tasdiqlash kodi noto'g'ri. Qolgan urinishlar: {remaining}")
+
+    with transaction.atomic():
+        challenge.is_used = True
+        challenge.used_at = timezone.now()
+        challenge.save(update_fields=["is_used", "used_at"])
+
+        payload = challenge.pending_payload or {}
+        existing_user = User.objects.filter(telegram_id=challenge.telegram_id).first()
+
+        if existing_user:
+            user = existing_user
+            user.phone = challenge.phone
+            user.password_hash = payload.get("password_hash", "")
+            user.auth_provider = AUTH_PROVIDER_BOTH
+            if not user.first_name and payload.get("first_name"):
+                user.first_name = payload["first_name"]
+                user.display_name = payload["first_name"]
+            if not user.last_name and payload.get("last_name"):
+                user.last_name = payload["last_name"]
+            if payload.get("email"):
+                user.email = payload["email"]
+            user.save()
+            user.bump_token_version()
+        else:
+            user = User.objects.create(
+                telegram_id=challenge.telegram_id,
+                phone=challenge.phone,
+                password_hash=payload.get("password_hash", ""),
+                first_name=payload.get("first_name") or "",
+                last_name=payload.get("last_name") or None,
+                display_name=payload.get("first_name") or "Foydalanuvchi",
+                username=payload.get("username") or None,
+                email=payload.get("email") or None,
+                language=payload.get("language") or "uz-latn",
+                auth_provider=AUTH_PROVIDER_BOTH,
+            )
+
+        mark_logged_in(user)
+
+    logger.info(
+        "auth_telegram_register_success",
+        extra={
+            "event": "auth_telegram_register_success",
+            "user_pk": user.pk,
+            "telegram_id": user.telegram_id,
+            "phone": mask_phone(user.phone),
+        },
+    )
+    _notify_milestone_safe()
+    return user
+
+
+def start_password_recovery(*, identifier: str) -> dict:
+    """Parolni tiklash so'rovi (anti-enumeration va timing attack himoyalangan)."""
+    clean = identifier.strip()
+    phone = normalize_phone(clean) if (clean.startswith("+") or clean.replace(" ", "").isdigit()) else None
+    user = None
+    if phone:
+        user = User.objects.filter(phone=phone).first()
+    if not user and clean:
+        username_clean = clean.lstrip("@")
+        user = User.objects.filter(username=username_clean).first()
+
+    session_token = secrets.token_urlsafe(32)
+    session_token_hash = hashlib.sha256(session_token.encode("utf-8")).hexdigest()
+    bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "ZakovatApp_bot") or "ZakovatApp_bot"
+    deep_link = f"https://t.me/{bot_username}?start=reset_{session_token}"
+
+    if user and user.has_usable_password():
+        TelegramOtpChallenge.objects.filter(
+            user=user, purpose=TelegramOtpChallenge.PURPOSE_PASSWORD_RESET, is_used=False
+        ).delete()
+
+        otp = f"{secrets.randbelow(900000) + 100000}"
+        otp_hash = hashlib.sha256(f"{otp}:{session_token}".encode("utf-8")).hexdigest()
+
+        is_linked = not user.is_app_account() and user.telegram_id > 0
+        challenge = TelegramOtpChallenge.objects.create(
+            session_token_hash=session_token_hash,
+            purpose=TelegramOtpChallenge.PURPOSE_PASSWORD_RESET,
+            user=user,
+            phone=user.phone,
+            telegram_id=user.telegram_id if is_linked else None,
+            otp_hash=otp_hash,
+            is_verified=is_linked,
+            expires_at=timezone.now() + timedelta(minutes=5 if is_linked else 10),
+            last_sent_at=timezone.now() if is_linked else None,
+        )
+
+        if is_linked:
+            msg = (
+                "🔐 <b>Zakovat: Parolni tiklash</b>\n\n"
+                f"Sizning bir martalik tasdiqlash kodingiz: <code>{otp}</code>\n\n"
+                "⏱ Kod amal qilish muddati: <b>5 daqiqa</b>.\n"
+                "⚠️ Ushbu kodni hech kimga bermang! Agar siz parolni tiklashni so'ramagan bo'lsangiz, bu xabarni e'tiborsiz qoldiring."
+            )
+            send_message_sync(user.telegram_id, msg)
+    else:
+        # User enumeration va timing attack himoyasi:
+        check_password(clean or "dummy", _DUMMY_PASSWORD_HASH)
+
+    return {
+        "ok": True,
+        "message": "Agar ushbu hisob mavjud bo'lsa, Telegram botga tasdiqlash kodi yuborildi.",
+        "sessionToken": session_token,
+        "botUsername": bot_username,
+        "deepLink": deep_link,
+        "expiresInSeconds": 300,
+    }
+
+
+def verify_password_reset_otp(*, session_token: str, otp: str, new_password: str) -> tuple[User, any]:
+    """Parolni tiklash OTP sini tasdiqlaydi va yangi parolni o'rnatadi."""
+    token_hash = hashlib.sha256(session_token.strip().encode("utf-8")).hexdigest()
+    challenge = (
+        TelegramOtpChallenge.objects.filter(
+            session_token_hash=token_hash, purpose=TelegramOtpChallenge.PURPOSE_PASSWORD_RESET
+        ).first()
+    )
+
+    if not challenge or not challenge.user:
+        check_password(new_password, _DUMMY_PASSWORD_HASH)
+        raise AppError(400, "Tasdiqlash kodi noto'g'ri yoki muddati o'tgan")
+
+    if challenge.is_used:
+        raise AppError(400, "Ushbu tasdiqlash kodi allaqachon ishlatilgan")
+
+    if challenge.expires_at < timezone.now():
+        raise AppError(400, "Tasdiqlash kodi muddati o'tgan. Iltimos, yangi kod so'rang.")
+
+    if challenge.attempt_count >= 5:
+        raise AppError(429, "Urinishlar chegarasi tugadi. Parolni tiklashni boshidan boshlang.")
+
+    expected_hash = hashlib.sha256(f"{otp.strip()}:{session_token.strip()}".encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(challenge.otp_hash, expected_hash):
+        challenge.attempt_count += 1
+        challenge.save(update_fields=["attempt_count"])
+        remaining = max(0, 5 - challenge.attempt_count)
+        raise AppError(400, f"Tasdiqlash kodi noto'g'ri. Qolgan urinishlar: {remaining}")
+
+    user = challenge.user
+    with transaction.atomic():
+        challenge.is_used = True
+        challenge.used_at = timezone.now()
+        challenge.save(update_fields=["is_used", "used_at"])
+
+        user.set_password(new_password)
+        if user.auth_provider == "telegram":
+            user.auth_provider = AUTH_PROVIDER_BOTH
+        user.save(update_fields=["password_hash", "auth_provider", "updated_at"])
+        user.bump_token_version()
+        mark_logged_in(user)
+
+    from .tokens import issue_token_pair
+
+    tokens = issue_token_pair(user)
+
+    logger.info(
+        "auth_password_reset_success",
+        extra={"event": "auth_password_reset_success", "user_pk": user.pk, "phone": mask_phone(user.phone)},
+    )
+    return user, tokens
+
+
+def resend_telegram_otp(*, session_token: str) -> dict:
+    """Yangi OTP kod yaratib qayta yuboradi (60 soniyalik cooldown bilan)."""
+    token_hash = hashlib.sha256(session_token.strip().encode("utf-8")).hexdigest()
+    challenge = TelegramOtpChallenge.objects.filter(session_token_hash=token_hash).first()
+
+    if not challenge or challenge.is_used:
+        raise AppError(400, "Sessiya topilmadi yoki allaqachon ishlatilgan")
+
+    if challenge.last_sent_at:
+        elapsed = (timezone.now() - challenge.last_sent_at).total_seconds()
+        if elapsed < 60:
+            cooldown = int(60 - elapsed)
+            raise AppError(429, f"Iltimos, yangi kod so'rashdan oldin {cooldown} soniya kuting.")
+
+    bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "ZakovatApp_bot") or "ZakovatApp_bot"
+    prefix = "reg" if challenge.purpose == TelegramOtpChallenge.PURPOSE_REGISTER else "reset"
+    deep_link = f"https://t.me/{bot_username}?start={prefix}_{session_token.strip()}"
+
+    if not challenge.telegram_id:
+        return {
+            "ok": True,
+            "message": "Iltimos, avval Telegram botni oching va /start tugmasini bosing.",
+            "deepLink": deep_link,
+            "expiresInSeconds": 600,
+        }
+
+    otp = f"{secrets.randbelow(900000) + 100000}"
+    challenge.otp_hash = hashlib.sha256(f"{otp}:{session_token.strip()}".encode("utf-8")).hexdigest()
+    challenge.expires_at = timezone.now() + timedelta(minutes=5)
+    challenge.last_sent_at = timezone.now()
+    challenge.attempt_count = 0
+    challenge.save()
+
+    label = "Ro'yxatdan o'tish" if challenge.purpose == TelegramOtpChallenge.PURPOSE_REGISTER else "Parolni tiklash"
+    msg = (
+        f"🔐 <b>Zakovat: {label}</b>\n\n"
+        f"Sizning yangi bir martalik tasdiqlash kodingiz: <code>{otp}</code>\n\n"
+        "⏱ Kod amal qilish muddati: <b>5 daqiqa</b>.\n"
+        "⚠️ Ushbu kodni hech kimga bermang!"
+    )
+    send_message_sync(challenge.telegram_id, msg)
+
+    return {
+        "ok": True,
+        "message": "Yangi tasdiqlash kodi Telegram botingizga yuborildi.",
+        "expiresInSeconds": 300,
     }
