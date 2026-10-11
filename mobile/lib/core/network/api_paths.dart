@@ -63,9 +63,12 @@ class ApiPaths {
   static const svoyakRooms = '/api/svoyak/rooms';
   static String svoyakRoomJoin(String code) => '/api/svoyak/rooms/$code/join';
   static String svoyakRoomState(String code) => '/api/svoyak/rooms/$code/state';
+  static String svoyakRoomStart(String code) => '/api/svoyak/rooms/$code/start';
   static String svoyakRoomBuzz(String code) => '/api/svoyak/rooms/$code/buzz';
   static String svoyakRoomAnswer(String code) => '/api/svoyak/rooms/$code/answer';
+  static String svoyakRoomAutoAnswer(String code) => '/api/svoyak/rooms/$code/auto-answer';
   static String svoyakRoomLeave(String code) => '/api/svoyak/rooms/$code/leave';
+  static String svoyakRoomEnd(String code) => '/api/svoyak/rooms/$code/end';
 
   // ── Online O'yin Xonasi (GameRooms) ─────────────────────────────────────────
   static const gameRooms = '/api/gamerooms/rooms';
