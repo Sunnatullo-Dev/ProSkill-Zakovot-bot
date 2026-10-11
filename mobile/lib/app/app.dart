@@ -54,7 +54,7 @@ class _ZakovatAppState extends State<ZakovatApp> {
             ..showSnackBar(SnackBar(content: Text(message)));
         },
         child: MaterialApp.router(
-          title: 'Zakovat',
+          title: 'Zakovat App',
           debugShowCheckedModeBanner: false,
           scaffoldMessengerKey: scaffoldMessengerKey,
           routerConfig: _appRouter.router,
