@@ -74,14 +74,6 @@ class _LoginViewState extends State<_LoginView> {
         );
   }
 
-  void _fillDemoAccount() {
-    setState(() {
-      _phoneController.text = '90 123 45 67';
-      _passwordController.text = 'Zakovat2026!Review';
-    });
-    context.showSnack('Demo hisob ma\'lumotlari kiritildi (+998 90 123 45 67)');
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -89,6 +81,9 @@ class _LoginViewState extends State<_LoginView> {
     return BlocListener<LoginCubit, LoginState>(
       listenWhen: (prev, curr) => prev.status != curr.status,
       listener: (context, state) {
+        if (state.status == FormStatus.failure && state.errorMessage != null) {
+          context.showSnack(state.errorMessage!, isError: true);
+        }
         if (state.status == FormStatus.success && state.session != null) {
           // Sessiyani global bloc'ga beramiz — router avtomatik home'ga o'tadi.
           context.read<AuthBloc>().add(AuthSessionGranted(state.session!));
@@ -202,31 +197,6 @@ class _LoginViewState extends State<_LoginView> {
                                     label: 'Kirish',
                                     isLoading: state.isSubmitting,
                                     onPressed: _submit,
-                                  ),
-                                  const SizedBox(height: 10),
-                                  OutlinedButton.icon(
-                                    onPressed: state.isSubmitting ? null : _fillDemoAccount,
-                                    icon: const Icon(
-                                      Icons.verified_user_outlined,
-                                      size: 16,
-                                    ),
-                                    label: const Text(
-                                      'Google Play Demo hisobi',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.gold,
-                                      side: BorderSide(
-                                        color: AppColors.gold.withValues(alpha: 0.5),
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
                                   ),
                                 ],
                               );

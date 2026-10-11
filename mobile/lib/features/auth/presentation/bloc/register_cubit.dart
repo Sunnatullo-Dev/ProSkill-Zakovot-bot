@@ -15,7 +15,7 @@ class RegisterState extends Equatable {
     this.errorMessage,
     this.fieldErrors = const {},
     this.obscurePassword = true,
-    this.acceptedTerms = false,
+    this.acceptedTerms = true,
   });
 
   final FormStatus status;

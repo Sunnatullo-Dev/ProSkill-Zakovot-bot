@@ -78,7 +78,7 @@ class _RegisterViewState extends State<_RegisterView> {
 
     final cubit = context.read<RegisterCubit>();
     if (!cubit.state.acceptedTerms) {
-      context.showSnack('Shartlarni qabul qiling', isError: true);
+      context.showSnack('Foydalanish shartlariga rozilik bildiring', isError: true);
       return;
     }
 
@@ -99,6 +99,9 @@ class _RegisterViewState extends State<_RegisterView> {
             'cubit': cubit,
           },
         );
+      } else if (cubit.state.session != null) {
+        context.read<AuthBloc>().add(AuthSessionGranted(cubit.state.session!));
+        context.go(AppRoutes.home);
       }
     }
   }
@@ -116,8 +119,12 @@ class _RegisterViewState extends State<_RegisterView> {
     return BlocListener<RegisterCubit, RegisterState>(
       listenWhen: (prev, curr) => prev.status != curr.status,
       listener: (context, state) {
+        if (state.status == FormStatus.failure && state.errorMessage != null) {
+          context.showSnack(state.errorMessage!, isError: true);
+        }
         if (state.status == FormStatus.success && state.session != null) {
           context.read<AuthBloc>().add(AuthSessionGranted(state.session!));
+          context.go(AppRoutes.home);
         }
       },
       child: Scaffold(
@@ -134,8 +141,10 @@ class _RegisterViewState extends State<_RegisterView> {
             behavior: HitTestBehavior.opaque,
             child: BlocBuilder<RegisterCubit, RegisterState>(
               builder: (context, state) {
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                return Form(
+                  key: _formKey,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   children: [
@@ -317,8 +326,9 @@ class _RegisterViewState extends State<_RegisterView> {
                       ),
                     ),
                   ],
-                );
-              },
+                ),
+              );
+            },
             ),
           ),
         ),
