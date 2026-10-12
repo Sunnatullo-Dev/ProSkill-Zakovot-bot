@@ -7,7 +7,7 @@ faqat birinchisining yozuvi qabul qilinadi).
 from __future__ import annotations
 
 import secrets
-import string
+import re
 import time
 import unicodedata
 from typing import Any
@@ -37,6 +37,10 @@ AUTO_GRACE_MS = 2_000                # vaqt tugaganda grace period
 AUTO_RESULT_MS = 3_000               # natija ko'rsatish vaqti
 _DEFAULT_TIME_PER_QUESTION_S = 15    # standart (admin o'zgartirmasa)
 READING_TIME_MS = 10_000             # O'qish fazasi: 10 soniya (bloklangan)
+
+_ANSWER_APOSTROPHE_RE = re.compile(r"['ʻʼ`ˈ‘’]")
+_ANSWER_NON_WORD_RE = re.compile(r"[^\w]+", re.UNICODE)
+_ANSWER_WHITESPACE_RE = re.compile(r"\s+")
 
 
 def _get_time_per_question_ms(time_seconds: int | None = None) -> int:
@@ -79,6 +83,112 @@ def _normalize(text: str) -> str:
     if text is None:
         return ""
     return unicodedata.normalize("NFC", text).strip().lower()
+
+
+def _normalize_free_answer(text: str) -> str:
+    """Erkin matn javoblari uchun case/punctuation/apostrof tolerant normalize."""
+    if text is None:
+        return ""
+    value = unicodedata.normalize("NFKC", str(text)).casefold()
+    value = _ANSWER_APOSTROPHE_RE.sub("", value)
+    value = _ANSWER_NON_WORD_RE.sub(" ", value)
+    return _ANSWER_WHITESPACE_RE.sub(" ", value).strip()
+
+
+def _edit_distance_at_most_one(left: str, right: str) -> bool:
+    """Bir dona harf tushib qolishi, ortiqcha bo'lishi yoki almashishini tekshiradi."""
+    if left == right:
+        return True
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        return sum(1 for a, b in zip(left, right) if a != b) <= 1
+    if len(left) > len(right):
+        left, right = right, left
+
+    i = j = edits = 0
+    while i < len(left) and j < len(right):
+        if left[i] == right[j]:
+            i += 1
+            j += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return False
+        j += 1
+    return True
+
+
+def _can_fuzzy_match(value: str) -> bool:
+    return len(value) >= 4 and not any(ch.isdigit() for ch in value)
+
+
+def _free_answer_matches_locally(correct_answer: str, user_answer: str) -> bool:
+    """Svoyak matn javobida katta-kichik harf va 1 harf typo'ni kechiradi."""
+    correct = _normalize_free_answer(correct_answer)
+    user = _normalize_free_answer(user_answer)
+    if not correct or not user:
+        return False
+    if user == correct:
+        return True
+
+    correct_compact = correct.replace(" ", "")
+    user_compact = user.replace(" ", "")
+    if user_compact == correct_compact:
+        return True
+    if (
+        _can_fuzzy_match(correct_compact)
+        and _can_fuzzy_match(user_compact)
+        and _edit_distance_at_most_one(user_compact, correct_compact)
+    ):
+        return True
+
+    correct_tokens = correct.split()
+    user_tokens = user.split()
+    if len(user_tokens) == 1:
+        token = user_tokens[0]
+        if len(token) >= 3 and token in correct_tokens:
+            return True
+        return any(
+            _can_fuzzy_match(token)
+            and _can_fuzzy_match(correct_token)
+            and _edit_distance_at_most_one(token, correct_token)
+            for correct_token in correct_tokens
+        )
+
+    if len(correct_tokens) == 1:
+        correct_token = correct_tokens[0]
+        if len(correct_token) >= 3 and correct_token in user_tokens:
+            return True
+        return any(
+            _can_fuzzy_match(user_token)
+            and _can_fuzzy_match(correct_token)
+            and _edit_distance_at_most_one(user_token, correct_token)
+            for user_token in user_tokens
+        )
+
+    if len(user_tokens) == len(correct_tokens):
+        return all(
+            user_token == correct_token
+            or (
+                _can_fuzzy_match(user_token)
+                and _can_fuzzy_match(correct_token)
+                and _edit_distance_at_most_one(user_token, correct_token)
+            )
+            for user_token, correct_token in zip(user_tokens, correct_tokens)
+        )
+
+    return False
+
+
+def _grade_free_answer(question_text: str, correct_answer: str, user_answer: str) -> bool:
+    if _free_answer_matches_locally(correct_answer, user_answer):
+        return True
+
+    from apps.answers.gemini import check_answer as gemini_check_answer
+
+    result = gemini_check_answer(question_text, correct_answer, user_answer)
+    return result.status == "correct"
 
 
 # ─── Kod generatsiya ─────────────────────────────────────────────────────────
@@ -531,11 +641,12 @@ def submit_answer(
             else:
                 is_correct = _normalize(trimmed) == _normalize(question.correct_answer)
         else:
-            # Erkin matn — Gemini AI bilan fuzzy matching (solo o'yindagi kabi).
-            # "Alisher Navoiy" → "Navoiy" ham to'g'ri deb hisoblanadi.
-            from apps.answers.gemini import check_answer as gemini_check_answer
-            result = gemini_check_answer(question.text, question.correct_answer, trimmed)
-            is_correct = result.status == "correct"
+            # Erkin matn — avval lokal typo/case tolerant tekshiruv, keyin Gemini.
+            is_correct = _grade_free_answer(
+                question.text,
+                question.correct_answer,
+                trimmed,
+            )
 
         delta = round_row.value if is_correct else -round_row.value
         round_row.answer_text = trimmed
@@ -927,10 +1038,8 @@ def submit_auto_answer(*, code: str, telegram_id: int, answer_text: str) -> dict
                 if already:
                     raise AppError(409, "Siz allaqachon javob bergansiz")
 
-        # Gemini orqali baholash
-        from apps.answers.gemini import check_answer as gemini_check
-        result = gemini_check(question_text, correct_answer, trimmed)
-        is_correct = result.status == "correct"
+        # Avval lokal typo/case tolerant tekshiruv, keyin Gemini orqali baholash.
+        is_correct = _grade_free_answer(question_text, correct_answer, trimmed)
 
         if is_correct:
             # Progressiv ball — round.value orqali (1-savol=10, 2-savol=20, ...)
