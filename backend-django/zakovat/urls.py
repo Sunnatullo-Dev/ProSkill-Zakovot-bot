@@ -7,11 +7,38 @@ from django.contrib import admin
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.urls import include, path, re_path
 
+from apps.core.views import delete_account_view, privacy_policy
+
 _admin_path = getattr(settings, "ADMIN_SECRET_PATH", "admin").strip("/")
 
 
 def health(_request):
     return JsonResponse({"ok": True})
+
+
+def server_time(_request):
+    """Mobil ilova taymerlarini serverga sinxronlash uchun.
+
+    Kliyent qurilma soatiga ISHONMASLIGI kerak (foydalanuvchi uni o'zgartirib
+    taymerni to'xtatib qo'yishi mumkin). Flutter ilovasi ishga tushganda va
+    davriy ravishda shu endpointni chaqiradi, kelgan `epochMs` bilan o'z
+    monotonik soati orasidagi farqni (offset) saqlaydi va barcha o'yin
+    taymerlarini shu offset bilan hisoblaydi.
+
+    RTT (round-trip) ni kliyent o'zi o'lchaydi va yarmini kompensatsiya qiladi.
+    """
+    import time as _time
+
+    from django.utils import timezone as _tz
+
+    now = _tz.now()
+    return JsonResponse(
+        {
+            "epochMs": int(_time.time() * 1000),
+            "iso": now.isoformat(),
+            "timezone": str(getattr(settings, "TIME_ZONE", "UTC")),
+        }
+    )
 
 
 def _spa_response():
@@ -39,6 +66,7 @@ def spa_fallback(request, **_kwargs):
 
 urlpatterns = [
     path("health", health),
+    path("api/time", server_time),
     path(f"{_admin_path}/", admin.site.urls),
     path("api/auth/", include("apps.auth_api.urls")),
     path("api/users/", include("apps.users.urls")),
@@ -58,8 +86,14 @@ urlpatterns = [
     path("api/", include("apps.author_questions.urls_public")),  # POST /api/author-questions
     path("api/ustoz/", include("apps.ustoz_ai.urls")),           # Ustoz AI public
     path("api/admin/ustoz/", include("apps.ustoz_ai.admin_urls")),  # Ustoz AI admin
+    # ── Privacy Policy (Google Play & Public Web) ────────────────────────────
+    path("privacy-policy", privacy_policy, name="privacy_policy"),
+    path("privacy-policy/", privacy_policy, name="privacy_policy_slash"),
+    # ── Account Deletion (Google Play & Public Web) ──────────────────────────
+    path("delete-account", delete_account_view, name="account_deletion"),
+    path("delete-account/", delete_account_view, name="account_deletion_slash"),
     re_path(
-        rf"^(?!api/|{_admin_path}/|health$|static/).*$",
+        rf"^(?!api/|{_admin_path}/|health$|privacy-policy|delete-account|static/).*$",
         spa_fallback,
     ),
 ]

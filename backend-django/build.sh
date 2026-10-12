@@ -33,4 +33,11 @@ echo "[build] === Django cache table (DatabaseCache uchun) ==="
 # ham xavfsiz — faqat jadval mavjud emasligini tekshiradi.
 python manage.py createcachetable
 
+echo "[build] === Django migrate ==="
+python manage.py migrate --noinput
+
+echo "[build] === Google Play Demo Reviewer setup ==="
+python manage.py setup_demo_reviewer || true
+
 echo "[build] === Tugadi ==="
+

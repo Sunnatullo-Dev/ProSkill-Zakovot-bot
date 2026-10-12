@@ -1,0 +1,97 @@
+name: zakovat
+description: "Zakovat — bilim o'yini. Android va iOS uchun rasmiy mobil ilova."
+publish_to: 'none'
+version: 1.0.2+3
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # ── State management ──────────────────────────────────────────────────────
+  flutter_bloc: ^9.1.1
+  bloc: ^9.0.1
+  equatable: ^2.0.7
+
+  # ── DI ────────────────────────────────────────────────────────────────────
+  get_it: ^8.2.0
+
+  # ── Routing ───────────────────────────────────────────────────────────────
+  go_router: ^16.2.4
+
+  # ── Networking ────────────────────────────────────────────────────────────
+  dio: ^5.9.0
+  retrofit: ^4.7.2
+  pretty_dio_logger: ^1.4.0
+  connectivity_plus: ^7.0.0
+
+  # ── Model generatsiyasi ───────────────────────────────────────────────────
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.12.0
+
+  # ── Storage ───────────────────────────────────────────────────────────────
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.5.3
+
+  # ── Funksional yordamchilar ───────────────────────────────────────────────
+  dartz: ^0.10.1
+
+  # ── UI ────────────────────────────────────────────────────────────────────
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.3.2
+  flutter_animate: ^4.5.2
+  shimmer: ^3.0.0
+  cached_network_image: ^3.4.1
+  flutter_svg: ^2.2.1
+
+  # ── Platforma / xavfsizlik ────────────────────────────────────────────────
+  # Skrinshot va ekran yozib olishni bloklash (Android FLAG_SECURE + iOS)
+  no_screenshot: ^0.3.2
+  package_info_plus: ^8.3.1
+  device_info_plus: ^12.1.0
+
+  # ── Media va tashqi integratsiya ──────────────────────────────────────────
+  # Premium: to'lov chekini galereyadan tanlash yoki kamerada olish
+  image_picker: ^1.2.0
+  # Natija/jamoa taklifini ulashish (web ilovadagi ShareSheet o'rnida)
+  share_plus: ^12.0.0
+  # Telegram havolalarini va kanallarni ochish
+  url_launcher: ^6.3.2
+
+  # ── Boshqa ────────────────────────────────────────────────────────────────
+  intl: ^0.20.2
+  audioplayers: ^6.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  build_runner: ^2.7.1
+  freezed: ^3.2.3
+  json_serializable: ^6.11.1
+  retrofit_generator: ^10.0.4
+
+  bloc_test: ^10.0.0
+  mocktail: ^1.0.4
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/sounds/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  adaptive_icon_background: "#080F1E"
+  adaptive_icon_foreground: "assets/images/app_icon_foreground.png"
+  min_sdk_android: 21

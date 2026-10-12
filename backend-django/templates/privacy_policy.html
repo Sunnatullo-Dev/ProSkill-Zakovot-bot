@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Zakovat App</title>
+  <meta name="description" content="Official Privacy Policy for Zakovat App — Android, iOS, Telegram Bot, and Telegram Mini App.">
+  <meta name="robots" content="index, follow">
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --primary-dark: #0f172a;
+      --accent: #d97706;
+      --accent-light: #fef3c7;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --bg-page: #f8fafc;
+      --bg-card: #ffffff;
+      --border: #e2e8f0;
+      --border-focus: #3b82f6;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.65;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Header */
+    header.site-header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: #ffffff;
+      padding: 48px 24px 36px;
+      border-bottom: 3px solid var(--accent);
+    }
+
+    .header-container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 9999px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #fef3c7;
+      margin-bottom: 16px;
+    }
+
+    .brand-badge svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    h1.page-title {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      color: #ffffff;
+    }
+
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      font-size: 14px;
+      color: #cbd5e1;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .meta-item strong {
+      color: #ffffff;
+    }
+
+    /* Main Layout */
+    .content-wrapper {
+      max-width: 960px;
+      margin: 32px auto 60px;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+
+    @media (max-width: 840px) {
+      .content-wrapper {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Table of Contents */
+    aside.toc-sidebar {
+      position: sticky;
+      top: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+    }
+
+    @media (max-width: 840px) {
+      aside.toc-sidebar {
+        position: static;
+        max-height: none;
+      }
+    }
+
+    .toc-title {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--primary);
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .toc-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toc-list a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 500;
+      display: block;
+      padding: 4px 6px;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s, background-color 0.15s;
+    }
+
+    .toc-list a:hover {
+      color: var(--primary);
+      background-color: var(--bg-page);
+    }
+
+    /* Policy Main Content */
+    main.policy-body {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 40px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    @media (max-width: 600px) {
+      main.policy-body {
+        padding: 24px 20px;
+      }
+    }
+
+    /* Callout Box */
+    .callout {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 15px;
+      color: #1e3a8a;
+    }
+
+    .callout-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .callout-warning {
+      background: #fffbeb;
+      border-left-color: #f59e0b;
+      color: #92400e;
+    }
+
+    /* Typography inside policy */
+    section.policy-section {
+      margin-bottom: 36px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section.policy-section:last-of-type {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    h2.section-heading {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      scroll-margin-top: 24px;
+    }
+
+    h2.section-heading .section-num {
+      color: var(--accent);
+      font-size: 18px;
+    }
+
+    h3.sub-heading {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin: 20px 0 10px;
+    }
+
+    p {
+      margin-bottom: 14px;
+      color: #334155;
+    }
+
+    ul, ol {
+      margin: 12px 0 16px 24px;
+      color: #334155;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    li strong {
+      color: var(--text-main);
+    }
+
+    /* Tables */
+    .data-table-wrapper {
+      overflow-x: auto;
+      margin: 20px 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    table.data-table th {
+      background: #f1f5f9;
+      color: var(--primary-dark);
+      font-weight: 600;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    table.data-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: #334155;
+      vertical-align: top;
+    }
+
+    table.data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Contact box */
+    .contact-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin-top: 16px;
+    }
+
+    .contact-card dl {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 10px 16px;
+      font-size: 15px;
+    }
+
+    @media (max-width: 500px) {
+      .contact-card dl {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .contact-card dt {
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .contact-card dd {
+      color: var(--text-main);
+      word-break: break-all;
+    }
+
+    /* Footer */
+    footer.site-footer {
+      background: #ffffff;
+      border-top: 1px solid var(--border);
+      padding: 32px 20px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    footer.site-footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    footer.site-footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Site Header -->
+  <header class="site-header">
+    <div class="header-container">
+      <div class="brand-badge">
+        <svg viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm0 3.5L19.5 19h-15L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>
+        <span>Zakovat App — Legal Notice</span>
+      </div>
+      <h1 class="page-title">Privacy Policy — Zakovat App</h1>
+      <p style="color: #cbd5e1; max-width: 680px; font-size: 15.5px;">
+        Comprehensive privacy disclosures and data governance standards governing the Zakovat knowledge competition platform across Android, iOS, Web, and Telegram ecosystems.
+      </p>
+      <div class="meta-bar">
+        <div class="meta-item">Effective Date: <strong>October 11, 2026</strong></div>
+        <div class="meta-item">Last Updated: <strong>October 11, 2026</strong></div>
+        <div class="meta-item">Platform: <strong>Android, iOS, Web, Telegram</strong></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Content Container -->
+  <div class="content-wrapper">
+
+    <!-- Table of Contents Sidebar -->
+    <aside class="toc-sidebar">
+      <div class="toc-title">Table of Contents</div>
+      <nav>
+        <ul class="toc-list">
+          <li><a href="#section-1">1. Scope & Ecosystem</a></li>
+          <li><a href="#section-2">2. Information We Collect</a></li>
+          <li><a href="#section-3">3. How Information Is Used</a></li>
+          <li><a href="#section-4">4. Auth & Account Linking</a></li>
+          <li><a href="#section-5">5. Telegram Integration</a></li>
+          <li><a href="#section-6">6. Third-Party Services</a></li>
+          <li><a href="#section-7">7. Storage & Hosting</a></li>
+          <li><a href="#section-8">8. Data Retention Policy</a></li>
+          <li><a href="#section-9">9. Account Deletion Instructions</a></li>
+          <li><a href="#section-10">10. Security Safeguards</a></li>
+          <li><a href="#section-11">11. Children's Privacy</a></li>
+          <li><a href="#section-12">12. User Privacy Rights</a></li>
+          <li><a href="#section-13">13. Cross-Border Transfers</a></li>
+          <li><a href="#section-14">14. Policy Updates</a></li>
+          <li><a href="#section-15">15. Contact Information</a></li>
+          <li><a href="#section-16">16. Regulatory Compliance</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="policy-body">
+
+      <!-- Summary Callout -->
+      <div class="callout">
+        <div class="callout-title">
+          <span>Key Privacy Highlights</span>
+        </div>
+        <p style="margin-bottom: 0;">
+          Zakovat App is an intellectual trivia and educational competition platform. We only collect the minimal personal data necessary to authenticate your account, maintain fair leaderboard competition, and preserve your game statistics. We never sell your personal data or share it with data brokers.
+        </p>
+      </div>
+
+      <!-- Section 1 -->
+      <section id="section-1" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">1.</span>
+          <span>Introduction and Scope</span>
+        </h2>
+        <p>
+          This Privacy Policy explains how <strong>Zakovat App</strong> ("we", "our", or "the Platform") collects, uses, stores, and protects personal information when you use our intellectual competition platform.
+        </p>
+        <p>
+          Zakovat App operates across multiple unified environments:
+        </p>
+        <ul>
+          <li><strong>Mobile Applications:</strong> The native Flutter applications for Android (Google Play Store) and iOS.</li>
+          <li><strong>Backend Services:</strong> The Django REST API backend located at <code>zakovat-backend-euc8.onrender.com</code>.</li>
+          <li><strong>Telegram Interfaces:</strong> The official Telegram bot (<code>@ZakovatOyinBot</code>) and the associated React-based Telegram Mini App.</li>
+        </ul>
+        <p>
+          By creating an account, accessing, or participating in quizzes through any of these clients, you acknowledge the collection and handling of your information as set forth in this Privacy Policy.
+        </p>
+      </section>
+
+      <!-- Section 2 -->
+      <section id="section-2" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">2.</span>
+          <span>Information We Collect</span>
+        </h2>
+        <p>
+          We strictly adhere to data minimization principles. We collect only information that is directly necessary to deliver quiz games, calculate standings, and maintain account security.
+        </p>
+
+        <h3 class="sub-heading">A. Account and Profile Information</h3>
+        <ul>
+          <li><strong>Phone Number:</strong> Collected exclusively when registering via the mobile application. Used as your primary account identifier and login credential. We do not use your phone number for marketing calls or send unsolicited SMS.</li>
+          <li><strong>Password (Hashed):</strong> When you create an account on mobile, your password is encrypted using strong one-way cryptographic algorithms (PBKDF2/Argon2 with individual salts). We never store or transmit your password in plain text.</li>
+          <li><strong>Profile Names:</strong> Your first name, optional last name, and chosen display name or pseudonym shown on public leaderboards.</li>
+          <li><strong>Telegram Identifier:</strong> When using the Telegram bot or Telegram Mini App, or when voluntarily linking your Telegram account from the mobile app, we record your public Telegram user ID (<code>telegram_id</code>) and public username.</li>
+        </ul>
+
+        <h3 class="sub-heading">B. Gameplay, Competition, and Progress Records</h3>
+        <ul>
+          <li><strong>Quiz Responses:</strong> Your selected answers, timestamps of submission, and whether the answer was correct.</li>
+          <li><strong>Scores and Leaderboards:</strong> Accumulated competition points, monthly league rankings, daily challenge streak counters, and unlocked achievements.</li>
+          <li><strong>Multiplayer Activity:</strong> Game room participation codes, Svoyak buzzer reaction timings, 1v1 battle challenge history, Zakovat Table team roles (Captain, Player, Spectator), and in-team collaboration messages.</li>
+          <li><strong>User-Submitted Questions:</strong> If you voluntarily author and submit trivia questions for review, we store the question text, suggested answers, and your contributor attribution.</li>
+          <li><strong>Voluntary Premium Receipts:</strong> If you request a voluntary premium status, you may upload a payment receipt screenshot for manual administrative review.</li>
+        </ul>
+
+        <h3 class="sub-heading">C. Device, Technical, and Diagnostic Data</h3>
+        <ul>
+          <li><strong>IP Address:</strong> Logged temporarily in server access logs and security caches strictly for rate limiting, brute-force defense, and DDoS mitigation.</li>
+          <li><strong>Timestamps & Server Clock Calibration:</strong> Request times are processed via <code>/api/time</code> to synchronize game timers and ensure anti-cheat round timing fairness across international devices.</li>
+          <li><strong>Client Identifiers:</strong> Standard HTTP request headers (such as User-Agent) used for server diagnostic logging and platform compatibility verification.</li>
+        </ul>
+
+        <h3 class="sub-heading">D. Telegram Web App Data</h3>
+        <p>
+          When using the Telegram Mini App, Telegram provides cryptographically signed init data (<code>initData</code>). We verify this signature on our backend using HMAC-SHA256. We do not access, view, or read your private Telegram chats, contacts, or messages outside of our bot.
+        </p>
+      </section>
+
+      <!-- Section 3 -->
+      <section id="section-3" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">3.</span>
+          <span>How Information Is Used</span>
+        </h2>
+        <p>We process your personal information for the following specific purposes:</p>
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Purpose</th>
+                <th>Data Categories Used</th>
+                <th>Legal / Operational Basis</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Quiz Game Delivery</strong></td>
+                <td>User ID, quiz answers, timestamps</td>
+                <td>Performance of contractual service</td>
+              </tr>
+              <tr>
+                <td><strong>Cross-Platform Synchronization</strong></td>
+                <td>Account ID, scores, streak, game history</td>
+                <td>Performance of contractual service</td>
+              </tr>
+              <tr>
+                <td><strong>Leaderboard Standings</strong></td>
+                <td>Display name, score, league ranking</td>
+                <td>Platform functionality & competition integrity</td>
+              </tr>
+              <tr>
+                <td><strong>Anti-Cheat & Anti-Fraud</strong></td>
+                <td>Answer-ticket signatures, IP rate limits, clock offsets</td>
+                <td>Legitimate interest (fair competition)</td>
+              </tr>
+              <tr>
+                <td><strong>Account Security</strong></td>
+                <td>Phone number, hashed password, security tokens</td>
+                <td>Account protection & authentication</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Section 4 -->
+      <section id="section-4" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">4.</span>
+          <span>Account Creation, Authentication, and Account Linking</span>
+        </h2>
+        <p>
+          Zakovat App enables players to maintain one unified identity across the Flutter mobile apps, Telegram bot, and Telegram Mini App:
+        </p>
+        <ul>
+          <li><strong>Mobile Authentication:</strong> Handled through secure JSON Web Tokens (JWT). Short-lived access tokens (30 minutes) are stored in secure on-device hardware storage, and refresh tokens (60 days) are rotated upon use.</li>
+          <li><strong>Cryptographic Account Linking Protocol:</strong> When you connect your mobile account to Telegram, we generate a one-time 256-bit cryptographically random token (<code>secrets.token_urlsafe(32)</code>). This token expires after 15 minutes and is stored in our database only as a SHA-256 hash.</li>
+          <li><strong>Zero-Knowledge Linking:</strong> You confirm this token inside the Telegram bot (<code>/start link_&lt;token&gt;</code>). At no point are your mobile phone number, password, or authentication credentials transmitted in open Telegram chat messages.</li>
+          <li><strong>Data Merge:</strong> Upon confirmation, your previous scores, tournament records, and achievements are unified into your single central account.</li>
+        </ul>
+      </section>
+
+      <!-- Section 5 -->
+      <section id="section-5" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">5.</span>
+          <span>Telegram Integration</span>
+        </h2>
+        <p>
+          Our bot and Mini App operate within the Telegram platform provided by Telegram Messenger Inc.
+        </p>
+        <ul>
+          <li>We only access information that you transmit to the bot or that Telegram provides upon launch (your Telegram ID, first name, last name, and username).</li>
+          <li>We do not request or access your private Telegram messages, your contacts list, or your personal device storage through Telegram.</li>
+          <li>Telegram's own data processing practices are governed by the <a href="https://telegram.org/privacy" target="_blank" rel="noopener noreferrer">Telegram Privacy Policy</a>.</li>
+        </ul>
+      </section>
+
+      <!-- Section 6 -->
+      <section id="section-6" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">6.</span>
+          <span>Data Sharing and Third-Party Services</span>
+        </h2>
+        <div class="callout callout-warning">
+          <div class="callout-title">
+            <span>Our Commitment on Data Monetization</span>
+          </div>
+          <p style="margin-bottom: 0;">
+            We do not sell, rent, lease, trade, or monetize your personal information to third parties, advertising networks, or data brokers under any circumstances.
+          </p>
+        </div>
+        <p>We share minimal necessary data only with trusted infrastructure providers required to operate our platform:</p>
+        <ul>
+          <li><strong>Render (Cloud Hosting & Database):</strong> Our Django backend API and database are hosted on Render Services, Inc. Render provides secure data center infrastructure and automated backups.</li>
+          <li><strong>Telegram (Bot & Mini App Platform):</strong> Telegram Messenger Inc. facilitates bot messaging and Mini App web views.</li>
+          <li><strong>Google Gemini AI (Server-Side Evaluation):</strong> We use Google Gemini API strictly on our backend for automated question validation and audio response evaluation. Only the question text and answer text are sent to the AI service; no personal user identifiers (such as names or phone numbers) are included in AI requests.</li>
+          <li><strong>Legal Disclosures:</strong> We may disclose information only if required by law, subpoena, or valid judicial process to protect legal rights or ensure user safety.</li>
+        </ul>
+      </section>
+
+      <!-- Section 7 -->
+      <section id="section-7" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">7.</span>
+          <span>Hosting and Data Storage</span>
+        </h2>
+        <p>
+          All backend databases and application logic are hosted in enterprise cloud environments provided by Render. Data is stored in managed relational databases with access restricted to authorized operational staff through cryptographic SSH keys and environment secrets.
+        </p>
+        <p>
+          All communication between our clients (mobile apps, web apps, bot) and the backend API is strictly encrypted in transit using industry-standard Transport Layer Security (TLS/HTTPS).
+        </p>
+      </section>
+
+      <!-- Section 8 -->
+      <section id="section-8" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">8.</span>
+          <span>Data Retention Policy</span>
+        </h2>
+        <ul>
+          <li><strong>Active Accounts:</strong> We retain account credentials, profile details, and gameplay records as long as your account remains active so that you can view your competition history and maintain your rank.</li>
+          <li><strong>Transient Security Tokens:</strong> One-time account linking tokens expire and are invalidated after 15 minutes. Ephemeral answer validation tickets expire within 120 seconds.</li>
+          <li><strong>Session Invalidation:</strong> When you tap "Log Out" or "Log Out from All Devices", access and refresh tokens are immediately revoked and blacklisted.</li>
+          <li><strong>Inactive Accounts:</strong> Accounts with no activity for more than 24 consecutive months may be archived or scheduled for deletion following notice.</li>
+        </ul>
+      </section>
+
+      <!-- Section 9 -->
+      <section id="section-9" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">9.</span>
+          <span>Account Deletion Instructions</span>
+        </h2>
+        <p>
+          In full accordance with Google Play Store User Data policies, users have the right to request the complete deletion of their account and all associated personal data at any time.
+        </p>
+
+        <h3 class="sub-heading">How to Request Deletion:</h3>
+        <ol>
+          <li>
+            <strong>Public Web Request Page (Direct Self-Service):</strong> You can submit a deletion request directly through our official web portal at <a href="/delete-account" style="font-weight: 700; color: #1e3a8a;">/delete-account</a> without requiring app installation.
+          </li>
+          <li>
+            <strong>In-App Deletion:</strong> In the mobile application, navigate to <strong>Sozlamalar (Settings)</strong> &rarr; <strong>Akkaunt</strong> &rarr; <strong>Akkauntdan chiqish / Akkauntni o'chirish</strong>, or submit a request directly through the app support interface.
+          </li>
+          <li>
+            <strong>Email Deletion Request:</strong> You may submit an account deletion request by emailing us at <a href="mailto:support@zakovat-app.uz">support@zakovat-app.uz</a> with the subject line <code>"Account Deletion Request"</code>. Please include your registered phone number or Telegram User ID to verify ownership.
+          </li>
+        </ol>
+
+        <h3 class="sub-heading">What Happens Upon Deletion:</h3>
+        <ul>
+          <li>Your personal credentials, phone number, hashed password, and personal profile information are permanently erased from our active database within 30 days.</li>
+          <li>Past quiz questions you authored and collective leaderboard score totals are permanently decoupled from your identity and retained in anonymized format to preserve historical contest rankings.</li>
+        </ul>
+      </section>
+
+      <!-- Section 10 -->
+      <section id="section-10" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">10.</span>
+          <span>Data Security Safeguards</span>
+        </h2>
+        <p>We maintain comprehensive technical and organizational safeguards:</p>
+        <ul>
+          <li><strong>Password Hashing:</strong> Passwords are cryptographically hashed using PBKDF2 with SHA-256 and salt. Passwords are never stored or logged in plain text.</li>
+          <li><strong>Hardware Storage on Mobile:</strong> Mobile JWT tokens are securely stored using <code>FlutterSecureStorage</code>, utilizing Android KeyStore (EncryptedSharedPreferences) on Android and Keychain Services on iOS.</li>
+          <li><strong>Anti-Tampering Protection:</strong> Sensitive in-app screens employ <code>FLAG_SECURE</code> to prevent screen scraping, unauthorized screenshots, and background recording.</li>
+          <li><strong>Rate Limiting & Anti-Brute-Force:</strong> Authentication and password change endpoints are guarded by strict rate-limiting policies to prevent credential-stuffing and automated attacks.</li>
+          <li><strong>Constant-Time Password Verification:</strong> We implement timing-attack mitigations (dummy hashing) during phone authentication to prevent user enumeration attacks.</li>
+        </ul>
+      </section>
+
+      <!-- Section 11 -->
+      <section id="section-11" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">11.</span>
+          <span>Children's Privacy</span>
+        </h2>
+        <p>
+          Zakovat App is an intellectual quiz platform designed for a general audience. Our services are not directed to children under the age of 13 (or under the age of 16 for users residing in the European Economic Area).
+        </p>
+        <p>
+          We do not knowingly solicit or collect personal information from children under 13. If we discover that a child under 13 has registered or provided personal information without verified parental consent, we will promptly delete that information from our records. If you are a parent or guardian and believe your child has submitted personal information to our platform, please contact us immediately at <a href="mailto:support@zakovat-app.uz">support@zakovat-app.uz</a>.
+        </p>
+      </section>
+
+      <!-- Section 12 -->
+      <section id="section-12" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">12.</span>
+          <span>User Privacy Rights</span>
+        </h2>
+        <p>Depending on your jurisdiction, you have specific legal rights regarding your personal data:</p>
+        <ul>
+          <li><strong>Right of Access:</strong> You have the right to request a copy of the personal information we maintain about you.</li>
+          <li><strong>Right to Rectification:</strong> You may update or correct your profile display name and language preferences directly in your profile settings.</li>
+          <li><strong>Right to Erasure (Right to be Forgotten):</strong> You may request the permanent deletion of your account and personal records.</li>
+          <li><strong>Right to Data Portability:</strong> You may request an export of your personal gameplay history in a standard electronic format.</li>
+          <li><strong>Right to Withdraw Consent:</strong> Where processing relies on consent, you may withdraw your consent at any time without affecting prior lawful processing.</li>
+        </ul>
+        <p>To exercise any of these rights, please contact our support team at <a href="mailto:support@zakovat-app.uz">support@zakovat-app.uz</a>.</p>
+      </section>
+
+      <!-- Section 13 -->
+      <section id="section-13" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">13.</span>
+          <span>Cross-Border Data Processing</span>
+        </h2>
+        <p>
+          Because our infrastructure relies on cloud services provided by Render and Telegram, your information may be transferred to, stored, and processed on servers located outside your country of residence (including data centers in Frankfurt, Germany and the European Union). By using Zakovat App, you consent to the transfer of your information to facilities with appropriate technical and contractual data safeguards.
+        </p>
+      </section>
+
+      <!-- Section 14 -->
+      <section id="section-14" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">14.</span>
+          <span>Changes to This Privacy Policy</span>
+        </h2>
+        <p>
+          We may update this Privacy Policy periodically to reflect new app features, game mechanics, or legal requirements. When revisions occur, we will update the "Last Updated" date at the top of this document. Significant changes will be announced through an in-app notice or a message via our official Telegram bot. We encourage you to review this policy periodically.
+        </p>
+      </section>
+
+      <!-- Section 15 -->
+      <section id="section-15" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">15.</span>
+          <span>Contact Information</span>
+        </h2>
+        <p>
+          If you have questions, feedback, concerns, or requests regarding this Privacy Policy or your personal data, please contact our data protection team:
+        </p>
+        <div class="contact-card">
+          <dl>
+            <dt>Application:</dt>
+            <dd>Zakovat App</dd>
+            <dt>Support Email:</dt>
+            <dd><a href="mailto:support@zakovat-app.uz">support@zakovat-app.uz</a></dd>
+            <dt>Telegram Bot:</dt>
+            <dd><a href="https://t.me/ZakovatOyinBot" target="_blank" rel="noopener noreferrer">@ZakovatOyinBot</a></dd>
+            <dt>Backend API:</dt>
+            <dd><code>https://zakovat-backend-euc8.onrender.com</code></dd>
+            <dt>Response Time:</dt>
+            <dd>We endeavor to respond to all privacy and account requests within 48 business hours.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- Section 16 -->
+      <section id="section-16" class="policy-section">
+        <h2 class="section-heading">
+          <span class="section-num">16.</span>
+          <span>Regulatory Compliance</span>
+        </h2>
+        <p>
+          This Privacy Policy is designed to comply with Google Play Developer Program Policies (specifically User Data and Privacy Policy requirements), the General Data Protection Regulation (GDPR), and applicable digital consumer protection standards.
+        </p>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <p>&copy; 2026 Zakovat App. All rights reserved.</p>
+    <p style="margin-top: 6px; font-size: 13px;">
+      Public Privacy Policy URL: <a href="https://zakovat-backend-euc8.onrender.com/privacy-policy">https://zakovat-backend-euc8.onrender.com/privacy-policy</a>
+    </p>
+  </footer>
+
+</body>
+</html>

@@ -68,6 +68,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "")
+TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME", "ZakovatApp_bot").lstrip("@")
 
 # Admin panel himoyasi
 # ADMIN_SECRET_PATH — env'da o'rnatilmasa, SECRET_KEY'dan avtomatik
@@ -94,7 +95,9 @@ ADMIN_ALLOWED_IPS: list[str] = env_list("ADMIN_ALLOWED_IPS")
 # (crash qilmaydi), warning log yoziladi.
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 if not ALLOWED_HOSTS:
-    derived: list[str] = ["localhost", "127.0.0.1"]
+    derived: list[str] = ["localhost", "127.0.0.1", "10.0.2.2"]
+    if not IS_PRODUCTION:
+        derived.append("*")
     if FRONTEND_URL:
         from urllib.parse import urlparse
         try:
@@ -136,6 +139,15 @@ if not TICKET_HMAC_SECRET:
 # Telegram bot tokeni bilan ARALASHMASIN. Bot tokeni Telegram bilan baham
 # ko'riladi va u har joyda log'larda paydo bo'lishi mumkin; admin huquqi
 # uni ko'rgan har qanday clientga berilmasligi kerak.
+# ── Mobil ilova JWT sozlamalari ──────────────────────────────────────────────
+# Sirlar berilmasa SECRET_KEY'dan deterministik derive qilinadi
+# (qarang: apps/auth_api/tokens.py). Alohida kalit qo'yish xavfsizroq —
+# shunda SECRET_KEY rotatsiyasi barcha sessiyalarni buzmaydi va aksincha.
+JWT_ACCESS_SECRET = os.environ.get("JWT_ACCESS_SECRET", "")
+JWT_REFRESH_SECRET = os.environ.get("JWT_REFRESH_SECRET", "")
+JWT_ACCESS_TTL_SECONDS = int(os.environ.get("JWT_ACCESS_TTL_SECONDS", str(30 * 60)))
+JWT_REFRESH_TTL_SECONDS = int(os.environ.get("JWT_REFRESH_TTL_SECONDS", str(60 * 24 * 3600)))
+
 BOT_INTERNAL_API_KEY = os.environ.get("BOT_INTERNAL_API_KEY", "")
 if not BOT_INTERNAL_API_KEY and IS_PRODUCTION:
     # Production'da yo'q bo'lsa, "bot <token>" path'ini umuman o'chirib qo'yamiz.
@@ -226,7 +238,7 @@ WSGI_APPLICATION = "zakovat.wsgi.application"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

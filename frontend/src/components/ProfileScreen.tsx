@@ -560,6 +560,38 @@ export default function ProfileScreen({
                   </span>
                   {levelInfo.title} · Lvl {levelInfo.level}
                 </div>
+                {user?.phone ? (
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "rgba(255, 255, 255, 0.95)",
+                      fontWeight: 600,
+                      marginTop: "5px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <span style={{ fontSize: "13px" }}>📱</span>
+                    <span style={{ fontFamily: "monospace", letterSpacing: "0.3px" }}>
+                      {user.phone}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "9px",
+                        padding: "1px 5px",
+                        borderRadius: "5px",
+                        background: "rgba(16, 185, 129, 0.25)",
+                        border: "1px solid rgba(16, 185, 129, 0.4)",
+                        color: "#34D399",
+                        fontWeight: 800,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Tasdiqlangan
+                    </span>
+                  </div>
+                ) : null}
               </>
             )}
             {nameError ? (
@@ -680,6 +712,61 @@ export default function ProfileScreen({
           </div>
           <span style={{ fontSize: "14px", color: "var(--gold)" }}>›</span>
         </button>
+      ) : null}
+
+      {user?.phone ? (
+        <div
+          style={{
+            width: "100%",
+            background: "linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 78, 59, 0.08))",
+            border: "1px solid rgba(16, 185, 129, 0.3)",
+            borderRadius: "14px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "12px",
+          }}
+        >
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "10px",
+              background: "rgba(16, 185, 129, 0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "18px",
+              flex: "0 0 auto",
+            }}
+          >
+            📱
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "14px", fontWeight: 800, color: "var(--text)" }}>
+                {user.phone}
+              </span>
+              <span
+                style={{
+                  fontSize: "9px",
+                  padding: "1px 5px",
+                  borderRadius: "5px",
+                  background: "rgba(16, 185, 129, 0.25)",
+                  color: "#10B981",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                }}
+              >
+                Bog'langan
+              </span>
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+              Yagona profil: Telegram bot, Mini App va mobil ilova
+            </div>
+          </div>
+        </div>
       ) : null}
 
       <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
